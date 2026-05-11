@@ -7,6 +7,7 @@ import {
 } from 'discord.js';
 
 import express from 'express';
+
 import {
   incrementMessageCount,
   setSnipeCache
@@ -31,18 +32,78 @@ import {
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
 } from './setup.js';
 
-// ─── ENV ──────────────────────────────────────────────────────────────────────
+// ─── ENV ─────────────────────────────────────────────────────────────────────
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const PORT = parseInt(process.env.PORT || '5000', 10);
+const PORT = process.env.PORT || 5000;
 
 if (!TOKEN || !CLIENT_ID) {
-  console.error('Missing TOKEN or CLIENT_ID environment variables.');
+  console.error("Missing TOKEN or CLIENT_ID");
   process.exit(1);
 }
 
-// ─── COMMAND ROUTER ──────────────────────────────────────────────────────────
+// ─── EXPRESS (START FIRST - prevents silent crashes) ────────────────────────
+
+const app = express();
+
+/**
+ * HEALTH ENDPOINT (UPTIMEROBOT)
+ */
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    bot: client?.isReady?.() ? "online" : "starting",
+    uptime: process.uptime(),
+    guilds: client?.guilds?.cache?.size ?? 0,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get("/", (req, res) => res.redirect("/health"));
+
+app.listen(PORT, () => {
+  console.log(`✅ Health server running on port ${PORT}`);
+});
+
+// ─── SAFE SELF-PINGER (NO fetch dependency) ────────────────────────────────
+
+function startSelfPinger() {
+  const domains = process.env.REPLIT_DOMAINS;
+
+  if (!domains) {
+    console.log("Self-pinger disabled (no REPLIT_DOMAINS)");
+    return;
+  }
+
+  const host = domains.split(",")[0].trim();
+  const pingUrl = `https://${host}/health`;
+
+  console.log(`🔁 Self-pinger active → ${pingUrl}`);
+
+  setInterval(() => {
+    try {
+      fetch(pingUrl).catch(() => {});
+    } catch (e) {
+      console.warn("Ping failed:", e.message);
+    }
+  }, 4 * 60 * 1000);
+}
+
+// ─── DISCORD CLIENT ─────────────────────────────────────────────────────────
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildModeration,
+  ],
+  partials: [Partials.Message, Partials.Channel],
+});
+
+// ─── COMMAND ROUTER ─────────────────────────────────────────────────────────
 
 const handlers = {
   'setup': handleSetup,
@@ -89,36 +150,23 @@ const handlers = {
   'reset-messages-all': handleResetMessagesAll,
 };
 
-// ─── DISCORD CLIENT ──────────────────────────────────────────────────────────
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildModeration,
-  ],
-  partials: [Partials.Message, Partials.Channel],
-});
-
-// ─── REGISTER COMMANDS ───────────────────────────────────────────────────────
+// ─── COMMAND REGISTRATION ───────────────────────────────────────────────────
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(TOKEN);
 
-  const allDefs = [...commandDefs, ...setupCommands].map(cmd => cmd.toJSON());
+  const allDefs = [...commandDefs, ...setupCommands].map(c => c.toJSON());
 
   try {
-    console.log(`Registering ${allDefs.length} slash commands...`);
+    console.log(`Registering ${allDefs.length} commands...`);
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: allDefs });
-    console.log('Slash commands registered successfully.');
+    console.log("Slash commands registered");
   } catch (err) {
-    console.error('Failed to register commands:', err);
+    console.error("Command register failed:", err);
   }
 }
 
-// ─── EVENTS ──────────────────────────────────────────────────────────────────
+// ─── EVENTS ─────────────────────────────────────────────────────────────────
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -131,18 +179,14 @@ client.on('interactionCreate', async interaction => {
   const handler = handlers[interaction.commandName];
 
   if (!handler) {
-    return interaction.reply({ content: '❌ Unknown command.', ephemeral: true });
+    return interaction.reply({ content: "❌ Unknown command", ephemeral: true });
   }
 
   try {
     await handler(interaction);
   } catch (err) {
-    console.error(`Error in /${interaction.commandName}:`, err);
-
-    const msg = {
-      content: '❌ An error occurred while running this command.',
-      ephemeral: true
-    };
+    console.error(err);
+    const msg = { content: "❌ Error occurred", ephemeral: true };
 
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(msg).catch(() => {});
@@ -152,86 +196,30 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// Message tracking
-client.on('messageCreate', message => {
-  if (message.author.bot || !message.guild) return;
-  incrementMessageCount(message.guild.id, message.author.id);
+// message tracking
+client.on('messageCreate', msg => {
+  if (msg.author.bot || !msg.guild) return;
+  incrementMessageCount(msg.guild.id, msg.author.id);
 });
 
-// Snipe system
-client.on('messageDelete', message => {
-  if (!message.guild || message.author?.bot) return;
-
-  const content = message.content || '';
-  const author = message.author;
-
-  if (!author) return;
+// snipe system
+client.on('messageDelete', msg => {
+  if (!msg.guild || msg.author?.bot) return;
 
   setSnipeCache(
-    message.guild.id,
-    message.channel.id,
-    content,
-    author.id,
-    author.tag,
-    author.displayAvatarURL()
+    msg.guild.id,
+    msg.channel.id,
+    msg.content || "",
+    msg.author?.id,
+    msg.author?.tag,
+    msg.author?.displayAvatarURL?.()
   );
 });
 
-// ─── EXPRESS HEALTH SERVER ──────────────────────────────────────────────────
-
-const app = express();
-
-// MAIN HEALTH ENDPOINT (USE FOR UPTIMEROBOT)
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    bot: client.isReady() ? 'online' : 'starting',
-    uptime: process.uptime(),
-    guilds: client.guilds.cache.size,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// ALIASES (prevents broken links)
-app.get('/healthz', (req, res) => res.redirect('/health'));
-app.get('/api/healthz', (req, res) => res.redirect('/health'));
-
-// ROOT
-app.get('/', (req, res) => res.redirect('/health'));
-
-app.listen(PORT, () => {
-  console.log(`Health server running on port ${PORT}`);
-});
-
-// ─── SELF-PINGER ─────────────────────────────────────────────────────────────
-
-function startSelfPinger() {
-  const domains = process.env.REPLIT_DOMAINS;
-
-  if (!domains) {
-    console.log('No REPLIT_DOMAINS found, self-pinger disabled.');
-    return;
-  }
-
-  const host = domains.split(',')[0].trim();
-  const pingUrl = `https://${host}/health`;
-
-  console.log(`Self-pinger active → ${pingUrl} every 4 minutes`);
-
-  setInterval(async () => {
-    try {
-      const res = await fetch(pingUrl);
-      console.log(`[pinger] ${pingUrl} → ${res.status}`);
-    } catch (err) {
-      console.warn(`[pinger] failed: ${err.message}`);
-    }
-  }, 4 * 60 * 1000);
-}
-
-// ─── LOGIN ───────────────────────────────────────────────────────────────────
+// ─── LOGIN ──────────────────────────────────────────────────────────────────
 
 client.login(TOKEN).catch(err => {
-  console.error('Failed to login:', err.message);
+  console.error("Login failed:", err);
   process.exit(1);
 });
 
