@@ -158,9 +158,26 @@ async function registerCommands() {
   const allDefs = [...commandDefs, ...setupCommands].map(c => c.toJSON());
 
   try {
-    console.log(`Registering ${allDefs.length} commands...`);
+    // 1. Wipe all global commands
+    console.log("Clearing global commands...");
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: [] });
+
+    // 2. Wipe all guild-specific commands for every guild the bot is in
+    const guilds = client.guilds.cache.map(g => g.id);
+    if (guilds.length > 0) {
+      console.log(`Clearing guild commands in ${guilds.length} guild(s)...`);
+      await Promise.all(
+        guilds.map(guildId =>
+          rest.put(Routes.applicationGuildCommands(CLIENT_ID, guildId), { body: [] })
+            .catch(err => console.warn(`Could not clear guild ${guildId}:`, err.message))
+        )
+      );
+    }
+
+    // 3. Register all commands globally
+    console.log(`Registering ${allDefs.length} commands globally...`);
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: allDefs });
-    console.log("Slash commands registered");
+    console.log("✅ Slash commands registered");
   } catch (err) {
     console.error("Command register failed:", err);
   }
