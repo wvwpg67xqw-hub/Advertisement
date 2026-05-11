@@ -170,6 +170,10 @@ const STATUS_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+router.get("/health", (_req, res) => {
+  res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+
 router.get("/", (_req, res) => {
   res.setHeader("Content-Type", "text/html");
   res.send(STATUS_HTML);
