@@ -1,0 +1,157 @@
+# Discord Moderation Bot
+
+A full Discord.js v14 moderation and staff-network bot with 34 slash commands, SQLite persistence, role-based permissions, and a health endpoint for uptime monitoring.
+
+---
+
+## Project Structure
+
+```
+/
+├── artifacts/
+│   └── discord-bot/          # The Discord bot — main project
+│       ├── src/
+│       │   ├── index.js      # Bot entry point: Discord client setup, event handlers, Express health server
+│       │   ├── commands.js   # All 34 slash commands (warn, ban, jail, requests, utility, etc.)
+│       │   ├── setup.js      # Setup commands: /setup, /setup-roles, /setup-roles-extra, /setup-status, /setup-edit
+│       │   ├── database.js   # SQLite schema + all database helper functions
+│       │   └── utils.js      # Shared helpers: embed builders, permission checks, duration parsing, safe fetchers
+│       ├── data/
+│       │   └── bot.db        # SQLite database file (auto-created on first run)
+│       ├── public/
+│       │   ├── favicon.svg   # Bot favicon
+│       │   └── opengraph.jpg # Preview image
+│       ├── .replit-artifact/
+│       │   └── artifact.toml # Replit artifact config: port, run command, preview path
+│       └── package.json      # Bot dependencies (discord.js, express) and scripts
+│
+│   └── api-server/           # Express API server (separate service, unused by bot)
+│       ├── src/
+│       │   ├── index.ts      # Server entry point
+│       │   ├── app.ts        # Express app setup
+│       │   ├── routes/
+│       │   │   ├── index.ts  # Route registration
+│       │   │   └── health.ts # Health check endpoint
+│       │   ├── middlewares/  # Express middlewares (placeholder)
+│       │   └── lib/
+│       │       └── logger.ts # Pino logger singleton
+│       ├── dist/             # Compiled output (auto-generated, do not edit)
+│       ├── .replit-artifact/
+│       │   └── artifact.toml # API server artifact config
+│       ├── tsconfig.json     # TypeScript config for api-server
+│       └── package.json      # API server dependencies
+│
+│   └── mockup-sandbox/       # Internal UI component preview tool (Replit canvas only)
+│       ├── src/
+│       │   ├── App.tsx       # Sandbox app shell
+│       │   ├── main.tsx      # React entry point
+│       │   ├── index.css     # Global styles
+│       │   ├── components/
+│       │   │   ├── mockups/  # Canvas mockup components (added by Replit agent)
+│       │   │   └── ui/       # Shadcn/ui component library
+│       │   ├── hooks/        # React hooks (use-mobile, use-toast)
+│       │   └── lib/
+│       │       └── utils.ts  # Tailwind class merge utility
+│       ├── vite.config.ts    # Vite dev server config
+│       └── package.json      # Sandbox dependencies
+│
+├── lib/                      # Shared TypeScript libraries (for api-server use)
+│   ├── api-spec/
+│   │   ├── openapi.yaml      # OpenAPI contract definition (source of truth for API)
+│   │   └── orval.config.ts   # Codegen config (generates hooks + Zod schemas from OpenAPI)
+│   ├── api-client-react/
+│   │   └── src/
+│   │       ├── generated/    # Auto-generated React Query hooks from OpenAPI spec
+│   │       └── index.ts      # Library exports
+│   ├── api-zod/
+│   │   └── src/
+│   │       ├── generated/    # Auto-generated Zod validation schemas from OpenAPI spec
+│   │       └── index.ts      # Library exports
+│   └── db/
+│       └── src/
+│           ├── schema/
+│           │   └── index.ts  # Drizzle ORM database schema (for api-server)
+│           └── index.ts      # Database client exports
+│
+├── scripts/
+│   ├── post-merge.sh         # Runs automatically after task merges (installs deps, migrations)
+│   └── src/
+│       └── hello.ts          # Example script template
+│
+├── replit.md                 # Project documentation and architecture notes (loaded by Replit agent)
+├── README.md                 # This file
+├── package.json              # Root workspace config and shared dev tooling
+├── pnpm-workspace.yaml       # pnpm monorepo package discovery and dependency catalog
+├── pnpm-lock.yaml            # Locked dependency versions (do not edit manually)
+├── tsconfig.json             # Root TypeScript solution config (lib packages only)
+├── tsconfig.base.json        # Shared TypeScript strict defaults extended by all packages
+├── .replit                   # Replit environment config
+├── .replitignore             # Files ignored by Replit
+├── .gitignore                # Files ignored by git
+└── .npmrc                    # npm/pnpm registry config
+```
+
+---
+
+## Bot Source Files — Detail
+
+| File | Purpose |
+|---|---|
+| `src/index.js` | Starts the Discord client, registers all commands on startup, listens for interactions, tracks deleted messages for `/snipe`, counts messages for leaderboard, and runs a small Express server for the `/health` ping endpoint |
+| `src/commands.js` | Every slash command in one file — warn system, ad-warn with message deletion, mute/ban/fire, strike system, jail/unjail, all four request commands (with image proof), and all utility commands |
+| `src/setup.js` | The five `/setup*` commands that configure the bot per server — log channels, jail role, and per-command role permissions |
+| `src/database.js` | Opens the SQLite database, creates all tables on first run, runs any column migrations, and exports every DB helper function used by commands |
+| `src/utils.js` | Shared utilities: safe member/channel/role fetching that never throws, `parseDuration`, `formatDuration`, embed builders for warns/strikes/requests/ad-warns, permission checking, and log channel routing |
+
+---
+
+## Database Tables
+
+| Table | Stores |
+|---|---|
+| `guilds` | Per-server config: log channels, jail role, and role lists for every command |
+| `warns` | Warning records with case ID, user, moderator, reason, and timestamp |
+| `ad_warns` | Ad warning records — also stores deleted message ID and full deleted message content |
+| `strikes` | Strike records with case ID, user, moderator, and reason |
+| `jailed_users` | Active jails — stores original role IDs for restoration on `/unjail` |
+| `message_counts` | Per-user message count per server for `/messages` and `/message-leaderboard` |
+| `snipe_cache` | Last deleted message per channel for `/snipe` |
+| `balances` | Economy balance per user per server for `/balance` |
+| `breaks` | Active staff breaks for `/current-breaks`, `/break`, `/break-end` |
+
+---
+
+## Commands Summary
+
+| Category | Commands |
+|---|---|
+| Setup | `/setup` `/setup-roles-wizard` `/setup-roles` `/setup-roles-extra` `/setup-status` `/setup-edit` |
+| Warnings | `/warn` `/warns` `/warn-leaderboard` |
+| Ad Warnings | `/ad-warn` `/remove-ad-warn` |
+| Moderation | `/mute` `/unmute` `/ban` `/fire` `/promote` `/demote-user` |
+| Strikes | `/strike` `/strike-remove` |
+| Jail | `/jail` `/unjail` |
+| Requests | `/ban-request` `/blacklist-request` `/network-ban-request` `/partnership-request` |
+| Utility | `/messages` `/message-leaderboard` `/case-info` `/balance` `/snipe` `/current-breaks` `/break` `/break-end` `/reset-messages` `/reset-messages-all` |
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `TOKEN` | Yes | Discord bot token |
+| `CLIENT_ID` | Yes | Discord application/client ID |
+| `PORT` | Auto-set | Port for the Express health server (20320 in dev) |
+
+---
+
+## Health Endpoint
+
+The bot runs a small HTTP server alongside Discord. Point UptimeRobot at:
+
+```
+https://bot-manager--mcgrayen8.replit.app/health
+```
+
+Ping every 5 minutes to keep the bot alive.
