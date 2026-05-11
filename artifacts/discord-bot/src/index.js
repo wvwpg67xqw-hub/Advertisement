@@ -36,7 +36,7 @@ import {
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.BOT_HEALTH_PORT || 8080;
 
 if (!TOKEN || !CLIENT_ID) {
   console.error("Missing TOKEN or CLIENT_ID");

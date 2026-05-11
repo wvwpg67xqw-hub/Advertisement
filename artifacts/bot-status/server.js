@@ -1,7 +1,7 @@
 import express from "express";
 
 const app = express();
-const port = Number(process.env.PORT ?? 5173);
+const port = Number(process.env.PORT ?? 3001);
 
 const STATUS_PAGE = `<!DOCTYPE html>
 <html lang="en">
@@ -175,6 +175,16 @@ const STATUS_PAGE = `<!DOCTYPE html>
 app.get("/", (_req, res) => {
   res.setHeader("Content-Type", "text/html");
   res.send(STATUS_PAGE);
+});
+
+app.get("/api/bot-status", async (_req, res) => {
+  try {
+    const r = await fetch("http://localhost:8080/health");
+    const data = await r.json();
+    res.json({ ...data, online: data.status === "ok" });
+  } catch {
+    res.json({ online: false, bot: "offline", uptime: 0, guilds: 0 });
+  }
 });
 
 app.get("/healthz", (_req, res) => {
