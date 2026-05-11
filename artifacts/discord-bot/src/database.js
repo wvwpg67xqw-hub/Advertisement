@@ -12,6 +12,20 @@ const db = new DatabaseSync(join(dataDir, 'bot.db'));
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
+// Migrate existing guilds table — add new request channel columns if missing
+for (const col of [
+  'ban_request_channel_id',
+  'blacklist_request_channel_id',
+  'network_ban_request_channel_id',
+  'partnership_request_channel_id',
+]) {
+  try {
+    db.exec(`ALTER TABLE guilds ADD COLUMN ${col} TEXT`);
+  } catch {
+    // Column already exists — safe to ignore
+  }
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS guilds (
     guild_id TEXT PRIMARY KEY,
@@ -22,7 +36,11 @@ db.exec(`
     ad_warn_log_channel_id TEXT,
     jail_role_id TEXT,
     muted_role_id TEXT,
-    command_roles TEXT NOT NULL DEFAULT '{}'
+    command_roles TEXT NOT NULL DEFAULT '{}',
+    ban_request_channel_id TEXT,
+    blacklist_request_channel_id TEXT,
+    network_ban_request_channel_id TEXT,
+    partnership_request_channel_id TEXT
   );
 
   CREATE TABLE IF NOT EXISTS warns (
@@ -118,6 +136,8 @@ export function setGuildConfig(guildId, fields) {
   const allowed = [
     'log_channel_id', 'warn_log_channel_id', 'strike_log_channel_id',
     'request_log_channel_id', 'ad_warn_log_channel_id', 'jail_role_id', 'muted_role_id',
+    'ban_request_channel_id', 'blacklist_request_channel_id',
+    'network_ban_request_channel_id', 'partnership_request_channel_id',
   ];
   for (const [key, val] of Object.entries(fields)) {
     if (allowed.includes(key)) {

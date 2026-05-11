@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } from 'discord.js';
 import { getGuild, setGuildConfig, setCommandRoles } from './database.js';
 
 // Max 25 choices per Discord string option — only include commands that need role restrictions.
@@ -99,6 +99,16 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('role3').setDescription('Allowed role 3'))
     .addRoleOption(o => o.setName('role4').setDescription('Allowed role 4'))
     .addRoleOption(o => o.setName('role5').setDescription('Allowed role 5')),
+
+  // /setup-requests — auto-create request channels category
+  new SlashCommandBuilder()
+    .setName('setup-requests')
+    .setDescription('Auto-create a Requests category with ban, blacklist, network-ban, and partnership channels')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o =>
+      o.setName('category-name')
+        .setDescription('Name for the category (default: 📋 Requests)')
+    ),
 ];
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -245,4 +255,61 @@ export async function handleSetupEdit(interaction) {
 
 export async function handleSetupRolesWizard(interaction) {
   return handleSetupRoles(interaction);
+}
+
+export async function handleSetupRequests(interaction) {
+  await interaction.deferReply();
+
+  const categoryName = interaction.options.getString('category-name') || '📋 Requests';
+  const guild = interaction.guild;
+
+  const channels = [
+    { key: 'ban_request_channel_id',         name: 'ban-requests',         label: '🔨 Ban Requests' },
+    { key: 'blacklist_request_channel_id',    name: 'blacklist-requests',   label: '⛔ Blacklist Requests' },
+    { key: 'network_ban_request_channel_id',  name: 'network-ban-requests', label: '🌐 Network Ban Requests' },
+    { key: 'partnership_request_channel_id',  name: 'partnership-requests', label: '🤝 Partnership Requests' },
+  ];
+
+  try {
+    // Create the category
+    const category = await guild.channels.create({
+      name: categoryName,
+      type: ChannelType.GuildCategory,
+    });
+
+    const created = [];
+    const dbFields = {};
+
+    for (const ch of channels) {
+      const channel = await guild.channels.create({
+        name: ch.name,
+        type: ChannelType.GuildText,
+        parent: category.id,
+      });
+      dbFields[ch.key] = channel.id;
+      created.push({ label: ch.label, channel });
+    }
+
+    // Save all channel IDs to the DB
+    setGuildConfig(interaction.guildId, dbFields);
+
+    const embed = new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('✅ Request Channels Created')
+      .setDescription(`Category **${categoryName}** has been set up with the following channels:`)
+      .addFields(
+        created.map(c => ({
+          name: c.label,
+          value: `<#${c.channel.id}>`,
+          inline: true,
+        }))
+      )
+      .setFooter({ text: 'Each request type now routes to its own dedicated channel.' })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    console.error('setup-requests error:', err);
+    await interaction.editReply({ content: `❌ Failed to create channels: ${err.message}` });
+  }
 }

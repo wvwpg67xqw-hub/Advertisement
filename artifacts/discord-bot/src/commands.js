@@ -515,7 +515,7 @@ async function handleRequest(interaction, type) {
     type, requesterId: interaction.user.id, targetId: target.id, reason, proof,
   });
   const config = getGuild(interaction.guildId);
-  await sendLog(interaction.guild, config, 'request', embed);
+  await sendLog(interaction.guild, config, `${type}-request`, embed);
   await interaction.reply({ embeds: [embed] });
 }
 

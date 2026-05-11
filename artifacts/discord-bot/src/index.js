@@ -30,6 +30,7 @@ import {
   setupCommands,
   handleSetup, handleSetupRoles, handleSetupRolesExtra,
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
+  handleSetupRequests,
 } from './setup.js';
 
 // ─── ENV ─────────────────────────────────────────────────────────────────────
@@ -112,6 +113,7 @@ const handlers = {
   'setup-status': handleSetupStatus,
   'setup-edit': handleSetupEdit,
   'setup-roles-wizard': handleSetupRolesWizard,
+  'setup-requests': handleSetupRequests,
 
   'warn': handleWarn,
   'warns': handleWarns,

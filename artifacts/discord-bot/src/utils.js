@@ -70,6 +70,10 @@ export async function sendLog(guild, config, type, embed) {
     request: config.request_log_channel_id,
     ad_warn: config.ad_warn_log_channel_id,
     general: config.log_channel_id,
+    'ban-request': config.ban_request_channel_id || config.request_log_channel_id,
+    'blacklist-request': config.blacklist_request_channel_id || config.request_log_channel_id,
+    'network-ban-request': config.network_ban_request_channel_id || config.request_log_channel_id,
+    'partnership-request': config.partnership_request_channel_id || config.request_log_channel_id,
   };
   const channelId = channelMap[type] || config.log_channel_id;
   if (!channelId) return;
