@@ -160,6 +160,16 @@ export function setHubGuildId(guildId, hubGuildId) {
   db.prepare('UPDATE guilds SET hub_guild_id = ? WHERE guild_id = ?').run(hubGuildId, guildId);
 }
 
+export function clearNetworkHub(guildId) {
+  getGuild(guildId);
+  db.prepare('UPDATE guilds SET is_hub = 0 WHERE guild_id = ?').run(guildId);
+}
+
+export function clearHubGuildId(guildId) {
+  getGuild(guildId);
+  db.prepare('UPDATE guilds SET hub_guild_id = NULL WHERE guild_id = ?').run(guildId);
+}
+
 export function getNetworkMembers(hubGuildId) {
   return db.prepare('SELECT guild_id FROM guilds WHERE hub_guild_id = ?').all(hubGuildId);
 }

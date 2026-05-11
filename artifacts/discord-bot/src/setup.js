@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } from 'discord.js';
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId } from './database.js';
 
 // Max 25 choices per Discord string option — only include commands that need role restrictions.
 // Utility commands open to all (warns, messages, balance, snipe, break, break-end, current-breaks)
@@ -126,6 +126,12 @@ export const setupCommands = [
         .setDescription('The server ID of your staff/hub server')
         .setRequired(true)
     ),
+
+  // /setup-network-reset — clear hub or member link from this server
+  new SlashCommandBuilder()
+    .setName('setup-network-reset')
+    .setDescription('Remove this server\'s network role (hub or linked member)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ];
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -272,6 +278,34 @@ export async function handleSetupEdit(interaction) {
 
 export async function handleSetupRolesWizard(interaction) {
   return handleSetupRoles(interaction);
+}
+
+export async function handleSetupNetworkReset(interaction) {
+  const config = getGuild(interaction.guildId);
+  const wasHub = config.is_hub;
+  const wasLinked = !!config.hub_guild_id;
+
+  if (!wasHub && !wasLinked) {
+    return interaction.reply({
+      content: '❌ This server has no network role to clear — it is neither a hub nor linked to one.',
+      flags: 64,
+    });
+  }
+
+  if (wasHub) clearNetworkHub(interaction.guildId);
+  if (wasLinked) clearHubGuildId(interaction.guildId);
+
+  const lines = [];
+  if (wasHub) lines.push('• Removed **hub** status from this server');
+  if (wasLinked) lines.push('• Unlinked this server from its hub');
+
+  const embed = new EmbedBuilder()
+    .setColor(0xFEE75C)
+    .setTitle('🔄 Network Reset')
+    .setDescription(lines.join('\n') + '\n\nYou can now run `/setup-network-hub` in the correct server and `/setup-network-join` here if needed.')
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
 }
 
 export async function handleSetupNetworkHub(interaction) {
