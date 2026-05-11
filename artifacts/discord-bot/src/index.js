@@ -170,9 +170,32 @@ app.listen(PORT, () => {
   console.log(`Health server running on port ${PORT}`);
 });
 
+// ─── Self-Pinger (keeps bot alive on free tier) ───────────────────────────────
+
+function startSelfPinger() {
+  const domains = process.env.REPLIT_DOMAINS;
+  if (!domains) {
+    console.log('No REPLIT_DOMAINS found, self-pinger disabled.');
+    return;
+  }
+  const host = domains.split(',')[0].trim();
+  const pingUrl = `https://${host}/api/healthz`;
+  console.log(`Self-pinger active → ${pingUrl} every 4 minutes`);
+  setInterval(async () => {
+    try {
+      const res = await fetch(pingUrl);
+      console.log(`[pinger] ${pingUrl} → ${res.status}`);
+    } catch (err) {
+      console.warn(`[pinger] ping failed: ${err.message}`);
+    }
+  }, 4 * 60 * 1000);
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 client.login(TOKEN).catch(err => {
   console.error('Failed to login:', err.message);
   process.exit(1);
 });
+
+startSelfPinger();
