@@ -164,30 +164,28 @@ const handlers = {
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(TOKEN);
-
   const allDefs = [...commandDefs, ...setupCommands].map(c => c.toJSON());
+  const guilds = client.guilds.cache.map(g => g.id);
 
   try {
-    // 1. Wipe all global commands
-    console.log("Clearing global commands...");
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: [] });
-
-    // 2. Wipe all guild-specific commands for every guild the bot is in
-    const guilds = client.guilds.cache.map(g => g.id);
+    // Register per-guild for instant propagation (no 1-hour delay)
     if (guilds.length > 0) {
-      console.log(`Clearing guild commands in ${guilds.length} guild(s)...`);
+      console.log(`Registering ${allDefs.length} commands in ${guilds.length} guild(s)...`);
       await Promise.all(
         guilds.map(guildId =>
-          rest.put(Routes.applicationGuildCommands(CLIENT_ID, guildId), { body: [] })
-            .catch(err => console.warn(`Could not clear guild ${guildId}:`, err.message))
+          rest.put(Routes.applicationGuildCommands(CLIENT_ID, guildId), { body: allDefs })
+            .catch(err => console.warn(`Could not register in guild ${guildId}:`, err.message))
         )
       );
     }
 
-    // 3. Register all commands globally
-    console.log(`Registering ${allDefs.length} commands globally...`);
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: allDefs });
-    console.log("✅ Slash commands registered");
+    // Also register globally so new guilds the bot joins get commands
+    console.log("Registering commands globally (background, up to 1h propagation)...");
+    rest.put(Routes.applicationCommands(CLIENT_ID), { body: allDefs })
+      .then(() => console.log("✅ Global commands registered"))
+      .catch(err => console.warn("Global register failed (guild commands still active):", err.message));
+
+    console.log("✅ Guild commands registered");
   } catch (err) {
     console.error("Command register failed:", err);
   }
