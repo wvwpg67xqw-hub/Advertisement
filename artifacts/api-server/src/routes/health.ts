@@ -19,7 +19,7 @@ router.get("/health", (_req, res) => {
  * Backward compatibility (prevents broken links)
  */
 router.get("/healthz", (_req, res) => {
-  res.redirect("/health");
+  res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
 export default router;
