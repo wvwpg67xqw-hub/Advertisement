@@ -2,7 +2,7 @@ modules = ["nodejs-24"]
 
 [deployment]
 router = "application"
-deploymentTarget = "cloudrun"
+deploymentTarget = "vm"
 run = ["pnpm", "--filter", "@workspace/discord-bot", "run", "start"]
 
 [deployment.postBuild]
