@@ -63,7 +63,7 @@ export function hasCommandPermission(member, commandName) {
 
 // ─── Log Channel Routing ──────────────────────────────────────────────────────
 
-export async function sendLog(guild, config, type, embed) {
+export async function sendLog(guild, config, type, embed, components = null) {
   const channelMap = {
     warn: config.warn_log_channel_id,
     strike: config.strike_log_channel_id,
@@ -76,11 +76,14 @@ export async function sendLog(guild, config, type, embed) {
     'partnership-request': config.partnership_request_channel_id || config.request_log_channel_id,
   };
   const channelId = channelMap[type] || config.log_channel_id;
-  if (!channelId) return;
+  if (!channelId) return null;
   const channel = await safeFetchChannel(guild, channelId);
   if (channel && channel.isTextBased()) {
-    await channel.send({ embeds: [embed] }).catch(() => {});
+    const payload = { embeds: [embed] };
+    if (components) payload.components = components;
+    return channel.send(payload).catch(() => null);
   }
+  return null;
 }
 
 // ─── Embed Builders ───────────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import {
   handleCurrentBreaks, handleBreak, handleBreakEnd,
   handleResetMessages, handleResetMessagesAll,
   handleNetworkBan, handleNetworkUnban,
+  handleRequestButton,
 } from './commands.js';
 
 import {
@@ -199,6 +200,21 @@ client.once('ready', async () => {
 });
 
 client.on('interactionCreate', async interaction => {
+  // Button interactions
+  if (interaction.isButton()) {
+    if (interaction.customId.startsWith('req:')) {
+      try {
+        await handleRequestButton(interaction);
+      } catch (err) {
+        console.error(err);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: '❌ Error handling button', flags: 64 }).catch(() => {});
+        }
+      }
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const handler = handlers[interaction.commandName];

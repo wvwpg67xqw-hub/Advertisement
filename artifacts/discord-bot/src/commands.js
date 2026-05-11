@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import {
   addWarn, getWarns, getWarnCount, getWarnLeaderboard,
   addAdWarn, getAdWarns, removeAdWarn,
@@ -8,6 +8,7 @@ import {
   getSnipeCache, getBalance, setBalance,
   startBreak, endBreak, getCurrentBreaks, isOnBreak,
   getCaseInfo, getGuild, getNetworkMembers,
+  addBlacklist,
 } from './database.js';
 import {
   safeFetchMember, safeFetchChannel, safeFetchRole,
@@ -519,6 +520,22 @@ export async function handleUnjail(interaction) {
   await sendLog(interaction.guild, config, 'general', embed);
 }
 
+// Build Accept / Deny buttons for a request
+function buildRequestButtons(type, targetId, originGuildId, disabled = false) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`req:accept:${type}:${targetId}:${originGuildId}`)
+      .setLabel('✅ Accept')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`req:deny:${type}:${targetId}:${originGuildId}`)
+      .setLabel('❌ Deny')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(disabled),
+  );
+}
+
 // REQUEST HANDLER (shared)
 async function handleRequest(interaction, type) {
   if (!hasCommandPermission(interaction.member, `${type}-request`)) return deny(interaction);
@@ -530,24 +547,100 @@ async function handleRequest(interaction, type) {
   });
 
   const config = getGuild(interaction.guildId);
+  const buttons = [buildRequestButtons(type, target.id, interaction.guildId)];
 
   // Always log in the current server if it has a channel set
-  await sendLog(interaction.guild, config, `${type}-request`, embed);
+  await sendLog(interaction.guild, config, `${type}-request`, embed, buttons);
 
   // If this server is linked to a hub, also forward to the hub's request channel
   if (config.hub_guild_id) {
     const hubGuild = interaction.client.guilds.cache.get(config.hub_guild_id);
     if (hubGuild) {
       const hubConfig = getGuild(config.hub_guild_id);
-      // Add origin server info to the forwarded embed
       const forwardedEmbed = buildRequestEmbed({
         type, requesterId: interaction.user.id, targetId: target.id, reason, proof,
       }).addFields({ name: '📡 Origin Server', value: `${interaction.guild.name} (${interaction.guildId})`, inline: true });
-      await sendLog(hubGuild, hubConfig, `${type}-request`, forwardedEmbed);
+      // Buttons in hub still use originGuildId so Accept bans from the correct server
+      await sendLog(hubGuild, hubConfig, `${type}-request`, forwardedEmbed, buttons);
     }
   }
 
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ content: '✅ Request submitted.', flags: 64 });
+}
+
+// BUTTON HANDLER for request Accept / Deny
+export async function handleRequestButton(interaction) {
+  const [, action, type, targetId, originGuildId] = interaction.customId.split(':');
+
+  if (!hasCommandPermission(interaction.member, `${type}-request`)) {
+    return interaction.reply({ content: '❌ You don\'t have permission to handle this request.', flags: 64 });
+  }
+
+  await interaction.deferUpdate();
+
+  const originalEmbed = interaction.message.embeds[0];
+  const reason = originalEmbed?.fields?.find(f => f.name === 'Reason')?.value ?? 'No reason provided';
+
+  let resultText = '';
+  let resultColor = 0x5865F2;
+
+  if (action === 'accept') {
+    resultColor = 0x57F287;
+    try {
+      if (type === 'ban') {
+        const targetGuild = interaction.client.guilds.cache.get(originGuildId);
+        if (targetGuild) {
+          await targetGuild.members.ban(targetId, { reason: `[Accepted Ban Request] by ${interaction.user.tag}: ${reason}` });
+          resultText = `Banned from **${targetGuild.name}**`;
+        } else {
+          resultText = '⚠️ Origin server unreachable — ban was NOT applied';
+          resultColor = 0xFEE75C;
+        }
+      } else if (type === 'blacklist') {
+        addBlacklist(originGuildId, targetId, interaction.user.id, reason);
+        resultText = 'Added to blacklist';
+      } else if (type === 'network-ban') {
+        const members = getNetworkMembers(interaction.guildId);
+        const results = [];
+        for (const { guild_id } of members) {
+          const g = interaction.client.guilds.cache.get(guild_id);
+          if (!g) { results.push(`⚠️ Unknown (${guild_id})`); continue; }
+          try {
+            await g.members.ban(targetId, { reason: `[Network Ban] ${reason}` });
+            results.push(`✅ ${g.name}`);
+          } catch (e) {
+            results.push(`❌ ${g.name}: ${e.message}`);
+          }
+        }
+        try {
+          await interaction.guild.members.ban(targetId, { reason: `[Network Ban] ${reason}` });
+          results.push(`✅ ${interaction.guild.name} (hub)`);
+        } catch (e) {
+          results.push(`❌ ${interaction.guild.name} (hub): ${e.message}`);
+        }
+        resultText = results.join('\n') || 'No linked servers.';
+      } else if (type === 'partnership') {
+        resultText = 'Partnership accepted';
+      }
+    } catch (err) {
+      resultText = `Error: ${err.message}`;
+      resultColor = 0xFF0000;
+    }
+  } else {
+    resultColor = 0xED4245;
+    resultText = 'Request denied';
+  }
+
+  const updatedEmbed = EmbedBuilder.from(originalEmbed)
+    .setColor(resultColor)
+    .addFields(
+      { name: action === 'accept' ? '✅ Accepted By' : '❌ Denied By', value: `<@${interaction.user.id}>`, inline: true },
+      { name: 'Outcome', value: resultText },
+    );
+
+  const disabledRow = buildRequestButtons(type, targetId, originGuildId, true);
+
+  await interaction.editReply({ embeds: [updatedEmbed], components: [disabledRow] });
 }
 
 export const handleBanRequest = i => handleRequest(i, 'ban');

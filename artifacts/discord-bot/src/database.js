@@ -113,6 +113,16 @@ db.exec(`
     PRIMARY KEY (guild_id, user_id)
   );
 
+  CREATE TABLE IF NOT EXISTS blacklist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    moderator_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(guild_id, user_id)
+  );
+
   CREATE TABLE IF NOT EXISTS breaks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     guild_id TEXT NOT NULL,
@@ -372,6 +382,25 @@ export function startBreak(guildId, userId, username, reason) {
     'INSERT INTO breaks (guild_id, user_id, username, reason) VALUES (?, ?, ?, ?)',
   ).run(guildId, userId, username, reason ?? null);
   return true;
+}
+
+export function addBlacklist(guildId, userId, moderatorId, reason) {
+  db.prepare(`
+    INSERT INTO blacklist (guild_id, user_id, moderator_id, reason)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(guild_id, user_id) DO UPDATE SET
+      moderator_id = excluded.moderator_id,
+      reason = excluded.reason,
+      created_at = unixepoch()
+  `).run(guildId, userId, moderatorId, reason);
+}
+
+export function isBlacklisted(guildId, userId) {
+  return !!db.prepare('SELECT 1 FROM blacklist WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
+}
+
+export function getBlacklistEntry(guildId, userId) {
+  return db.prepare('SELECT * FROM blacklist WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
 }
 
 export function endBreak(guildId, userId) {
