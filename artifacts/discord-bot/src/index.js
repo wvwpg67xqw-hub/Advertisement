@@ -1,7 +1,20 @@
-import { Client, GatewayIntentBits, Partials, REST, Routes, Collection } from 'discord.js';
+import {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  REST,
+  Routes
+} from 'discord.js';
+
 import express from 'express';
-import { incrementMessageCount, setSnipeCache } from './database.js';
-import { commandDefs, handleWarn, handleWarns, handleWarnLeaderboard,
+import {
+  incrementMessageCount,
+  setSnipeCache
+} from './database.js';
+
+import {
+  commandDefs,
+  handleWarn, handleWarns, handleWarnLeaderboard,
   handleAdWarn, handleRemoveAdWarn,
   handleMute, handleUnmute, handleBan, handleFire, handlePromote, handleDemoteUser,
   handleStrike, handleStrikeRemove,
@@ -11,10 +24,14 @@ import { commandDefs, handleWarn, handleWarns, handleWarnLeaderboard,
   handleCurrentBreaks, handleBreak, handleBreakEnd,
   handleResetMessages, handleResetMessagesAll,
 } from './commands.js';
-import { setupCommands,
+
+import {
+  setupCommands,
   handleSetup, handleSetupRoles, handleSetupRolesExtra,
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
 } from './setup.js';
+
+// ─── ENV ──────────────────────────────────────────────────────────────────────
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -25,42 +42,41 @@ if (!TOKEN || !CLIENT_ID) {
   process.exit(1);
 }
 
-// ─── Command Router ───────────────────────────────────────────────────────────
+// ─── COMMAND ROUTER ──────────────────────────────────────────────────────────
 
 const handlers = {
-  // Setup
   'setup': handleSetup,
   'setup-roles': handleSetupRoles,
   'setup-roles-extra': handleSetupRolesExtra,
   'setup-status': handleSetupStatus,
   'setup-edit': handleSetupEdit,
   'setup-roles-wizard': handleSetupRolesWizard,
-  // Warnings
+
   'warn': handleWarn,
   'warns': handleWarns,
   'warn-leaderboard': handleWarnLeaderboard,
-  // Ad warnings
+
   'ad-warn': handleAdWarn,
   'remove-ad-warn': handleRemoveAdWarn,
-  // Moderation
+
   'mute': handleMute,
   'unmute': handleUnmute,
   'ban': handleBan,
   'fire': handleFire,
   'promote': handlePromote,
   'demote-user': handleDemoteUser,
-  // Strikes
+
   'strike': handleStrike,
   'strike-remove': handleStrikeRemove,
-  // Jail
+
   'jail': handleJail,
   'unjail': handleUnjail,
-  // Requests
+
   'ban-request': handleBanRequest,
   'blacklist-request': handleBlacklistRequest,
   'network-ban-request': handleNetworkBanRequest,
   'partnership-request': handlePartnershipRequest,
-  // Utility
+
   'messages': handleMessages,
   'message-leaderboard': handleMessageLeaderboard,
   'case-info': handleCaseInfo,
@@ -73,7 +89,7 @@ const handlers = {
   'reset-messages-all': handleResetMessagesAll,
 };
 
-// ─── Discord Client ───────────────────────────────────────────────────────────
+// ─── DISCORD CLIENT ──────────────────────────────────────────────────────────
 
 const client = new Client({
   intents: [
@@ -86,11 +102,13 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel],
 });
 
-// ─── Register Commands ────────────────────────────────────────────────────────
+// ─── REGISTER COMMANDS ───────────────────────────────────────────────────────
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(TOKEN);
+
   const allDefs = [...commandDefs, ...setupCommands].map(cmd => cmd.toJSON());
+
   try {
     console.log(`Registering ${allDefs.length} slash commands...`);
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: allDefs });
@@ -100,7 +118,7 @@ async function registerCommands() {
   }
 }
 
-// ─── Event Handlers ───────────────────────────────────────────────────────────
+// ─── EVENTS ──────────────────────────────────────────────────────────────────
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -109,15 +127,23 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
+
   const handler = handlers[interaction.commandName];
+
   if (!handler) {
-    return interaction.reply({ content: '❌ Unknown command.', flags: 64 });
+    return interaction.reply({ content: '❌ Unknown command.', ephemeral: true });
   }
+
   try {
     await handler(interaction);
   } catch (err) {
     console.error(`Error in /${interaction.commandName}:`, err);
-    const msg = { content: '❌ An error occurred while running this command.', flags: 64 };
+
+    const msg = {
+      content: '❌ An error occurred while running this command.',
+      ephemeral: true
+    };
+
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(msg).catch(() => {});
     } else {
@@ -126,72 +152,83 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// Track messages for leaderboard (ignore bots)
+// Message tracking
 client.on('messageCreate', message => {
   if (message.author.bot || !message.guild) return;
   incrementMessageCount(message.guild.id, message.author.id);
 });
 
-// Track deleted messages for /snipe
+// Snipe system
 client.on('messageDelete', message => {
   if (!message.guild || message.author?.bot) return;
+
   const content = message.content || '';
   const author = message.author;
+
   if (!author) return;
+
   setSnipeCache(
     message.guild.id,
     message.channel.id,
     content,
     author.id,
     author.tag,
-    author.displayAvatarURL(),
+    author.displayAvatarURL()
   );
 });
 
-// ─── Express Health Server ────────────────────────────────────────────────────
+// ─── EXPRESS HEALTH SERVER ──────────────────────────────────────────────────
 
 const app = express();
 
+// MAIN HEALTH ENDPOINT (USE FOR UPTIMEROBOT)
 app.get('/health', (req, res) => {
-  res.json({
+  res.status(200).json({
     status: 'ok',
-    bot: client.isReady() ? 'online' : 'connecting',
+    bot: client.isReady() ? 'online' : 'starting',
     uptime: process.uptime(),
     guilds: client.guilds.cache.size,
     timestamp: new Date().toISOString(),
   });
 });
 
-app.get('/', (req, res) => {
-  res.redirect('/health');
-});
+// ALIASES (prevents broken links)
+app.get('/healthz', (req, res) => res.redirect('/health'));
+app.get('/api/healthz', (req, res) => res.redirect('/health'));
+
+// ROOT
+app.get('/', (req, res) => res.redirect('/health'));
 
 app.listen(PORT, () => {
   console.log(`Health server running on port ${PORT}`);
 });
 
-// ─── Self-Pinger (keeps bot alive on free tier) ───────────────────────────────
+// ─── SELF-PINGER ─────────────────────────────────────────────────────────────
 
 function startSelfPinger() {
   const domains = process.env.REPLIT_DOMAINS;
+
   if (!domains) {
     console.log('No REPLIT_DOMAINS found, self-pinger disabled.');
     return;
   }
+
   const host = domains.split(',')[0].trim();
-  const pingUrl = `https://${host}/api/healthz`;
+  const pingUrl = `https://${host}/health`;
+
   console.log(`Self-pinger active → ${pingUrl} every 4 minutes`);
+
   setInterval(async () => {
     try {
       const res = await fetch(pingUrl);
       console.log(`[pinger] ${pingUrl} → ${res.status}`);
     } catch (err) {
-      console.warn(`[pinger] ping failed: ${err.message}`);
+      console.warn(`[pinger] failed: ${err.message}`);
     }
   }, 4 * 60 * 1000);
 }
 
-// ─── Login ────────────────────────────────────────────────────────────────────
+// ─── LOGIN ───────────────────────────────────────────────────────────────────
 
 client.login(TOKEN).catch(err => {
   console.error('Failed to login:', err.message);
