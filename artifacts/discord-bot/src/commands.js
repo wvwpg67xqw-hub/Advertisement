@@ -447,11 +447,38 @@ export async function handleStrike(interaction) {
   const reason = interaction.options.getString('reason');
   const caseId = addStrike(interaction.guildId, target.id, interaction.user.id, reason);
   const total = getStrikeCount(interaction.guildId, target.id);
-  const embed = buildStrikeEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
-  embed.setFooter({ text: `Total strikes: ${total}` });
-  await interaction.reply({ embeds: [embed] });
   const config = getGuild(interaction.guildId);
+
+  const embed = buildStrikeEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
+  embed.setFooter({ text: `Total strikes: ${total}${total >= 3 ? ' — AUTO-FIRE TRIGGERED' : ''}` });
+  await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'strike', embed);
+
+  // Auto-fire at 3 strikes: remove all roles (except Verified) and kick
+  if (total >= 3) {
+    const member = await safeFetchMember(interaction.guild, target.id);
+    if (member) {
+      const rolesToRemove = member.roles.cache.filter(
+        r => r.name !== 'Verified' && r.name !== '@everyone'
+      );
+      await member.roles.remove(rolesToRemove, '3 strikes — auto-fire').catch(() => {});
+      await member.kick('Auto-fired: 3 strikes reached').catch(() => {});
+
+      const fireEmbed = new EmbedBuilder()
+        .setColor(0xFF4500)
+        .setTitle('🔥 Staff Member Auto-Fired')
+        .setDescription('3 strikes reached — staff roles removed and user kicked.')
+        .addFields(
+          { name: 'User', value: `<@${target.id}> (${target.id})`, inline: true },
+          { name: 'Triggered By', value: `<@${interaction.user.id}>`, inline: true },
+          { name: 'Final Strike Reason', value: reason },
+        )
+        .setFooter({ text: 'The Verified role was preserved.' })
+        .setTimestamp();
+
+      await sendLog(interaction.guild, config, 'general', fireEmbed);
+    }
+  }
 }
 
 // STRIKE REMOVE
@@ -572,8 +599,8 @@ async function handleRequest(interaction, type) {
 export async function handleRequestButton(interaction) {
   const [, action, type, targetId, originGuildId] = interaction.customId.split(':');
 
-  if (!hasCommandPermission(interaction.member, `${type}-request`)) {
-    return interaction.reply({ content: '❌ You don\'t have permission to handle this request.', flags: 64 });
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    return interaction.reply({ content: '❌ Only Administrators can accept or deny requests.', flags: 64 });
   }
 
   await interaction.deferUpdate();
