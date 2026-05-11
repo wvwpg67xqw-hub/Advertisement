@@ -7,7 +7,7 @@ import {
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
   getSnipeCache, getBalance, setBalance,
   startBreak, endBreak, getCurrentBreaks, isOnBreak,
-  getCaseInfo, getGuild,
+  getCaseInfo, getGuild, getNetworkMembers,
 } from './database.js';
 import {
   safeFetchMember, safeFetchChannel, safeFetchRole,
@@ -113,6 +113,13 @@ export const commandDefs = [
     .setName('unjail')
     .setDescription('Release a user from jail (restore their roles)')
     .addUserOption(o => o.setName('user').setDescription('User to unjail').setRequired(true)),
+
+  // NETWORK BAN
+  new SlashCommandBuilder()
+    .setName('network-ban')
+    .setDescription('Ban a user from ALL servers in the network (hub only)')
+    .addUserOption(o => o.setName('user').setDescription('User to ban').setRequired(true))
+    .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true)),
 
   // REQUESTS
   new SlashCommandBuilder()
@@ -514,8 +521,25 @@ async function handleRequest(interaction, type) {
   const embed = buildRequestEmbed({
     type, requesterId: interaction.user.id, targetId: target.id, reason, proof,
   });
+
   const config = getGuild(interaction.guildId);
+
+  // Always log in the current server if it has a channel set
   await sendLog(interaction.guild, config, `${type}-request`, embed);
+
+  // If this server is linked to a hub, also forward to the hub's request channel
+  if (config.hub_guild_id) {
+    const hubGuild = interaction.client.guilds.cache.get(config.hub_guild_id);
+    if (hubGuild) {
+      const hubConfig = getGuild(config.hub_guild_id);
+      // Add origin server info to the forwarded embed
+      const forwardedEmbed = buildRequestEmbed({
+        type, requesterId: interaction.user.id, targetId: target.id, reason, proof,
+      }).addFields({ name: '📡 Origin Server', value: `${interaction.guild.name} (${interaction.guildId})`, inline: true });
+      await sendLog(hubGuild, hubConfig, `${type}-request`, forwardedEmbed);
+    }
+  }
+
   await interaction.reply({ embeds: [embed] });
 }
 
@@ -523,6 +547,63 @@ export const handleBanRequest = i => handleRequest(i, 'ban');
 export const handleBlacklistRequest = i => handleRequest(i, 'blacklist');
 export const handleNetworkBanRequest = i => handleRequest(i, 'network-ban');
 export const handlePartnershipRequest = i => handleRequest(i, 'partnership');
+
+// NETWORK BAN
+export async function handleNetworkBan(interaction) {
+  if (!hasCommandPermission(interaction.member, 'network-ban')) return deny(interaction);
+
+  const config = getGuild(interaction.guildId);
+  if (!config.is_hub) {
+    return interaction.reply({
+      content: '❌ `/network-ban` can only be used in the network hub (staff server). Use `/ban-request` from a main server instead.',
+      flags: 64,
+    });
+  }
+
+  await interaction.deferReply();
+
+  const target = interaction.options.getUser('user');
+  const reason = interaction.options.getString('reason');
+  const members = getNetworkMembers(interaction.guildId);
+
+  const results = [];
+
+  for (const { guild_id } of members) {
+    const guild = interaction.client.guilds.cache.get(guild_id);
+    if (!guild) {
+      results.push(`⚠️ **Unknown server** (\`${guild_id}\`) — bot may have left`);
+      continue;
+    }
+    try {
+      await guild.members.ban(target.id, { reason: `[Network Ban] ${reason}` });
+      results.push(`✅ **${guild.name}**`);
+    } catch (e) {
+      results.push(`❌ **${guild.name}** — ${e.message}`);
+    }
+  }
+
+  // Also ban in the hub itself
+  try {
+    await interaction.guild.members.ban(target.id, { reason: `[Network Ban] ${reason}` });
+    results.push(`✅ **${interaction.guild.name}** (hub)`);
+  } catch (e) {
+    results.push(`❌ **${interaction.guild.name}** (hub) — ${e.message}`);
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0xFF0000)
+    .setTitle('🌐 Network Ban Executed')
+    .addFields(
+      { name: 'User', value: `<@${target.id}> (${target.id})`, inline: true },
+      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: 'Reason', value: reason },
+      { name: `Results (${results.length} servers)`, value: results.join('\n') || 'No linked servers.' }
+    )
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+  await sendLog(interaction.guild, config, 'general', embed);
+}
 
 // MESSAGES
 export async function handleMessages(interaction) {

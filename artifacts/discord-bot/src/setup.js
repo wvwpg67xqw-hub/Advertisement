@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } from 'discord.js';
-import { getGuild, setGuildConfig, setCommandRoles } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId } from './database.js';
 
 // Max 25 choices per Discord string option — only include commands that need role restrictions.
 // Utility commands open to all (warns, messages, balance, snipe, break, break-end, current-breaks)
@@ -108,6 +108,23 @@ export const setupCommands = [
     .addStringOption(o =>
       o.setName('category-name')
         .setDescription('Name for the category (default: 📋 Requests)')
+    ),
+
+  // /setup-network-hub — mark this server as the network hub
+  new SlashCommandBuilder()
+    .setName('setup-network-hub')
+    .setDescription('Mark this server as the network hub (staff server). All request logs will route here.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  // /setup-network-join — link a main server to the hub
+  new SlashCommandBuilder()
+    .setName('setup-network-join')
+    .setDescription('Link this server to the network hub so requests forward to the staff server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o =>
+      o.setName('hub-server-id')
+        .setDescription('The server ID of your staff/hub server')
+        .setRequired(true)
     ),
 ];
 
@@ -255,6 +272,58 @@ export async function handleSetupEdit(interaction) {
 
 export async function handleSetupRolesWizard(interaction) {
   return handleSetupRoles(interaction);
+}
+
+export async function handleSetupNetworkHub(interaction) {
+  setNetworkHub(interaction.guildId, true);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('🌐 Network Hub Configured')
+    .setDescription(
+      `**${interaction.guild.name}** is now the **network hub** (staff server).\n\n` +
+      `All request logs from linked main servers will be forwarded here.\n\n` +
+      `Run \`/setup-requests\` here to create the request channels, then run \`/setup-network-join\` in each of your main servers using this server's ID:\n\n` +
+      `\`\`\`${interaction.guildId}\`\`\``
+    )
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
+}
+
+export async function handleSetupNetworkJoin(interaction) {
+  const hubGuildId = interaction.options.getString('hub-server-id');
+
+  // Verify the bot is actually in the hub server
+  const hubGuild = interaction.client.guilds.cache.get(hubGuildId);
+  if (!hubGuild) {
+    return interaction.reply({
+      content: `❌ The bot is not in server \`${hubGuildId}\`, or that ID is wrong. Make sure the bot has been added to your staff server first.`,
+      flags: 64,
+    });
+  }
+
+  // Verify the hub is actually configured as a hub
+  const hubConfig = getGuild(hubGuildId);
+  if (!hubConfig.is_hub) {
+    return interaction.reply({
+      content: `❌ Server \`${hubGuildId}\` (**${hubGuild.name}**) has not been set up as a network hub. Run \`/setup-network-hub\` in that server first.`,
+      flags: 64,
+    });
+  }
+
+  setHubGuildId(interaction.guildId, hubGuildId);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x57F287)
+    .setTitle('✅ Joined Network')
+    .setDescription(
+      `**${interaction.guild.name}** is now linked to the network hub **${hubGuild.name}**.\n\n` +
+      `Request commands (\`/ban-request\`, \`/blacklist-request\`, etc.) used in this server will automatically forward to the hub's request channels.`
+    )
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
 }
 
 export async function handleSetupRequests(interaction) {

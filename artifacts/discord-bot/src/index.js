@@ -24,13 +24,14 @@ import {
   handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance, handleSnipe,
   handleCurrentBreaks, handleBreak, handleBreakEnd,
   handleResetMessages, handleResetMessagesAll,
+  handleNetworkBan,
 } from './commands.js';
 
 import {
   setupCommands,
   handleSetup, handleSetupRoles, handleSetupRolesExtra,
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
-  handleSetupRequests,
+  handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin,
 } from './setup.js';
 
 // ─── ENV ─────────────────────────────────────────────────────────────────────
@@ -114,6 +115,9 @@ const handlers = {
   'setup-edit': handleSetupEdit,
   'setup-roles-wizard': handleSetupRolesWizard,
   'setup-requests': handleSetupRequests,
+  'setup-network-hub': handleSetupNetworkHub,
+  'setup-network-join': handleSetupNetworkJoin,
+  'network-ban': handleNetworkBan,
 
   'warn': handleWarn,
   'warns': handleWarns,

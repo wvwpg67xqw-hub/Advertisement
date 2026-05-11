@@ -12,15 +12,17 @@ const db = new DatabaseSync(join(dataDir, 'bot.db'));
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
-// Migrate existing guilds table — add new request channel columns if missing
+// Migrate existing guilds table — add columns if missing
 for (const col of [
-  'ban_request_channel_id',
-  'blacklist_request_channel_id',
-  'network_ban_request_channel_id',
-  'partnership_request_channel_id',
+  'ban_request_channel_id TEXT',
+  'blacklist_request_channel_id TEXT',
+  'network_ban_request_channel_id TEXT',
+  'partnership_request_channel_id TEXT',
+  'is_hub INTEGER NOT NULL DEFAULT 0',
+  'hub_guild_id TEXT',
 ]) {
   try {
-    db.exec(`ALTER TABLE guilds ADD COLUMN ${col} TEXT`);
+    db.exec(`ALTER TABLE guilds ADD COLUMN ${col}`);
   } catch {
     // Column already exists — safe to ignore
   }
@@ -40,7 +42,9 @@ db.exec(`
     ban_request_channel_id TEXT,
     blacklist_request_channel_id TEXT,
     network_ban_request_channel_id TEXT,
-    partnership_request_channel_id TEXT
+    partnership_request_channel_id TEXT,
+    is_hub INTEGER NOT NULL DEFAULT 0,
+    hub_guild_id TEXT
   );
 
   CREATE TABLE IF NOT EXISTS warns (
@@ -144,6 +148,20 @@ export function setGuildConfig(guildId, fields) {
       db.prepare(`UPDATE guilds SET ${key} = ? WHERE guild_id = ?`).run(val, guildId);
     }
   }
+}
+
+export function setNetworkHub(guildId, isHub) {
+  getGuild(guildId);
+  db.prepare('UPDATE guilds SET is_hub = ? WHERE guild_id = ?').run(isHub ? 1 : 0, guildId);
+}
+
+export function setHubGuildId(guildId, hubGuildId) {
+  getGuild(guildId);
+  db.prepare('UPDATE guilds SET hub_guild_id = ? WHERE guild_id = ?').run(hubGuildId, guildId);
+}
+
+export function getNetworkMembers(hubGuildId) {
+  return db.prepare('SELECT guild_id FROM guilds WHERE hub_guild_id = ?').all(hubGuildId);
 }
 
 export function setCommandRoles(guildId, command, roleIds) {
