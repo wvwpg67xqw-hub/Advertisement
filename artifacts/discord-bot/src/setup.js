@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } from 'discord.js';
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers } from './database.js';
 
 // Max 25 choices per Discord string option — only include commands that need role restrictions.
 // Utility commands open to all (warns, messages, balance, snipe, break, break-end, current-breaks)
@@ -131,6 +131,12 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-network-reset')
     .setDescription('Remove this server\'s network role (hub or linked member)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  // /network-status — show all linked servers and their reachability
+  new SlashCommandBuilder()
+    .setName('network-status')
+    .setDescription('Show the network hub and all linked servers with their bot reachability')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ];
 
@@ -278,6 +284,55 @@ export async function handleSetupEdit(interaction) {
 
 export async function handleSetupRolesWizard(interaction) {
   return handleSetupRoles(interaction);
+}
+
+export async function handleNetworkStatus(interaction) {
+  const config = getGuild(interaction.guildId);
+
+  // Determine the hub guild ID to inspect
+  let hubGuildId = null;
+  let viewingAsHub = false;
+
+  if (config.is_hub) {
+    hubGuildId = interaction.guildId;
+    viewingAsHub = true;
+  } else if (config.hub_guild_id) {
+    hubGuildId = config.hub_guild_id;
+  } else {
+    return interaction.reply({
+      content: '❌ This server is not part of a network. Run `/setup-network-hub` or `/setup-network-join` first.',
+      flags: 64,
+    });
+  }
+
+  const hubGuild = interaction.client.guilds.cache.get(hubGuildId);
+  const hubName = hubGuild ? hubGuild.name : `Unknown (${hubGuildId})`;
+  const hubReachable = !!hubGuild;
+
+  const members = getNetworkMembers(hubGuildId);
+
+  const memberLines = members.map(({ guild_id }) => {
+    const g = interaction.client.guilds.cache.get(guild_id);
+    if (g) return `✅ **${g.name}** (${guild_id})`;
+    return `⚠️ **Unreachable** (${guild_id}) — bot may have left`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('🌐 Network Status')
+    .addFields(
+      {
+        name: 'Hub Server',
+        value: `${hubReachable ? '✅' : '⚠️'} **${hubName}** (${hubGuildId})${viewingAsHub ? ' — **(this server)**' : ''}`,
+      },
+      {
+        name: `Linked Servers (${members.length})`,
+        value: memberLines.length ? memberLines.join('\n') : '*No servers linked yet. Run `/setup-network-join` in each main server.*',
+      }
+    )
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
 }
 
 export async function handleSetupNetworkReset(interaction) {

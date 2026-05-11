@@ -32,6 +32,7 @@ import {
   handleSetup, handleSetupRoles, handleSetupRolesExtra,
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
   handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin, handleSetupNetworkReset,
+  handleNetworkStatus,
 } from './setup.js';
 
 // ─── ENV ─────────────────────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ const handlers = {
   'setup-network-hub': handleSetupNetworkHub,
   'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset,
+  'network-status': handleNetworkStatus,
   'network-ban': handleNetworkBan,
 
   'warn': handleWarn,
