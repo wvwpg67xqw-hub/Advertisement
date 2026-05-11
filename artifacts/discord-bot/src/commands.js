@@ -121,6 +121,13 @@ export const commandDefs = [
     .addUserOption(o => o.setName('user').setDescription('User to ban').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true)),
 
+  // NETWORK UNBAN
+  new SlashCommandBuilder()
+    .setName('network-unban')
+    .setDescription('Remove a ban from a user across ALL servers in the network (hub only)')
+    .addStringOption(o => o.setName('user-id').setDescription('User ID to unban').setRequired(true))
+    .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true)),
+
   // REQUESTS
   new SlashCommandBuilder()
     .setName('ban-request')
@@ -547,6 +554,65 @@ export const handleBanRequest = i => handleRequest(i, 'ban');
 export const handleBlacklistRequest = i => handleRequest(i, 'blacklist');
 export const handleNetworkBanRequest = i => handleRequest(i, 'network-ban');
 export const handlePartnershipRequest = i => handleRequest(i, 'partnership');
+
+// NETWORK UNBAN
+export async function handleNetworkUnban(interaction) {
+  if (!hasCommandPermission(interaction.member, 'network-unban')) return deny(interaction);
+
+  const config = getGuild(interaction.guildId);
+  if (!config.is_hub) {
+    return interaction.reply({
+      content: '❌ `/network-unban` can only be used in the network hub (staff server).',
+      flags: 64,
+    });
+  }
+
+  await interaction.deferReply();
+
+  const userId = interaction.options.getString('user-id').trim();
+  const reason = interaction.options.getString('reason');
+  const members = getNetworkMembers(interaction.guildId);
+
+  const results = [];
+
+  for (const { guild_id } of members) {
+    const guild = interaction.client.guilds.cache.get(guild_id);
+    if (!guild) {
+      results.push(`⚠️ **Unknown server** (\`${guild_id}\`) — bot may have left`);
+      continue;
+    }
+    try {
+      await guild.members.unban(userId, `[Network Unban] ${reason}`);
+      results.push(`✅ **${guild.name}**`);
+    } catch (e) {
+      const msg = e.code === 10026 ? 'not banned' : e.message;
+      results.push(`➖ **${guild.name}** — ${msg}`);
+    }
+  }
+
+  // Also unban in the hub itself
+  try {
+    await interaction.guild.members.unban(userId, `[Network Unban] ${reason}`);
+    results.push(`✅ **${interaction.guild.name}** (hub)`);
+  } catch (e) {
+    const msg = e.code === 10026 ? 'not banned' : e.message;
+    results.push(`➖ **${interaction.guild.name}** (hub) — ${msg}`);
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x57F287)
+    .setTitle('🌐 Network Unban Executed')
+    .addFields(
+      { name: 'User ID', value: userId, inline: true },
+      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: 'Reason', value: reason },
+      { name: `Results (${results.length} servers)`, value: results.join('\n') || 'No linked servers.' }
+    )
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+  await sendLog(interaction.guild, config, 'general', embed);
+}
 
 // NETWORK BAN
 export async function handleNetworkBan(interaction) {

@@ -24,7 +24,7 @@ import {
   handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance, handleSnipe,
   handleCurrentBreaks, handleBreak, handleBreakEnd,
   handleResetMessages, handleResetMessagesAll,
-  handleNetworkBan,
+  handleNetworkBan, handleNetworkUnban,
 } from './commands.js';
 
 import {
@@ -121,6 +121,7 @@ const handlers = {
   'setup-network-reset': handleSetupNetworkReset,
   'network-status': handleNetworkStatus,
   'network-ban': handleNetworkBan,
+  'network-unban': handleNetworkUnban,
 
   'warn': handleWarn,
   'warns': handleWarns,
