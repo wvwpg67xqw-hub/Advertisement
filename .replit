@@ -25,12 +25,12 @@ args = "Discord Bot"
 name = "Discord Bot"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/discord-bot run dev"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "BOT_HEALTH_PORT=8099 pnpm --filter @workspace/discord-bot run dev"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
@@ -45,6 +45,10 @@ localPort = 3001
 externalPort = 80
 
 [[ports]]
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
 localPort = 8080
 externalPort = 8080
 
@@ -55,6 +59,10 @@ externalPort = 8081
 [[ports]]
 localPort = 8082
 externalPort = 3000
+
+[[ports]]
+localPort = 8099
+externalPort = 8099
 
 [nix]
 channel = "stable-25_05"

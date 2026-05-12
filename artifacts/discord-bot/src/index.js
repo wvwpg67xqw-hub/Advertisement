@@ -3,7 +3,11 @@ import {
   GatewayIntentBits,
   Partials,
   REST,
-  Routes
+  Routes,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
 } from 'discord.js';
 
 import express from 'express';
@@ -40,7 +44,9 @@ import {
   handleNetworkStatus, handleSetupAdChannels,
 } from './setup.js';
 
-// ─── ENV ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ENV
+// ─────────────────────────────────────────────
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -51,15 +57,14 @@ if (!TOKEN || !CLIENT_ID) {
   process.exit(1);
 }
 
-// ─── EXPRESS (START FIRST - prevents silent crashes) ────────────────────────
+// ─────────────────────────────────────────────
+// EXPRESS HEALTH SERVER
+// ─────────────────────────────────────────────
 
 const app = express();
 
-/**
- * HEALTH ENDPOINT (UPTIMEROBOT)
- */
 app.get("/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     status: "ok",
     bot: client?.isReady?.() ? "online" : "starting",
     uptime: process.uptime(),
@@ -74,31 +79,27 @@ app.listen(PORT, () => {
   console.log(`✅ Health server running on port ${PORT}`);
 });
 
-// ─── SAFE SELF-PINGER (NO fetch dependency) ────────────────────────────────
+// ─────────────────────────────────────────────
+// SELF PINGER
+// ─────────────────────────────────────────────
 
 function startSelfPinger() {
   const domains = process.env.REPLIT_DOMAINS;
-
-  if (!domains) {
-    console.log("Self-pinger disabled (no REPLIT_DOMAINS)");
-    return;
-  }
+  if (!domains) return console.log("Self-pinger disabled");
 
   const host = domains.split(",")[0].trim();
-  const pingUrl = `https://${host}/health`;
+  const url = `https://${host}/health`;
 
-  console.log(`🔁 Self-pinger active → ${pingUrl}`);
+  console.log(`🔁 Self-pinger active → ${url}`);
 
   setInterval(() => {
-    try {
-      fetch(pingUrl).catch(() => {});
-    } catch (e) {
-      console.warn("Ping failed:", e.message);
-    }
+    fetch(url).catch(() => {});
   }, 4 * 60 * 1000);
 }
 
-// ─── DISCORD CLIENT ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// DISCORD CLIENT
+// ─────────────────────────────────────────────
 
 const client = new Client({
   intents: [
@@ -111,210 +112,219 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel],
 });
 
-// ─── COMMAND ROUTER ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// COMMAND HANDLERS MAP
+// ─────────────────────────────────────────────
 
 const handlers = {
-  'setup': handleSetup,
-  'setup-roles': handleSetupRoles,
-  'setup-roles-extra': handleSetupRolesExtra,
-  'setup-status': handleSetupStatus,
-  'setup-edit': handleSetupEdit,
-  'setup-roles-wizard': handleSetupRolesWizard,
-  'setup-requests': handleSetupRequests,
-  'setup-ad-channels': handleSetupAdChannels,
-  'setup-network-hub': handleSetupNetworkHub,
-  'setup-network-join': handleSetupNetworkJoin,
-  'setup-network-reset': handleSetupNetworkReset,
-  'network-status': handleNetworkStatus,
-  'network-ban': handleNetworkBan,
-  'network-unban': handleNetworkUnban,
+  setup: handleSetup,
+  "setup-roles": handleSetupRoles,
+  "setup-roles-extra": handleSetupRolesExtra,
+  "setup-status": handleSetupStatus,
+  "setup-edit": handleSetupEdit,
+  "setup-roles-wizard": handleSetupRolesWizard,
+  "setup-requests": handleSetupRequests,
+  "setup-ad-channels": handleSetupAdChannels,
+  "setup-network-hub": handleSetupNetworkHub,
+  "setup-network-join": handleSetupNetworkJoin,
+  "setup-network-reset": handleSetupNetworkReset,
+  "network-status": handleNetworkStatus,
+  "network-ban": handleNetworkBan,
+  "network-unban": handleNetworkUnban,
 
-  'warn': handleWarn,
-  'warns': handleWarns,
-  'warn-leaderboard': handleWarnLeaderboard,
+  warn: handleWarn,
+  warns: handleWarns,
+  "warn-leaderboard": handleWarnLeaderboard,
 
-  'ad-warn': handleAdWarn,
-  'remove-ad-warn': handleRemoveAdWarn,
+  "ad-warn": handleAdWarn,
+  "remove-ad-warn": handleRemoveAdWarn,
 
-  'mute': handleMute,
-  'unmute': handleUnmute,
-  'ban': handleBan,
-  'fire': handleFire,
-  'promote': handlePromote,
-  'demote-user': handleDemoteUser,
+  mute: handleMute,
+  unmute: handleUnmute,
+  ban: handleBan,
+  fire: handleFire,
+  promote: handlePromote,
+  "demote-user": handleDemoteUser,
 
-  'strike': handleStrike,
-  'strike-remove': handleStrikeRemove,
+  strike: handleStrike,
+  "strike-remove": handleStrikeRemove,
 
-  'jail': handleJail,
-  'unjail': handleUnjail,
+  jail: handleJail,
+  unjail: handleUnjail,
 
-  'ban-request': handleBanRequest,
-  'blacklist-request': handleBlacklistRequest,
-  'network-ban-request': handleNetworkBanRequest,
-  'partnership-request': handlePartnershipRequest,
+  "ban-request": handleBanRequest,
+  "blacklist-request": handleBlacklistRequest,
+  "network-ban-request": handleNetworkBanRequest,
+  "partnership-request": handlePartnershipRequest,
 
-  'messages': handleMessages,
-  'message-leaderboard': handleMessageLeaderboard,
-  'case-info': handleCaseInfo,
-  'balance': handleBalance,
-  'snipe': handleSnipe,
-  'current-breaks': handleCurrentBreaks,
-  'break': handleBreak,
-  'break-end': handleBreakEnd,
-  'reset-messages': handleResetMessages,
-  'reset-messages-all': handleResetMessagesAll,
+  messages: handleMessages,
+  "message-leaderboard": handleMessageLeaderboard,
+  "case-info": handleCaseInfo,
+  balance: handleBalance,
+  snipe: handleSnipe,
+  "current-breaks": handleCurrentBreaks,
+  break: handleBreak,
+  "break-end": handleBreakEnd,
+  "reset-messages": handleResetMessages,
+  "reset-messages-all": handleResetMessagesAll,
 };
 
-// ─── COMMAND REGISTRATION ───────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// COMMAND REGISTRATION
+// ─────────────────────────────────────────────
 
 async function registerCommands() {
-  const rest = new REST({ version: '10' }).setToken(TOKEN);
-  const allDefs = [...commandDefs, ...setupCommands].map(c => c.toJSON());
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+
+  const all = [...commandDefs, ...setupCommands].map(c => c.toJSON());
   const guilds = client.guilds.cache.map(g => g.id);
 
   try {
-    // Register per-guild for instant propagation (no 1-hour delay)
-    if (guilds.length > 0) {
-      console.log(`Registering ${allDefs.length} commands in ${guilds.length} guild(s)...`);
-      await Promise.all(
-        guilds.map(guildId =>
-          rest.put(Routes.applicationGuildCommands(CLIENT_ID, guildId), { body: allDefs })
-            .catch(err => console.warn(`Could not register in guild ${guildId}:`, err.message))
-        )
-      );
+    for (const id of guilds) {
+      await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, id),
+        { body: all }
+      ).catch(() => {});
     }
 
-    // Also register globally so new guilds the bot joins get commands
-    console.log("Registering commands globally (background, up to 1h propagation)...");
-    rest.put(Routes.applicationCommands(CLIENT_ID), { body: allDefs })
-      .then(() => console.log("✅ Global commands registered"))
-      .catch(err => console.warn("Global register failed (guild commands still active):", err.message));
+    await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: all }
+    );
 
-    console.log("✅ Guild commands registered");
+    console.log("✅ Commands registered");
   } catch (err) {
-    console.error("Command register failed:", err);
+    console.error(err);
   }
 }
 
-// ─── EVENTS ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// READY EVENT
+// ─────────────────────────────────────────────
 
-client.once('ready', async () => {
+client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await registerCommands();
 });
 
-client.on('interactionCreate', async interaction => {
-  // Button interactions
-  if (interaction.isButton()) {
-    if (interaction.customId.startsWith('req:')) {
-      try {
-        await handleRequestButton(interaction);
-      } catch (err) {
-        console.error(err);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: '❌ Error handling button', flags: 64 }).catch(() => {});
-        }
-      }
-    }
-    return;
-  }
+// ─────────────────────────────────────────────
+// INTERACTIONS
+// ─────────────────────────────────────────────
 
-  if (!interaction.isChatInputCommand()) return;
-
-  const handler = handlers[interaction.commandName];
-
-  if (!handler) {
-    return interaction.reply({ content: "❌ Unknown command", ephemeral: true });
-  }
-
+client.on("interactionCreate", async (interaction) => {
   try {
+    if (interaction.isButton()) {
+      if (interaction.customId.startsWith("req:")) {
+        return handleRequestButton(interaction);
+      }
+      return;
+    }
+
+    if (!interaction.isChatInputCommand()) return;
+
+    const handler = handlers[interaction.commandName];
+
+    if (!handler) {
+      return interaction.reply({ content: "❌ Unknown command", ephemeral: true });
+    }
+
     await handler(interaction);
+
   } catch (err) {
     console.error(err);
+
     const msg = { content: "❌ Error occurred", ephemeral: true };
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(msg).catch(() => {});
+    if (interaction.replied) {
+      interaction.followUp(msg).catch(() => {});
     } else {
-      await interaction.reply(msg).catch(() => {});
+      interaction.reply(msg).catch(() => {});
     }
   }
 });
 
-// ─── AD CHANNEL PROMO MESSAGE ────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// 💎 AD SYSTEM (FIXED WITH EMBED)
+// ─────────────────────────────────────────────
 
-const AD_PROMO = `# 📈 Join and advertise for free
-https://discord.gg/CU8DHHM5dk
-https://discord.gg/GQV2mPcSzF
-https://discord.gg/SfVkFuts2E
-https://discord.gg/G4z9DWFQzT
-https://discord.gg/nMnz4dTCZb
-https://discord.gg/Mr72YbJYj3
-https://discord.gg/2Wb8sekNG7
-https://discord.gg/uwU9XMUydE
-https://discord.gg/jhcWUgRQS8
-https://discord.gg/GtjUa5hhCz
-https://discord.gg/globalads
-https://discord.gg/promotions`;
+const adCooldown = new Map();
 
-// Per-user cooldown so the promo only sends once per 10 min per user per channel
-const adPromoCooldown = new Map();
+const AD_LINKS = [
+  "https://discord.gg/CU8DHHM5dk",
+  "https://discord.gg/GQV2mPcSzF",
+  "https://discord.gg/SfVkFuts2E",
+  "https://discord.gg/G4z9DWFQzT",
+  "https://discord.gg/nMnz4dTCZb",
+  "https://discord.gg/Mr72YbJYj3",
+  "https://discord.gg/2Wb8sekNG7",
+  "https://discord.gg/uwU9XMUydE",
+  "https://discord.gg/jhcWUgRQS8",
+  "https://discord.gg/GtjUa5hhCz",
+  "https://discord.gg/globalads",
+  "https://discord.gg/promotions"
+];
 
-// message tracking + ad channel handling
-client.on('messageCreate', async msg => {
+function buildAdEmbed() {
+  return new EmbedBuilder()
+    .setTitle("📈 Advertise Your Server")
+    .setColor(0x2b2d31)
+    .setDescription(
+      "Post your server & grow your community!\n\n" +
+      AD_LINKS.map((l, i) => `**${i + 1}.** ${l}`).join("\n")
+    )
+    .setFooter({ text: "Free advertising system" })
+    .setTimestamp();
+}
+
+// ─────────────────────────────────────────────
+// MESSAGE SYSTEM
+// ─────────────────────────────────────────────
+
+client.on("messageCreate", async (msg) => {
   if (msg.author.bot || !msg.guild) return;
 
   incrementMessageCount(msg.guild.id, msg.author.id);
 
   if (isAdChannel(msg.guild.id, msg.channel.id)) {
-    // Track the post so we can delete it if the member leaves
     trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
 
-    // Cooldown key: userId + channelId — only send promo once per 10 min per user
-    const cooldownKey = `${msg.author.id}:${msg.channel.id}`;
-    const lastSent = adPromoCooldown.get(cooldownKey) || 0;
-    if (Date.now() - lastSent > 10 * 60 * 1000) {
-      adPromoCooldown.set(cooldownKey, Date.now());
-      try {
-        await msg.reply({ content: AD_PROMO, allowedMentions: { repliedUser: false } });
-      } catch (err) {
-        console.warn('Failed to send ad promo reply:', err.message);
-      }
+    const key = `${msg.author.id}:${msg.channel.id}`;
+    const last = adCooldown.get(key) || 0;
+
+    if (Date.now() - last > 10 * 60 * 1000) {
+      adCooldown.set(key, Date.now());
+
+      await msg.reply({
+        embeds: [buildAdEmbed()],
+        allowedMentions: { repliedUser: false }
+      }).catch(() => {});
     }
   }
 });
 
-// ─── MEMBER LEAVE — DELETE THEIR AD POSTS ────────────────────────────────────
+// ─────────────────────────────────────────────
+// MEMBER LEAVE CLEANUP
+// ─────────────────────────────────────────────
 
-client.on('guildMemberRemove', async member => {
-  const guildId = member.guild.id;
-  const userId = member.id;
+client.on("guildMemberRemove", async (member) => {
+  const posts = getAdPostsByUser(member.guild.id, member.id);
 
-  const posts = getAdPostsByUser(guildId, userId);
-  if (posts.length === 0) return;
-
-  let deleted = 0;
-  for (const { channel_id, message_id } of posts) {
+  for (const p of posts) {
     try {
-      const channel = await member.guild.channels.fetch(channel_id).catch(() => null);
-      if (!channel) continue;
-      const message = await channel.messages.fetch(message_id).catch(() => null);
-      if (message) {
-        await message.delete();
-        deleted++;
-      }
-    } catch (err) {
-      console.warn(`Failed to delete ad post ${message_id}:`, err.message);
-    }
+      const ch = await member.guild.channels.fetch(p.channel_id);
+      const m = await ch.messages.fetch(p.message_id);
+      await m.delete().catch(() => {});
+    } catch {}
   }
 
-  clearAdPostsByUser(guildId, userId);
-  console.log(`🗑️ Deleted ${deleted}/${posts.length} ad posts for leaving member ${member.user.tag} (${userId})`);
+  clearAdPostsByUser(member.guild.id, member.id);
 });
 
-// snipe system
-client.on('messageDelete', msg => {
+// ─────────────────────────────────────────────
+// SNIPE SYSTEM
+// ─────────────────────────────────────────────
+
+client.on("messageDelete", (msg) => {
   if (!msg.guild || msg.author?.bot) return;
 
   setSnipeCache(
@@ -327,11 +337,12 @@ client.on('messageDelete', msg => {
   );
 });
 
-// ─── LOGIN ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// LOGIN
+// ─────────────────────────────────────────────
 
 client.login(TOKEN).catch(err => {
   console.error("Login failed:", err);
-  process.exit(1);
 });
 
 startSelfPinger();
