@@ -10,7 +10,11 @@ import express from 'express';
 
 import {
   incrementMessageCount,
-  setSnipeCache
+  setSnipeCache,
+  isAdChannel,
+  trackAdPost,
+  getAdPostsByUser,
+  clearAdPostsByUser,
 } from './database.js';
 
 import {
@@ -33,7 +37,7 @@ import {
   handleSetup, handleSetupRoles, handleSetupRolesExtra,
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
   handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin, handleSetupNetworkReset,
-  handleNetworkStatus,
+  handleNetworkStatus, handleSetupAdChannels,
 } from './setup.js';
 
 // ─── ENV ─────────────────────────────────────────────────────────────────────
@@ -117,6 +121,7 @@ const handlers = {
   'setup-edit': handleSetupEdit,
   'setup-roles-wizard': handleSetupRolesWizard,
   'setup-requests': handleSetupRequests,
+  'setup-ad-channels': handleSetupAdChannels,
   'setup-network-hub': handleSetupNetworkHub,
   'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset,
@@ -237,10 +242,75 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// message tracking
-client.on('messageCreate', msg => {
+// ─── AD CHANNEL PROMO MESSAGE ────────────────────────────────────────────────
+
+const AD_PROMO = `# 📈 Join and advertise for free
+https://discord.gg/CU8DHHM5dk
+https://discord.gg/GQV2mPcSzF
+https://discord.gg/SfVkFuts2E
+https://discord.gg/G4z9DWFQzT
+https://discord.gg/nMnz4dTCZb
+https://discord.gg/Mr72YbJYj3
+https://discord.gg/2Wb8sekNG7
+https://discord.gg/uwU9XMUydE
+https://discord.gg/jhcWUgRQS8
+https://discord.gg/GtjUa5hhCz
+https://discord.gg/globalads
+https://discord.gg/promotions`;
+
+// Per-user cooldown so the promo only sends once per 10 min per user per channel
+const adPromoCooldown = new Map();
+
+// message tracking + ad channel handling
+client.on('messageCreate', async msg => {
   if (msg.author.bot || !msg.guild) return;
+
   incrementMessageCount(msg.guild.id, msg.author.id);
+
+  if (isAdChannel(msg.guild.id, msg.channel.id)) {
+    // Track the post so we can delete it if the member leaves
+    trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
+
+    // Cooldown key: userId + channelId — only send promo once per 10 min per user
+    const cooldownKey = `${msg.author.id}:${msg.channel.id}`;
+    const lastSent = adPromoCooldown.get(cooldownKey) || 0;
+    if (Date.now() - lastSent > 10 * 60 * 1000) {
+      adPromoCooldown.set(cooldownKey, Date.now());
+      try {
+        await msg.reply({ content: AD_PROMO, allowedMentions: { repliedUser: false } });
+      } catch (err) {
+        console.warn('Failed to send ad promo reply:', err.message);
+      }
+    }
+  }
+});
+
+// ─── MEMBER LEAVE — DELETE THEIR AD POSTS ────────────────────────────────────
+
+client.on('guildMemberRemove', async member => {
+  const guildId = member.guild.id;
+  const userId = member.id;
+
+  const posts = getAdPostsByUser(guildId, userId);
+  if (posts.length === 0) return;
+
+  let deleted = 0;
+  for (const { channel_id, message_id } of posts) {
+    try {
+      const channel = await member.guild.channels.fetch(channel_id).catch(() => null);
+      if (!channel) continue;
+      const message = await channel.messages.fetch(message_id).catch(() => null);
+      if (message) {
+        await message.delete();
+        deleted++;
+      }
+    } catch (err) {
+      console.warn(`Failed to delete ad post ${message_id}:`, err.message);
+    }
+  }
+
+  clearAdPostsByUser(guildId, userId);
+  console.log(`🗑️ Deleted ${deleted}/${posts.length} ad posts for leaving member ${member.user.tag} (${userId})`);
 });
 
 // snipe system

@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } from 'discord.js';
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels } from './database.js';
 
 // Max 25 choices per Discord string option — only include commands that need role restrictions.
 // Utility commands open to all (warns, messages, balance, snipe, break, break-end, current-breaks)
@@ -99,6 +99,21 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('role3').setDescription('Allowed role 3'))
     .addRoleOption(o => o.setName('role4').setDescription('Allowed role 4'))
     .addRoleOption(o => o.setName('role5').setDescription('Allowed role 5')),
+
+  // /setup-ad-channels — manage which channels are ad channels
+  new SlashCommandBuilder()
+    .setName('setup-ad-channels')
+    .setDescription('Add, remove, or list ad channels (bot replies with promo links + tracks posts for cleanup on leave)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o =>
+      o.setName('action').setDescription('What to do').setRequired(true)
+        .addChoices(
+          { name: 'add', value: 'add' },
+          { name: 'remove', value: 'remove' },
+          { name: 'list', value: 'list' },
+        )
+    )
+    .addChannelOption(o => o.setName('channel').setDescription('The ad channel (required for add/remove)')),
 
   // /setup-requests — auto-create request channels category
   new SlashCommandBuilder()
@@ -413,6 +428,56 @@ export async function handleSetupNetworkJoin(interaction) {
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed] });
+}
+
+export async function handleSetupAdChannels(interaction) {
+  const action = interaction.options.getString('action');
+  const channel = interaction.options.getChannel('channel');
+  const guildId = interaction.guildId;
+
+  if (action === 'list') {
+    const ids = getAdChannels(guildId);
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('📢 Ad Channels')
+      .setDescription(
+        ids.length
+          ? ids.map(id => `<#${id}>`).join('\n')
+          : '*No ad channels configured. Use `/setup-ad-channels add #channel` to add one.*'
+      )
+      .setTimestamp();
+    return interaction.reply({ embeds: [embed], flags: 64 });
+  }
+
+  if (!channel) {
+    return interaction.reply({ content: '❌ Please specify a channel.', flags: 64 });
+  }
+
+  if (action === 'add') {
+    addAdChannel(guildId, channel.id);
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('✅ Ad Channel Added')
+          .setDescription(`<#${channel.id}> is now an ad channel.\n\nThe bot will:\n• Reply to every post with partner server invite links\n• Delete posts from members who leave the server`)
+          .setTimestamp()
+      ]
+    });
+  }
+
+  if (action === 'remove') {
+    const removed = removeAdChannel(guildId, channel.id);
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(removed ? 0xFEE75C : 0xED4245)
+          .setTitle(removed ? '✅ Ad Channel Removed' : '❌ Not Found')
+          .setDescription(removed ? `<#${channel.id}> is no longer an ad channel.` : `<#${channel.id}> was not an ad channel.`)
+          .setTimestamp()
+      ]
+    });
+  }
 }
 
 export async function handleSetupRequests(interaction) {

@@ -12,6 +12,25 @@ const db = new DatabaseSync(join(dataDir, 'bot.db'));
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
+// Migrate ad_channels/ad_posts tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ad_channels (
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    PRIMARY KEY (guild_id, channel_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS ad_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(guild_id, message_id)
+  );
+`);
+
 // Migrate existing guilds table — add columns if missing
 for (const col of [
   'ban_request_channel_id TEXT',
@@ -416,4 +435,45 @@ export function getCurrentBreaks(guildId) {
 
 export function isOnBreak(guildId, userId) {
   return !!db.prepare('SELECT 1 FROM breaks WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
+}
+
+// ─── Ad Channels ──────────────────────────────────────────────────────────────
+
+export function addAdChannel(guildId, channelId) {
+  db.prepare('INSERT OR IGNORE INTO ad_channels (guild_id, channel_id) VALUES (?, ?)').run(guildId, channelId);
+}
+
+export function removeAdChannel(guildId, channelId) {
+  const result = db.prepare('DELETE FROM ad_channels WHERE guild_id = ? AND channel_id = ?').run(guildId, channelId);
+  return result.changes > 0;
+}
+
+export function getAdChannels(guildId) {
+  return db.prepare('SELECT channel_id FROM ad_channels WHERE guild_id = ?').all(guildId).map(r => r.channel_id);
+}
+
+export function isAdChannel(guildId, channelId) {
+  return !!db.prepare('SELECT 1 FROM ad_channels WHERE guild_id = ? AND channel_id = ?').get(guildId, channelId);
+}
+
+// ─── Ad Posts Tracking ────────────────────────────────────────────────────────
+
+export function trackAdPost(guildId, channelId, messageId, userId) {
+  db.prepare(
+    'INSERT OR IGNORE INTO ad_posts (guild_id, channel_id, message_id, user_id) VALUES (?, ?, ?, ?)'
+  ).run(guildId, channelId, messageId, userId);
+}
+
+export function getAdPostsByUser(guildId, userId) {
+  return db.prepare(
+    'SELECT channel_id, message_id FROM ad_posts WHERE guild_id = ? AND user_id = ?'
+  ).all(guildId, userId);
+}
+
+export function clearAdPostsByUser(guildId, userId) {
+  db.prepare('DELETE FROM ad_posts WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+}
+
+export function removeAdPostRecord(guildId, messageId) {
+  db.prepare('DELETE FROM ad_posts WHERE guild_id = ? AND message_id = ?').run(guildId, messageId);
 }
