@@ -5,9 +5,6 @@ import {
   REST,
   Routes,
   EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
 } from 'discord.js';
 
 import express from 'express';
@@ -23,25 +20,54 @@ import {
 
 import {
   commandDefs,
-  handleWarn, handleWarns, handleWarnLeaderboard,
-  handleAdWarn, handleRemoveAdWarn,
-  handleMute, handleUnmute, handleBan, handleFire, handlePromote, handleDemoteUser,
-  handleStrike, handleStrikeRemove,
-  handleJail, handleUnjail,
-  handleBanRequest, handleBlacklistRequest, handleNetworkBanRequest, handlePartnershipRequest,
-  handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance, handleSnipe,
-  handleCurrentBreaks, handleBreak, handleBreakEnd,
-  handleResetMessages, handleResetMessagesAll,
-  handleNetworkBan, handleNetworkUnban,
+  handleWarn,
+  handleWarns,
+  handleWarnLeaderboard,
+  handleAdWarn,
+  handleRemoveAdWarn,
+  handleMute,
+  handleUnmute,
+  handleBan,
+  handleFire,
+  handlePromote,
+  handleDemoteUser,
+  handleStrike,
+  handleStrikeRemove,
+  handleJail,
+  handleUnjail,
+  handleBanRequest,
+  handleBlacklistRequest,
+  handleNetworkBanRequest,
+  handlePartnershipRequest,
+  handleMessages,
+  handleMessageLeaderboard,
+  handleCaseInfo,
+  handleBalance,
+  handleSnipe,
+  handleCurrentBreaks,
+  handleBreak,
+  handleBreakEnd,
+  handleResetMessages,
+  handleResetMessagesAll,
+  handleNetworkBan,
+  handleNetworkUnban,
   handleRequestButton,
 } from './commands.js';
 
 import {
   setupCommands,
-  handleSetup, handleSetupRoles, handleSetupRolesExtra,
-  handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
-  handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin, handleSetupNetworkReset,
-  handleNetworkStatus, handleSetupAdChannels,
+  handleSetup,
+  handleSetupRoles,
+  handleSetupRolesExtra,
+  handleSetupStatus,
+  handleSetupEdit,
+  handleSetupRolesWizard,
+  handleSetupRequests,
+  handleSetupNetworkHub,
+  handleSetupNetworkJoin,
+  handleSetupNetworkReset,
+  handleNetworkStatus,
+  handleSetupAdChannels,
 } from './setup.js';
 
 // ─────────────────────────────────────────────
@@ -53,48 +79,8 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const PORT = process.env.BOT_HEALTH_PORT || 8080;
 
 if (!TOKEN || !CLIENT_ID) {
-  console.error("Missing TOKEN or CLIENT_ID");
+  console.error("❌ Missing TOKEN or CLIENT_ID");
   process.exit(1);
-}
-
-// ─────────────────────────────────────────────
-// EXPRESS HEALTH SERVER
-// ─────────────────────────────────────────────
-
-const app = express();
-
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    bot: client?.isReady?.() ? "online" : "starting",
-    uptime: process.uptime(),
-    guilds: client?.guilds?.cache?.size ?? 0,
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get("/", (req, res) => res.redirect("/health"));
-
-app.listen(PORT, () => {
-  console.log(`✅ Health server running on port ${PORT}`);
-});
-
-// ─────────────────────────────────────────────
-// SELF PINGER
-// ─────────────────────────────────────────────
-
-function startSelfPinger() {
-  const domains = process.env.REPLIT_DOMAINS;
-  if (!domains) return console.log("Self-pinger disabled");
-
-  const host = domains.split(",")[0].trim();
-  const url = `https://${host}/health`;
-
-  console.log(`🔁 Self-pinger active → ${url}`);
-
-  setInterval(() => {
-    fetch(url).catch(() => {});
-  }, 4 * 60 * 1000);
 }
 
 // ─────────────────────────────────────────────
@@ -113,7 +99,53 @@ const client = new Client({
 });
 
 // ─────────────────────────────────────────────
-// COMMAND HANDLERS MAP
+// EXPRESS HEALTH SERVER
+// ─────────────────────────────────────────────
+
+const app = express();
+
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    bot: client.isReady() ? "online" : "starting",
+    uptime: process.uptime(),
+    guilds: client.guilds.cache.size,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/", (req, res) => {
+  res.redirect("/health");
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ Health server running on port ${PORT}`);
+});
+
+// ─────────────────────────────────────────────
+// SELF PINGER
+// ─────────────────────────────────────────────
+
+function startSelfPinger() {
+  const domains = process.env.REPLIT_DOMAINS;
+
+  if (!domains) {
+    console.log("⚠️ Self-pinger disabled");
+    return;
+  }
+
+  const host = domains.split(",")[0].trim();
+  const url = `https://${host}/health`;
+
+  console.log(`🔁 Self-pinger active → ${url}`);
+
+  setInterval(() => {
+    fetch(url).catch(() => {});
+  }, 4 * 60 * 1000);
+}
+
+// ─────────────────────────────────────────────
+// COMMAND HANDLERS
 // ─────────────────────────────────────────────
 
 const handlers = {
@@ -162,9 +194,11 @@ const handlers = {
   "case-info": handleCaseInfo,
   balance: handleBalance,
   snipe: handleSnipe,
+
   "current-breaks": handleCurrentBreaks,
   break: handleBreak,
   "break-end": handleBreakEnd,
+
   "reset-messages": handleResetMessages,
   "reset-messages-all": handleResetMessagesAll,
 };
@@ -177,24 +211,45 @@ async function registerCommands() {
   const rest = new REST({ version: "10" }).setToken(TOKEN);
 
   const all = [...commandDefs, ...setupCommands].map(c => c.toJSON());
-  const guilds = client.guilds.cache.map(g => g.id);
 
   try {
-    for (const id of guilds) {
+    console.log("🗑 Clearing ALL old guild commands...");
+
+    // DELETE all guild commands
+    for (const guild of client.guilds.cache.values()) {
       await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, id),
-        { body: all }
-      ).catch(() => {});
+        Routes.applicationGuildCommands(CLIENT_ID, guild.id),
+        { body: [] }
+      );
+
+      console.log(`✅ Cleared guild commands in ${guild.name}`);
     }
 
+    console.log("🗑 Clearing ALL old global commands...");
+
+    // DELETE old global commands
+    await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: [] }
+    );
+
+    console.log("✅ Old global commands deleted");
+
+    // WAIT so Discord updates properly
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    console.log("📥 Registering fresh global commands...");
+
+    // REGISTER ONLY GLOBAL COMMANDS
     await rest.put(
       Routes.applicationCommands(CLIENT_ID),
       { body: all }
     );
 
-    console.log("✅ Commands registered");
+    console.log("✅ Fresh global commands registered");
+
   } catch (err) {
-    console.error(err);
+    console.error("❌ Failed to register commands:", err);
   }
 }
 
@@ -203,8 +258,11 @@ async function registerCommands() {
 // ─────────────────────────────────────────────
 
 client.once("ready", async () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`✅ Logged in as ${client.user.tag}`);
+
   await registerCommands();
+
+  startSelfPinger();
 });
 
 // ─────────────────────────────────────────────
@@ -213,19 +271,26 @@ client.once("ready", async () => {
 
 client.on("interactionCreate", async (interaction) => {
   try {
+
+    // BUTTONS
     if (interaction.isButton()) {
       if (interaction.customId.startsWith("req:")) {
         return handleRequestButton(interaction);
       }
+
       return;
     }
 
+    // SLASH COMMANDS
     if (!interaction.isChatInputCommand()) return;
 
     const handler = handlers[interaction.commandName];
 
     if (!handler) {
-      return interaction.reply({ content: "❌ Unknown command", ephemeral: true });
+      return interaction.reply({
+        content: "❌ Unknown command",
+        ephemeral: true,
+      });
     }
 
     await handler(interaction);
@@ -233,9 +298,12 @@ client.on("interactionCreate", async (interaction) => {
   } catch (err) {
     console.error(err);
 
-    const msg = { content: "❌ Error occurred", ephemeral: true };
+    const msg = {
+      content: "❌ Error occurred",
+      ephemeral: true,
+    };
 
-    if (interaction.replied) {
+    if (interaction.replied || interaction.deferred) {
       interaction.followUp(msg).catch(() => {});
     } else {
       interaction.reply(msg).catch(() => {});
@@ -244,7 +312,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ─────────────────────────────────────────────
-// 💎 AD SYSTEM (FIXED WITH EMBED)
+// AD SYSTEM
 // ─────────────────────────────────────────────
 
 const adCooldown = new Map();
@@ -261,7 +329,7 @@ const AD_LINKS = [
   "https://discord.gg/jhcWUgRQS8",
   "https://discord.gg/GtjUa5hhCz",
   "https://discord.gg/globalads",
-  "https://discord.gg/promotions"
+  "https://discord.gg/promotions",
 ];
 
 function buildAdEmbed() {
@@ -272,7 +340,9 @@ function buildAdEmbed() {
       "Post your server & grow your community!\n\n" +
       AD_LINKS.map((l, i) => `**${i + 1}.** ${l}`).join("\n")
     )
-    .setFooter({ text: "Free advertising system" })
+    .setFooter({
+      text: "Free advertising system",
+    })
     .setTimestamp();
 }
 
@@ -286,7 +356,12 @@ client.on("messageCreate", async (msg) => {
   incrementMessageCount(msg.guild.id, msg.author.id);
 
   if (isAdChannel(msg.guild.id, msg.channel.id)) {
-    trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
+    trackAdPost(
+      msg.guild.id,
+      msg.channel.id,
+      msg.id,
+      msg.author.id
+    );
 
     const key = `${msg.author.id}:${msg.channel.id}`;
     const last = adCooldown.get(key) || 0;
@@ -296,7 +371,9 @@ client.on("messageCreate", async (msg) => {
 
       await msg.reply({
         embeds: [buildAdEmbed()],
-        allowedMentions: { repliedUser: false }
+        allowedMentions: {
+          repliedUser: false,
+        },
       }).catch(() => {});
     }
   }
@@ -312,7 +389,11 @@ client.on("guildMemberRemove", async (member) => {
   for (const p of posts) {
     try {
       const ch = await member.guild.channels.fetch(p.channel_id);
+
+      if (!ch?.isTextBased()) continue;
+
       const m = await ch.messages.fetch(p.message_id);
+
       await m.delete().catch(() => {});
     } catch {}
   }
@@ -341,8 +422,6 @@ client.on("messageDelete", (msg) => {
 // LOGIN
 // ─────────────────────────────────────────────
 
-client.login(TOKEN).catch(err => {
-  console.error("Login failed:", err);
+client.login(TOKEN).catch((err) => {
+  console.error("❌ Login failed:", err);
 });
-
-startSelfPinger();
