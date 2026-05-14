@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["web", "bash", "nodejs-22"]
 
 [deployment]
 router = "application"
@@ -25,12 +25,12 @@ args = "Discord Bot"
 name = "Discord Bot"
 author = "agent"
 
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "BOT_HEALTH_PORT=8099 pnpm --filter @workspace/discord-bot run dev"
+args = "node src/index.js"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
