@@ -1,10 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { mkdirSync } from 'fs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const dataDir = join(__dirname, '..', 'data');
+const dataDir = join(process.cwd(), 'data');
 mkdirSync(dataDir, { recursive: true });
 
 const db = new DatabaseSync(join(dataDir, 'bot.db'));
