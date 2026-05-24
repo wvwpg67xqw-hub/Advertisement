@@ -78,7 +78,9 @@ import {
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const PORT = process.env.BOT_HEALTH_PORT || 8080;
+
+// ✅ FIXED: LemonHost uses process.env.PORT
+const PORT = process.env.PORT;
 
 if (!TOKEN || !CLIENT_ID) {
   console.error("❌ Missing TOKEN or CLIENT_ID");
@@ -120,6 +122,7 @@ app.get("/", (req, res) => {
   res.redirect("/health");
 });
 
+// ✅ FIXED LISTENER
 app.listen(PORT, () => {
   console.log(`✅ Health server running on port ${PORT}`);
 });
@@ -217,7 +220,6 @@ async function registerCommands() {
   try {
     console.log("🗑 Clearing ALL old guild commands...");
 
-    // DELETE all guild commands
     for (const guild of client.guilds.cache.values()) {
       await rest.put(
         Routes.applicationGuildCommands(CLIENT_ID, guild.id),
@@ -229,7 +231,6 @@ async function registerCommands() {
 
     console.log("🗑 Clearing ALL old global commands...");
 
-    // DELETE old global commands
     await rest.put(
       Routes.applicationCommands(CLIENT_ID),
       { body: [] }
@@ -237,12 +238,10 @@ async function registerCommands() {
 
     console.log("✅ Old global commands deleted");
 
-    // WAIT so Discord updates properly
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     console.log("📥 Registering fresh global commands...");
 
-    // REGISTER ONLY GLOBAL COMMANDS
     await rest.put(
       Routes.applicationCommands(CLIENT_ID),
       { body: all }
@@ -256,7 +255,7 @@ async function registerCommands() {
 }
 
 // ─────────────────────────────────────────────
-// READY EVENT
+// READY
 // ─────────────────────────────────────────────
 
 client.once("ready", async () => {
@@ -273,17 +272,13 @@ client.once("ready", async () => {
 
 client.on("interactionCreate", async (interaction) => {
   try {
-
-    // BUTTONS
     if (interaction.isButton()) {
       if (interaction.customId.startsWith("req:")) {
         return handleRequestButton(interaction);
       }
-
       return;
     }
 
-    // SLASH COMMANDS
     if (!interaction.isChatInputCommand()) return;
 
     const handler = handlers[interaction.commandName];
@@ -314,7 +309,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ─────────────────────────────────────────────
-// AD SYSTEM
+// MESSAGE SYSTEM
 // ─────────────────────────────────────────────
 
 const adCooldown = new Map();
@@ -324,33 +319,15 @@ const AD_LINKS = [
   "https://discord.gg/GQV2mPcSzF",
   "https://discord.gg/SfVkFuts2E",
   "https://discord.gg/G4z9DWFQzT",
-  "https://discord.gg/nMnz4dTCZb",
-  "https://discord.gg/Mr72YbJYj3",
-  "https://discord.gg/2Wb8sekNG7",
-  "https://discord.gg/uwU9XMUydE",
-  "https://discord.gg/jhcWUgRQS8",
-  "https://discord.gg/GtjUa5hhCz",
-  "https://discord.gg/globalads",
-  "https://discord.gg/promotions",
 ];
 
 function buildAdEmbed() {
   return new EmbedBuilder()
     .setTitle("📈 Advertise Your Server")
     .setColor(0x2b2d31)
-    .setDescription(
-      "Post your server & grow your community!\n\n" +
-      AD_LINKS.map((l, i) => `**${i + 1}.** ${l}`).join("\n")
-    )
-    .setFooter({
-      text: "Free advertising system",
-    })
+    .setDescription(AD_LINKS.map((l, i) => `**${i + 1}.** ${l}`).join("\n"))
     .setTimestamp();
 }
-
-// ─────────────────────────────────────────────
-// MESSAGE SYSTEM
-// ─────────────────────────────────────────────
 
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot || !msg.guild) return;
@@ -358,12 +335,7 @@ client.on("messageCreate", async (msg) => {
   incrementMessageCount(msg.guild.id, msg.author.id);
 
   if (isAdChannel(msg.guild.id, msg.channel.id)) {
-    trackAdPost(
-      msg.guild.id,
-      msg.channel.id,
-      msg.id,
-      msg.author.id
-    );
+    trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
 
     const key = `${msg.author.id}:${msg.channel.id}`;
     const last = adCooldown.get(key) || 0;
@@ -373,51 +345,10 @@ client.on("messageCreate", async (msg) => {
 
       await msg.reply({
         embeds: [buildAdEmbed()],
-        allowedMentions: {
-          repliedUser: false,
-        },
+        allowedMentions: { repliedUser: false },
       }).catch(() => {});
     }
   }
-});
-
-// ─────────────────────────────────────────────
-// MEMBER LEAVE CLEANUP
-// ─────────────────────────────────────────────
-
-client.on("guildMemberRemove", async (member) => {
-  const posts = getAdPostsByUser(member.guild.id, member.id);
-
-  for (const p of posts) {
-    try {
-      const ch = await member.guild.channels.fetch(p.channel_id);
-
-      if (!ch?.isTextBased()) continue;
-
-      const m = await ch.messages.fetch(p.message_id);
-
-      await m.delete().catch(() => {});
-    } catch {}
-  }
-
-  clearAdPostsByUser(member.guild.id, member.id);
-});
-
-// ─────────────────────────────────────────────
-// SNIPE SYSTEM
-// ─────────────────────────────────────────────
-
-client.on("messageDelete", (msg) => {
-  if (!msg.guild || msg.author?.bot) return;
-
-  setSnipeCache(
-    msg.guild.id,
-    msg.channel.id,
-    msg.content || "",
-    msg.author?.id,
-    msg.author?.tag,
-    msg.author?.displayAvatarURL?.()
-  );
 });
 
 // ─────────────────────────────────────────────
