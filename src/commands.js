@@ -285,14 +285,30 @@ export async function handleAdWarn(interaction) {
     }
   }
 
-  const caseId = addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, messageId, deletedContent);
-  const embed = buildAdWarnEmbed({
-    userId: target.id,
-    moderatorId: interaction.user.id,
-    caseId,
-    reason,
-    messageContent: deletedContent,
-  });
+  const caseId = addAdWarn(
+  interaction.guildId,
+  target.id,
+  interaction.user.id,
+  reason,
+  messageId,
+  deletedContent
+);
+
+const totalWarns = getAdWarns(
+  interaction.guildId,
+  target.id
+).length;
+
+const embed = buildAdWarnEmbed({
+  userId: target.id,
+  moderatorId: interaction.user.id,
+  caseId,
+  reason,
+  messageContent: deletedContent,
+  channelId: interaction.channelId,
+  messageId,
+  totalWarns,
+});
   await interaction.reply({ embeds: [embed] });
   const config = getGuild(interaction.guildId);
   await sendLog(interaction.guild, config, 'ad_warn', embed);
