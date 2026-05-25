@@ -1,7 +1,8 @@
 import { Router } from "express";
 import db from "../db.js";
 import { requireAdmin } from "../auth.js";
-import { EmbedBuilder } from "discord.js";
+import discordPkg from 'discord.js';
+const { EmbedBuilder } = discordPkg;
 
 const router = Router();
 

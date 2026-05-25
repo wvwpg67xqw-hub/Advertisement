@@ -1,8 +1,5 @@
-import {
-  Client,
-  GatewayIntentBits,
-  Partials,
-} from 'discord.js';
+import discordPkg from 'discord.js';
+const { Client, GatewayIntentBits, Partials } = discordPkg;
 
 const client = new Client({
   intents: [

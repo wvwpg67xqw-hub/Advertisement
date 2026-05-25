@@ -3,12 +3,8 @@ import db from '../db.js';
 import { requireAuth, isBlacklisted } from '../auth.js';
 import client from '../botClient.js';
 
-import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  EmbedBuilder,
-} from 'discord.js';
+import discordPkg from 'discord.js';
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = discordPkg;
 
 const router = Router();
 
