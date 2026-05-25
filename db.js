@@ -1,83 +1,129 @@
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readCol, writeCol, nextId, ts } from './jsondb.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const dataDir = join(__dirname, 'data');
-mkdirSync(dataDir, { recursive: true });
-
-const db = new Database(join(dataDir, 'app.db'));
-
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId TEXT UNIQUE NOT NULL,
-    username TEXT NOT NULL,
-    avatar TEXT,
-    role TEXT DEFAULT 'user',
-    createdAt INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE TABLE IF NOT EXISTS app_roles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    emoji TEXT NOT NULL DEFAULT '📋',
-    color TEXT NOT NULL DEFAULT '#6c63ff',
-    active INTEGER NOT NULL DEFAULT 1,
-    sort_order INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS applications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId TEXT NOT NULL,
-    username TEXT NOT NULL,
-    avatar TEXT,
-    role TEXT NOT NULL,
-    age TEXT NOT NULL,
-    timezone TEXT NOT NULL,
-    experience TEXT NOT NULL,
-    motivation TEXT NOT NULL,
-    availability TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    createdAt INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE TABLE IF NOT EXISTS blacklist (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId TEXT NOT NULL,
-    username TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    createdAt INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE TABLE IF NOT EXISTS admins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId TEXT UNIQUE NOT NULL,
-    username TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'admin',
-    createdAt INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-`);
-
-// Migrate applications table to add avatar column if missing
-try { db.exec('ALTER TABLE applications ADD COLUMN avatar TEXT'); } catch {}
-
-// Seed default roles if table is empty
-const roleCount = db.prepare('SELECT COUNT(*) as c FROM app_roles').get().c;
-if (roleCount === 0) {
-  const defaults = [
-    { name: 'Moderator',       description: 'Enforce community rules, manage disputes, handle reports, and maintain a safe environment for all members.', emoji: '🔨', color: '#6c63ff', sort_order: 0 },
-    { name: 'Human Resources', description: 'Onboard new staff, handle staff issues, manage promotions, and ensure team wellbeing and cohesion.',           emoji: '🤝', color: '#22c55e', sort_order: 1 },
-    { name: 'Partnership',     description: 'Build relationships with other communities, negotiate partnership deals, and grow our network.',                emoji: '🌐', color: '#f59e0b', sort_order: 2 },
-  ];
-  for (const r of defaults) {
-    db.prepare('INSERT OR IGNORE INTO app_roles (name, description, emoji, color, sort_order) VALUES (?, ?, ?, ?, ?)').run(r.name, r.description, r.emoji, r.color, r.sort_order);
-  }
+// ── Seed default app roles ────────────────────────────────────────────────────
+if (!readCol('app_roles').length) {
+  writeCol('app_roles', [
+    { id: 1, name: 'Moderator',       description: 'Enforce community rules, manage disputes, handle reports, and maintain a safe environment for all members.', emoji: '🔨', color: '#6c63ff', active: 1, sort_order: 0 },
+    { id: 2, name: 'Human Resources', description: 'Onboard new staff, handle staff issues, manage promotions, and ensure team wellbeing and cohesion.',           emoji: '🤝', color: '#22c55e', active: 1, sort_order: 1 },
+    { id: 3, name: 'Partnership',     description: 'Build relationships with other communities, negotiate partnership deals, and grow our network.',                emoji: '🌐', color: '#f59e0b', active: 1, sort_order: 2 },
+  ]);
 }
+
+const db = {
+  // ── Users ──────────────────────────────────────────────────────────────────
+  upsertUser(userId, username, avatar) {
+    const rows = readCol('users');
+    const i = rows.findIndex(u => u.userId === userId);
+    if (i >= 0) { rows[i].username = username; rows[i].avatar = avatar; }
+    else rows.push({ id: nextId('users'), userId, username, avatar: avatar ?? null, role: 'user', createdAt: ts() });
+    writeCol('users', rows);
+  },
+
+  // ── Admins ─────────────────────────────────────────────────────────────────
+  seedAdmin(userId, username, role) {
+    const rows = readCol('admins');
+    if (rows.find(a => a.userId === userId)) return;
+    rows.push({ id: nextId('admins'), userId, username, role, createdAt: ts() });
+    writeCol('admins', rows);
+  },
+
+  getAdmin(userId) {
+    return readCol('admins').find(a => a.userId === userId) ?? null;
+  },
+
+  getAllAdmins() {
+    return readCol('admins').sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  insertAdmin(userId, username, role) {
+    const rows = readCol('admins');
+    if (rows.find(a => a.userId === userId)) throw new Error('Admin already exists');
+    const entry = { id: nextId('admins'), userId, username, role: role || 'admin', createdAt: ts() };
+    rows.push(entry);
+    writeCol('admins', rows);
+    return entry;
+  },
+
+  deleteAdmin(id) {
+    const rows = readCol('admins');
+    const next = rows.filter(a => a.id !== Number(id));
+    writeCol('admins', next);
+    return { changes: rows.length - next.length };
+  },
+
+  // ── App Roles ──────────────────────────────────────────────────────────────
+  getActiveRoles() {
+    return readCol('app_roles')
+      .filter(r => r.active === 1)
+      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+  },
+
+  getAllRoles() {
+    return readCol('app_roles').sort((a, b) => a.sort_order - b.sort_order);
+  },
+
+  getRole(name) {
+    return readCol('app_roles').find(r => r.name === name && r.active === 1) ?? null;
+  },
+
+  // ── Applications ───────────────────────────────────────────────────────────
+  getApplication(id) {
+    return readCol('applications').find(a => a.id === Number(id)) ?? null;
+  },
+
+  getApplications(status) {
+    let rows = readCol('applications');
+    if (status && ['pending', 'accepted', 'denied'].includes(status)) {
+      rows = rows.filter(a => a.status === status);
+    }
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  getPendingApplication(userId, role) {
+    return readCol('applications').find(
+      a => a.userId === userId && a.role === role && a.status === 'pending'
+    ) ?? null;
+  },
+
+  insertApplication({ userId, username, avatar, role, age, timezone, experience, motivation, availability }) {
+    const rows = readCol('applications');
+    const id = nextId('applications');
+    rows.push({ id, userId, username, avatar: avatar ?? null, role, age, timezone, experience, motivation, availability, status: 'pending', createdAt: ts() });
+    writeCol('applications', rows);
+    return { lastInsertRowid: id };
+  },
+
+  updateApplicationStatus(id, status) {
+    const rows = readCol('applications');
+    const i = rows.findIndex(a => a.id === Number(id));
+    if (i >= 0) rows[i].status = status;
+    writeCol('applications', rows);
+  },
+
+  // ── Blacklist ──────────────────────────────────────────────────────────────
+  getBlacklist() {
+    return readCol('web_blacklist').sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  insertBlacklist(userId, username, reason) {
+    const rows = readCol('web_blacklist');
+    if (rows.find(b => b.userId === userId)) throw new Error('Already blacklisted');
+    const entry = { id: nextId('web_blacklist'), userId, username, reason, createdAt: ts() };
+    rows.push(entry);
+    writeCol('web_blacklist', rows);
+    return entry;
+  },
+
+  deleteBlacklist(id) {
+    const rows = readCol('web_blacklist');
+    const next = rows.filter(b => b.id !== Number(id));
+    writeCol('web_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  isBlacklisted(userId) {
+    return !!readCol('web_blacklist').find(b => b.userId === userId);
+  },
+};
 
 export default db;

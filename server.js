@@ -103,7 +103,7 @@ const ADMIN_ID       = process.env.ADMIN_ID;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'Owner';
 if (ADMIN_ID) {
   try {
-    db.prepare('INSERT OR IGNORE INTO admins (userId, username, role) VALUES (?, ?, ?)').run(ADMIN_ID, ADMIN_USERNAME, 'owner');
+    db.seedAdmin(ADMIN_ID, ADMIN_USERNAME, 'owner');
     console.log(`✅ Admin seeded: ${ADMIN_USERNAME} (${ADMIN_ID})`);
   } catch (err) {
     console.error('Admin seed error:', err.message);
@@ -158,9 +158,7 @@ app.get('/api/auth/callback', async (req, res) => {
 
     const user = { userId: discordUser.id, username: discordUser.username, avatar };
 
-    db.prepare(`INSERT INTO users (userId, username, avatar) VALUES (?, ?, ?)
-      ON CONFLICT(userId) DO UPDATE SET username = excluded.username, avatar = excluded.avatar`)
-      .run(user.userId, user.username, user.avatar);
+    db.upsertUser(user.userId, user.username, user.avatar);
 
     req.session.user = user;
     res.redirect('/');
@@ -172,7 +170,7 @@ app.get('/api/auth/callback', async (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session?.user) return res.status(401).json({ error: 'Not authenticated' });
-  const admin = db.prepare('SELECT * FROM admins WHERE userId = ?').get(req.session.user.userId);
+  const admin = db.getAdmin(req.session.user.userId);
   res.json({ ...req.session.user, isAdmin: !!admin });
 });
 
@@ -183,7 +181,7 @@ app.post('/api/auth/logout', (req, res) => {
 // ── Public: active application roles ─────────────────────────────────────────
 
 app.get('/api/roles', (req, res) => {
-  res.json(db.prepare('SELECT * FROM app_roles WHERE active = 1 ORDER BY sort_order ASC, id ASC').all());
+  res.json(db.getActiveRoles());
 });
 
 // ── Health check ──────────────────────────────────────────────────────────────
@@ -281,19 +279,19 @@ client.on('interactionCreate', async (interaction) => {
       const [type, action, id] = interaction.customId.split('_');
 
       if (type === 'app') {
-        const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(Number(id));
+        const application = db.getApplication(Number(id));
 
         if (!application) {
           return interaction.reply({ content: '❌ Application not found', ephemeral: true });
         }
 
         if (action === 'accept') {
-          db.prepare("UPDATE applications SET status = 'accepted' WHERE id = ?").run(Number(id));
+          db.updateApplicationStatus(Number(id), 'accepted');
           return interaction.reply({ content: `✅ Accepted application #${id}`, ephemeral: true });
         }
 
         if (action === 'deny') {
-          db.prepare("UPDATE applications SET status = 'denied' WHERE id = ?").run(Number(id));
+          db.updateApplicationStatus(Number(id), 'denied');
           return interaction.reply({ content: `❌ Denied application #${id}`, ephemeral: true });
         }
       }

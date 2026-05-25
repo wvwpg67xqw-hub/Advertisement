@@ -1,169 +1,29 @@
-import Database from 'better-sqlite3';
-import { join } from 'path';
-import { mkdirSync } from 'fs';
+import { readCol, writeCol, nextId, ts } from '../jsondb.js';
 
-const dataDir = join(process.cwd(), 'data');
-mkdirSync(dataDir, { recursive: true });
-
-const db = new Database(join(dataDir, 'bot.db'));
-
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-// Migrate ad_channels/ad_posts tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS ad_channels (
-    guild_id TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    PRIMARY KEY (guild_id, channel_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS ad_posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    message_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    UNIQUE(guild_id, message_id)
-  );
-`);
-
-// Migrate existing guilds table — add columns if missing
-for (const col of [
-  'ban_request_channel_id TEXT',
-  'blacklist_request_channel_id TEXT',
-  'network_ban_request_channel_id TEXT',
-  'partnership_request_channel_id TEXT',
-  'is_hub INTEGER NOT NULL DEFAULT 0',
-  'hub_guild_id TEXT',
-]) {
-  try {
-    db.exec(`ALTER TABLE guilds ADD COLUMN ${col}`);
-  } catch {
-    // Column already exists — safe to ignore
-  }
-}
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS guilds (
-    guild_id TEXT PRIMARY KEY,
-    log_channel_id TEXT,
-    warn_log_channel_id TEXT,
-    strike_log_channel_id TEXT,
-    request_log_channel_id TEXT,
-    ad_warn_log_channel_id TEXT,
-    jail_role_id TEXT,
-    muted_role_id TEXT,
-    command_roles TEXT NOT NULL DEFAULT '{}',
-    ban_request_channel_id TEXT,
-    blacklist_request_channel_id TEXT,
-    network_ban_request_channel_id TEXT,
-    partnership_request_channel_id TEXT,
-    is_hub INTEGER NOT NULL DEFAULT 0,
-    hub_guild_id TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS warns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    case_id TEXT UNIQUE NOT NULL,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE TABLE IF NOT EXISTS ad_warns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    case_id TEXT UNIQUE NOT NULL,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    message_id TEXT,
-    message_content TEXT,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE TABLE IF NOT EXISTS strikes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    case_id TEXT UNIQUE NOT NULL,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-
-  CREATE TABLE IF NOT EXISTS jailed_users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    original_roles TEXT NOT NULL DEFAULT '[]',
-    jailed_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    UNIQUE(guild_id, user_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS message_counts (
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (guild_id, user_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS snipe_cache (
-    guild_id TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    content TEXT,
-    author_id TEXT,
-    author_name TEXT,
-    author_avatar TEXT,
-    deleted_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    PRIMARY KEY (guild_id, channel_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS balances (
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    balance INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (guild_id, user_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS blacklist (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    UNIQUE(guild_id, user_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS breaks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    username TEXT NOT NULL,
-    reason TEXT,
-    started_at INTEGER NOT NULL DEFAULT (unixepoch())
-  );
-`);
-
-// ─── Guild Config ─────────────────────────────────────────────────────────────
+// ─── Guild Config ──────────────────────────────────────────────────────────────
 
 export function getGuild(guildId) {
-  let row = db.prepare('SELECT * FROM guilds WHERE guild_id = ?').get(guildId);
+  const rows = readCol('guilds');
+  let row = rows.find(g => g.guild_id === guildId);
   if (!row) {
-    db.prepare('INSERT OR IGNORE INTO guilds (guild_id) VALUES (?)').run(guildId);
-    row = db.prepare('SELECT * FROM guilds WHERE guild_id = ?').get(guildId);
+    row = {
+      guild_id: guildId, log_channel_id: null, warn_log_channel_id: null,
+      strike_log_channel_id: null, request_log_channel_id: null, ad_warn_log_channel_id: null,
+      jail_role_id: null, muted_role_id: null, command_roles: {},
+      ban_request_channel_id: null, blacklist_request_channel_id: null,
+      network_ban_request_channel_id: null, partnership_request_channel_id: null,
+      is_hub: 0, hub_guild_id: null,
+    };
+    rows.push(row);
+    writeCol('guilds', rows);
   }
-  row.command_roles = JSON.parse(row.command_roles || '{}');
   return row;
 }
 
 export function setGuildConfig(guildId, fields) {
+  const rows = readCol('guilds');
   getGuild(guildId);
+  const i = rows.findIndex(g => g.guild_id === guildId);
   const allowed = [
     'log_channel_id', 'warn_log_channel_id', 'strike_log_channel_id',
     'request_log_channel_id', 'ad_warn_log_channel_id', 'jail_role_id', 'muted_role_id',
@@ -171,307 +31,302 @@ export function setGuildConfig(guildId, fields) {
     'network_ban_request_channel_id', 'partnership_request_channel_id',
   ];
   for (const [key, val] of Object.entries(fields)) {
-    if (allowed.includes(key)) {
-      db.prepare(`UPDATE guilds SET ${key} = ? WHERE guild_id = ?`).run(val, guildId);
-    }
+    if (allowed.includes(key)) rows[i][key] = val;
   }
+  writeCol('guilds', rows);
 }
 
 export function setNetworkHub(guildId, isHub) {
+  const rows = readCol('guilds');
   getGuild(guildId);
-  db.prepare('UPDATE guilds SET is_hub = ? WHERE guild_id = ?').run(isHub ? 1 : 0, guildId);
+  const i = rows.findIndex(g => g.guild_id === guildId);
+  rows[i].is_hub = isHub ? 1 : 0;
+  writeCol('guilds', rows);
 }
 
 export function setHubGuildId(guildId, hubGuildId) {
+  const rows = readCol('guilds');
   getGuild(guildId);
-  db.prepare('UPDATE guilds SET hub_guild_id = ? WHERE guild_id = ?').run(hubGuildId, guildId);
+  const i = rows.findIndex(g => g.guild_id === guildId);
+  rows[i].hub_guild_id = hubGuildId;
+  writeCol('guilds', rows);
 }
 
 export function clearNetworkHub(guildId) {
-  getGuild(guildId);
-  db.prepare('UPDATE guilds SET is_hub = 0 WHERE guild_id = ?').run(guildId);
+  setNetworkHub(guildId, false);
 }
 
 export function clearHubGuildId(guildId) {
+  const rows = readCol('guilds');
   getGuild(guildId);
-  db.prepare('UPDATE guilds SET hub_guild_id = NULL WHERE guild_id = ?').run(guildId);
+  const i = rows.findIndex(g => g.guild_id === guildId);
+  rows[i].hub_guild_id = null;
+  writeCol('guilds', rows);
 }
 
 export function getNetworkMembers(hubGuildId) {
-  return db.prepare('SELECT guild_id FROM guilds WHERE hub_guild_id = ?').all(hubGuildId);
+  return readCol('guilds').filter(g => g.hub_guild_id === hubGuildId).map(g => ({ guild_id: g.guild_id }));
 }
 
 export function setCommandRoles(guildId, command, roleIds) {
-  const guild = getGuild(guildId);
-  const roles = guild.command_roles;
-  roles[command] = roleIds;
-  db.prepare('UPDATE guilds SET command_roles = ? WHERE guild_id = ?')
-    .run(JSON.stringify(roles), guildId);
+  const rows = readCol('guilds');
+  getGuild(guildId);
+  const i = rows.findIndex(g => g.guild_id === guildId);
+  if (!rows[i].command_roles) rows[i].command_roles = {};
+  rows[i].command_roles[command] = roleIds;
+  writeCol('guilds', rows);
 }
 
 export function getCommandRoles(guildId, command) {
   const guild = getGuild(guildId);
-  return guild.command_roles[command] || [];
+  return (guild.command_roles || {})[command] || [];
 }
 
 // ─── Case ID ──────────────────────────────────────────────────────────────────
 
 function generateCaseId(guildId) {
-  const w = db.prepare('SELECT COUNT(*) as c FROM warns WHERE guild_id = ?').get(guildId)?.c || 0;
-  const a = db.prepare('SELECT COUNT(*) as c FROM ad_warns WHERE guild_id = ?').get(guildId)?.c || 0;
-  const s = db.prepare('SELECT COUNT(*) as c FROM strikes WHERE guild_id = ?').get(guildId)?.c || 0;
-  return `CASE-${String(Number(w) + Number(a) + Number(s) + 1).padStart(4, '0')}`;
+  const w = readCol('warns').filter(r => r.guild_id === guildId).length;
+  const a = readCol('ad_warns').filter(r => r.guild_id === guildId).length;
+  const s = readCol('strikes').filter(r => r.guild_id === guildId).length;
+  return `CASE-${String(w + a + s + 1).padStart(4, '0')}`;
 }
 
 // ─── Warns ────────────────────────────────────────────────────────────────────
 
 export function addWarn(guildId, userId, moderatorId, reason) {
+  const rows = readCol('warns');
   const caseId = generateCaseId(guildId);
-  db.prepare(
-    'INSERT INTO warns (case_id, guild_id, user_id, moderator_id, reason) VALUES (?, ?, ?, ?, ?)',
-  ).run(caseId, guildId, userId, moderatorId, reason);
+  rows.push({ id: nextId('warns'), case_id: caseId, guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, created_at: ts() });
+  writeCol('warns', rows);
   return caseId;
 }
 
 export function getWarns(guildId, userId) {
-  return db.prepare(
-    'SELECT * FROM warns WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC',
-  ).all(guildId, userId);
+  return readCol('warns').filter(r => r.guild_id === guildId && r.user_id === userId).sort((a, b) => b.created_at - a.created_at);
 }
 
 export function getWarnCount(guildId, userId) {
-  return Number(db.prepare(
-    'SELECT COUNT(*) as c FROM warns WHERE guild_id = ? AND user_id = ?',
-  ).get(guildId, userId)?.c || 0);
+  return readCol('warns').filter(r => r.guild_id === guildId && r.user_id === userId).length;
 }
 
 export function getWarnLeaderboard(guildId, limit = 10) {
-  return db.prepare(
-    `SELECT user_id, COUNT(*) as count FROM warns
-     WHERE guild_id = ? GROUP BY user_id ORDER BY count DESC LIMIT ?`,
-  ).all(guildId, limit);
+  const counts = {};
+  readCol('warns').filter(r => r.guild_id === guildId).forEach(r => { counts[r.user_id] = (counts[r.user_id] || 0) + 1; });
+  return Object.entries(counts).map(([user_id, count]) => ({ user_id, count })).sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
 export function getCaseInfo(guildId, caseId) {
   return (
-    db.prepare("SELECT *, 'warn' as type FROM warns WHERE guild_id = ? AND case_id = ?").get(guildId, caseId) ||
-    db.prepare("SELECT *, 'ad_warn' as type FROM ad_warns WHERE guild_id = ? AND case_id = ?").get(guildId, caseId) ||
-    db.prepare("SELECT *, 'strike' as type FROM strikes WHERE guild_id = ? AND case_id = ?").get(guildId, caseId)
+    readCol('warns').find(r => r.guild_id === guildId && r.case_id === caseId && (r.type = 'warn')) ||
+    readCol('ad_warns').find(r => r.guild_id === guildId && r.case_id === caseId && (r.type = 'ad_warn')) ||
+    readCol('strikes').find(r => r.guild_id === guildId && r.case_id === caseId && (r.type = 'strike')) ||
+    null
   );
 }
 
 // ─── Ad Warns ─────────────────────────────────────────────────────────────────
 
 export function addAdWarn(guildId, userId, moderatorId, reason, messageId, messageContent) {
+  const rows = readCol('ad_warns');
   const caseId = generateCaseId(guildId);
-  db.prepare(
-    `INSERT INTO ad_warns (case_id, guild_id, user_id, moderator_id, reason, message_id, message_content)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(caseId, guildId, userId, moderatorId, reason, messageId ?? null, messageContent ?? null);
+  rows.push({ id: nextId('ad_warns'), case_id: caseId, guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, message_id: messageId ?? null, message_content: messageContent ?? null, created_at: ts() });
+  writeCol('ad_warns', rows);
   return caseId;
 }
 
 export function getAdWarns(guildId, userId) {
-  return db.prepare(
-    'SELECT * FROM ad_warns WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC',
-  ).all(guildId, userId);
+  return readCol('ad_warns').filter(r => r.guild_id === guildId && r.user_id === userId).sort((a, b) => b.created_at - a.created_at);
 }
 
 export function removeAdWarn(guildId, caseId) {
-  const result = db.prepare('DELETE FROM ad_warns WHERE guild_id = ? AND case_id = ?').run(guildId, caseId);
-  return result.changes > 0;
+  const rows = readCol('ad_warns');
+  const next = rows.filter(r => !(r.guild_id === guildId && r.case_id === caseId));
+  writeCol('ad_warns', next);
+  return rows.length !== next.length;
 }
 
 // ─── Strikes ──────────────────────────────────────────────────────────────────
 
 export function addStrike(guildId, userId, moderatorId, reason) {
+  const rows = readCol('strikes');
   const caseId = generateCaseId(guildId);
-  db.prepare(
-    'INSERT INTO strikes (case_id, guild_id, user_id, moderator_id, reason) VALUES (?, ?, ?, ?, ?)',
-  ).run(caseId, guildId, userId, moderatorId, reason);
+  rows.push({ id: nextId('strikes'), case_id: caseId, guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, created_at: ts() });
+  writeCol('strikes', rows);
   return caseId;
 }
 
 export function getStrikes(guildId, userId) {
-  return db.prepare(
-    'SELECT * FROM strikes WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC',
-  ).all(guildId, userId);
+  return readCol('strikes').filter(r => r.guild_id === guildId && r.user_id === userId).sort((a, b) => b.created_at - a.created_at);
 }
 
 export function getStrikeCount(guildId, userId) {
-  return Number(db.prepare(
-    'SELECT COUNT(*) as c FROM strikes WHERE guild_id = ? AND user_id = ?',
-  ).get(guildId, userId)?.c || 0);
+  return readCol('strikes').filter(r => r.guild_id === guildId && r.user_id === userId).length;
 }
 
 export function removeStrike(guildId, caseId) {
-  const result = db.prepare('DELETE FROM strikes WHERE guild_id = ? AND case_id = ?').run(guildId, caseId);
-  return result.changes > 0;
+  const rows = readCol('strikes');
+  const next = rows.filter(r => !(r.guild_id === guildId && r.case_id === caseId));
+  writeCol('strikes', next);
+  return rows.length !== next.length;
 }
 
 // ─── Jail ─────────────────────────────────────────────────────────────────────
 
 export function jailUser(guildId, userId, originalRoles) {
-  db.prepare(
-    'INSERT OR REPLACE INTO jailed_users (guild_id, user_id, original_roles) VALUES (?, ?, ?)',
-  ).run(guildId, userId, JSON.stringify(originalRoles));
+  const rows = readCol('jailed_users').filter(r => !(r.guild_id === guildId && r.user_id === userId));
+  rows.push({ guild_id: guildId, user_id: userId, original_roles: originalRoles, jailed_at: ts() });
+  writeCol('jailed_users', rows);
 }
 
 export function unjailUser(guildId, userId) {
-  const row = db.prepare(
-    'SELECT * FROM jailed_users WHERE guild_id = ? AND user_id = ?',
-  ).get(guildId, userId);
-  if (!row) return null;
-  db.prepare('DELETE FROM jailed_users WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
-  return JSON.parse(row.original_roles);
+  const rows = readCol('jailed_users');
+  const entry = rows.find(r => r.guild_id === guildId && r.user_id === userId);
+  if (!entry) return null;
+  writeCol('jailed_users', rows.filter(r => !(r.guild_id === guildId && r.user_id === userId)));
+  return entry.original_roles;
 }
 
 export function isJailed(guildId, userId) {
-  return !!db.prepare('SELECT 1 FROM jailed_users WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
+  return !!readCol('jailed_users').find(r => r.guild_id === guildId && r.user_id === userId);
 }
 
 // ─── Message Counts ───────────────────────────────────────────────────────────
 
 export function incrementMessageCount(guildId, userId) {
-  db.prepare(
-    `INSERT INTO message_counts (guild_id, user_id, count) VALUES (?, ?, 1)
-     ON CONFLICT(guild_id, user_id) DO UPDATE SET count = count + 1`,
-  ).run(guildId, userId);
+  const rows = readCol('message_counts');
+  const i = rows.findIndex(r => r.guild_id === guildId && r.user_id === userId);
+  if (i >= 0) rows[i].count++;
+  else rows.push({ guild_id: guildId, user_id: userId, count: 1 });
+  writeCol('message_counts', rows);
 }
 
 export function getMessageCount(guildId, userId) {
-  return Number(db.prepare(
-    'SELECT count FROM message_counts WHERE guild_id = ? AND user_id = ?',
-  ).get(guildId, userId)?.count || 0);
+  return readCol('message_counts').find(r => r.guild_id === guildId && r.user_id === userId)?.count || 0;
 }
 
 export function getMessageLeaderboard(guildId, limit = 10) {
-  return db.prepare(
-    'SELECT user_id, count FROM message_counts WHERE guild_id = ? ORDER BY count DESC LIMIT ?',
-  ).all(guildId, limit);
+  return readCol('message_counts').filter(r => r.guild_id === guildId).sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
 export function resetMessages(guildId, userId) {
-  db.prepare('DELETE FROM message_counts WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+  writeCol('message_counts', readCol('message_counts').filter(r => !(r.guild_id === guildId && r.user_id === userId)));
 }
 
 export function resetMessagesAll(guildId) {
-  db.prepare('DELETE FROM message_counts WHERE guild_id = ?').run(guildId);
+  writeCol('message_counts', readCol('message_counts').filter(r => r.guild_id !== guildId));
 }
 
 // ─── Snipe Cache ──────────────────────────────────────────────────────────────
 
 export function setSnipeCache(guildId, channelId, content, authorId, authorName, authorAvatar) {
-  db.prepare(
-    `INSERT OR REPLACE INTO snipe_cache
-     (guild_id, channel_id, content, author_id, author_name, author_avatar, deleted_at)
-     VALUES (?, ?, ?, ?, ?, ?, unixepoch())`,
-  ).run(guildId, channelId, content, authorId, authorName, authorAvatar);
+  const rows = readCol('snipe_cache').filter(r => !(r.guild_id === guildId && r.channel_id === channelId));
+  rows.push({ guild_id: guildId, channel_id: channelId, content, author_id: authorId, author_name: authorName, author_avatar: authorAvatar, deleted_at: ts() });
+  writeCol('snipe_cache', rows);
 }
 
 export function getSnipeCache(guildId, channelId) {
-  return db.prepare(
-    'SELECT * FROM snipe_cache WHERE guild_id = ? AND channel_id = ?',
-  ).get(guildId, channelId);
+  return readCol('snipe_cache').find(r => r.guild_id === guildId && r.channel_id === channelId) ?? null;
 }
 
 // ─── Balances ─────────────────────────────────────────────────────────────────
 
 export function getBalance(guildId, userId) {
-  return Number(db.prepare(
-    'SELECT balance FROM balances WHERE guild_id = ? AND user_id = ?',
-  ).get(guildId, userId)?.balance || 0);
+  return readCol('balances').find(r => r.guild_id === guildId && r.user_id === userId)?.balance || 0;
 }
 
 export function setBalance(guildId, userId, amount) {
-  db.prepare(
-    `INSERT INTO balances (guild_id, user_id, balance) VALUES (?, ?, ?)
-     ON CONFLICT(guild_id, user_id) DO UPDATE SET balance = ?`,
-  ).run(guildId, userId, amount, amount);
+  const rows = readCol('balances');
+  const i = rows.findIndex(r => r.guild_id === guildId && r.user_id === userId);
+  if (i >= 0) rows[i].balance = amount;
+  else rows.push({ guild_id: guildId, user_id: userId, balance: amount });
+  writeCol('balances', rows);
 }
 
 // ─── Breaks ───────────────────────────────────────────────────────────────────
 
 export function startBreak(guildId, userId, username, reason) {
-  const existing = db.prepare('SELECT 1 FROM breaks WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
-  if (existing) return false;
-  db.prepare(
-    'INSERT INTO breaks (guild_id, user_id, username, reason) VALUES (?, ?, ?, ?)',
-  ).run(guildId, userId, username, reason ?? null);
+  const rows = readCol('breaks');
+  if (rows.find(r => r.guild_id === guildId && r.user_id === userId)) return false;
+  rows.push({ id: nextId('breaks'), guild_id: guildId, user_id: userId, username, reason: reason ?? null, started_at: ts() });
+  writeCol('breaks', rows);
   return true;
 }
 
-export function addBlacklist(guildId, userId, moderatorId, reason) {
-  db.prepare(`
-    INSERT INTO blacklist (guild_id, user_id, moderator_id, reason)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(guild_id, user_id) DO UPDATE SET
-      moderator_id = excluded.moderator_id,
-      reason = excluded.reason,
-      created_at = unixepoch()
-  `).run(guildId, userId, moderatorId, reason);
-}
-
-export function isBlacklisted(guildId, userId) {
-  return !!db.prepare('SELECT 1 FROM blacklist WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
-}
-
-export function getBlacklistEntry(guildId, userId) {
-  return db.prepare('SELECT * FROM blacklist WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
-}
-
 export function endBreak(guildId, userId) {
-  const row = db.prepare('SELECT * FROM breaks WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
-  if (!row) return null;
-  db.prepare('DELETE FROM breaks WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
-  return row;
+  const rows = readCol('breaks');
+  const entry = rows.find(r => r.guild_id === guildId && r.user_id === userId);
+  if (!entry) return null;
+  writeCol('breaks', rows.filter(r => !(r.guild_id === guildId && r.user_id === userId)));
+  return entry;
 }
 
 export function getCurrentBreaks(guildId) {
-  return db.prepare('SELECT * FROM breaks WHERE guild_id = ? ORDER BY started_at ASC').all(guildId);
+  return readCol('breaks').filter(r => r.guild_id === guildId).sort((a, b) => a.started_at - b.started_at);
 }
 
 export function isOnBreak(guildId, userId) {
-  return !!db.prepare('SELECT 1 FROM breaks WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
+  return !!readCol('breaks').find(r => r.guild_id === guildId && r.user_id === userId);
+}
+
+// ─── Blacklist (bot) ──────────────────────────────────────────────────────────
+
+export function addBlacklist(guildId, userId, moderatorId, reason) {
+  const rows = readCol('bot_blacklist').filter(r => !(r.guild_id === guildId && r.user_id === userId));
+  rows.push({ id: nextId('bot_blacklist'), guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, created_at: ts() });
+  writeCol('bot_blacklist', rows);
+}
+
+export function isBlacklisted(guildId, userId) {
+  return !!readCol('bot_blacklist').find(r => r.guild_id === guildId && r.user_id === userId);
+}
+
+export function getBlacklistEntry(guildId, userId) {
+  return readCol('bot_blacklist').find(r => r.guild_id === guildId && r.user_id === userId) ?? null;
 }
 
 // ─── Ad Channels ──────────────────────────────────────────────────────────────
 
 export function addAdChannel(guildId, channelId) {
-  db.prepare('INSERT OR IGNORE INTO ad_channels (guild_id, channel_id) VALUES (?, ?)').run(guildId, channelId);
+  const rows = readCol('ad_channels');
+  if (!rows.find(r => r.guild_id === guildId && r.channel_id === channelId)) {
+    rows.push({ guild_id: guildId, channel_id: channelId });
+    writeCol('ad_channels', rows);
+  }
 }
 
 export function removeAdChannel(guildId, channelId) {
-  const result = db.prepare('DELETE FROM ad_channels WHERE guild_id = ? AND channel_id = ?').run(guildId, channelId);
-  return result.changes > 0;
+  const rows = readCol('ad_channels');
+  const next = rows.filter(r => !(r.guild_id === guildId && r.channel_id === channelId));
+  writeCol('ad_channels', next);
+  return rows.length !== next.length;
 }
 
 export function getAdChannels(guildId) {
-  return db.prepare('SELECT channel_id FROM ad_channels WHERE guild_id = ?').all(guildId).map(r => r.channel_id);
+  return readCol('ad_channels').filter(r => r.guild_id === guildId).map(r => r.channel_id);
 }
 
 export function isAdChannel(guildId, channelId) {
-  return !!db.prepare('SELECT 1 FROM ad_channels WHERE guild_id = ? AND channel_id = ?').get(guildId, channelId);
+  return !!readCol('ad_channels').find(r => r.guild_id === guildId && r.channel_id === channelId);
 }
 
-// ─── Ad Posts Tracking ────────────────────────────────────────────────────────
+// ─── Ad Posts ─────────────────────────────────────────────────────────────────
 
 export function trackAdPost(guildId, channelId, messageId, userId) {
-  db.prepare(
-    'INSERT OR IGNORE INTO ad_posts (guild_id, channel_id, message_id, user_id) VALUES (?, ?, ?, ?)'
-  ).run(guildId, channelId, messageId, userId);
+  const rows = readCol('ad_posts');
+  if (!rows.find(r => r.guild_id === guildId && r.message_id === messageId)) {
+    rows.push({ id: nextId('ad_posts'), guild_id: guildId, channel_id: channelId, message_id: messageId, user_id: userId, created_at: ts() });
+    writeCol('ad_posts', rows);
+  }
 }
 
 export function getAdPostsByUser(guildId, userId) {
-  return db.prepare(
-    'SELECT channel_id, message_id FROM ad_posts WHERE guild_id = ? AND user_id = ?'
-  ).all(guildId, userId);
+  return readCol('ad_posts').filter(r => r.guild_id === guildId && r.user_id === userId).map(r => ({ channel_id: r.channel_id, message_id: r.message_id }));
 }
 
 export function clearAdPostsByUser(guildId, userId) {
-  db.prepare('DELETE FROM ad_posts WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+  writeCol('ad_posts', readCol('ad_posts').filter(r => !(r.guild_id === guildId && r.user_id === userId)));
 }
 
 export function removeAdPostRecord(guildId, messageId) {
-  db.prepare('DELETE FROM ad_posts WHERE guild_id = ? AND message_id = ?').run(guildId, messageId);
+  writeCol('ad_posts', readCol('ad_posts').filter(r => !(r.guild_id === guildId && r.message_id === messageId)));
 }
