@@ -14,7 +14,7 @@ import {
 
 import express from 'express';
 
-import db from './database.js';
+import * as db from './database.js';
 
 import {
   incrementMessageCount,
