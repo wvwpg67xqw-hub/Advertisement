@@ -14,9 +14,11 @@ const db = {
   upsertUser(userId, username, avatar) {
     const rows = readCol('users');
     const i = rows.findIndex(u => u.userId === userId);
-    if (i >= 0) { rows[i].username = username; rows[i].avatar = avatar; }
-    else rows.push({ id: nextId('users'), userId, username, avatar: avatar ?? null, role: 'user', createdAt: ts() });
+    const isNew = i < 0;
+    if (i >= 0) { rows[i].username = username; rows[i].avatar = avatar; rows[i].lastSeen = ts(); }
+    else rows.push({ id: nextId('users'), userId, username, avatar: avatar ?? null, role: 'user', createdAt: ts(), lastSeen: ts() });
     writeCol('users', rows);
+    return { isNew };
   },
 
   // ── Admins ─────────────────────────────────────────────────────────────────
@@ -47,6 +49,13 @@ const db = {
   deleteAdmin(id) {
     const rows = readCol('admins');
     const next = rows.filter(a => a.id !== Number(id));
+    writeCol('admins', next);
+    return { changes: rows.length - next.length };
+  },
+
+  deleteAdminByUserId(userId) {
+    const rows = readCol('admins');
+    const next = rows.filter(a => a.userId !== userId);
     writeCol('admins', next);
     return { changes: rows.length - next.length };
   },
@@ -121,8 +130,19 @@ const db = {
     return { changes: rows.length - next.length };
   },
 
+  deleteBlacklistByUserId(userId) {
+    const rows = readCol('web_blacklist');
+    const next = rows.filter(b => b.userId !== userId);
+    writeCol('web_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
   isBlacklisted(userId) {
     return !!readCol('web_blacklist').find(b => b.userId === userId);
+  },
+
+  getBlacklistEntry(userId) {
+    return readCol('web_blacklist').find(b => b.userId === userId) ?? null;
   },
 
   // ── IP Blacklist ───────────────────────────────────────────────────────────
@@ -149,6 +169,41 @@ const db = {
   isIpBlacklisted(ip) {
     if (!ip || ip === 'unknown') return false;
     return !!readCol('ip_blacklist').find(b => b.ip === ip);
+  },
+
+  // ── Ban Appeals ────────────────────────────────────────────────────────────
+  insertAppeal({ userId, username, avatar, reason }) {
+    const rows = readCol('appeals');
+    const id = nextId('appeals');
+    rows.push({ id, userId, username, avatar: avatar ?? null, reason, status: 'pending', createdAt: ts() });
+    writeCol('appeals', rows);
+    return { id };
+  },
+
+  getAppeal(id) {
+    return readCol('appeals').find(a => a.id === Number(id)) ?? null;
+  },
+
+  getAppeals(status) {
+    let rows = readCol('appeals');
+    if (status) rows = rows.filter(a => a.status === status);
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  getUserAppeal(userId) {
+    const rows = readCol('appeals');
+    // Return most recent appeal for this user
+    return rows
+      .filter(a => a.userId === userId)
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+  },
+
+  updateAppealStatus(id, status) {
+    const rows = readCol('appeals');
+    const i = rows.findIndex(a => a.id === Number(id));
+    if (i >= 0) { rows[i].status = status; rows[i].reviewedAt = ts(); }
+    writeCol('appeals', rows);
+    return rows[i] ?? null;
   },
 };
 

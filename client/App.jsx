@@ -5,6 +5,7 @@ import Apply from './pages/Apply.jsx';
 import Login from './pages/Login.jsx';
 import Success from './pages/Success.jsx';
 import Admin from './pages/Admin.jsx';
+import Appeal from './pages/Appeal.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 const AuthContext = createContext(null);
@@ -61,6 +62,7 @@ function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth();
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.isBlacklisted) return <Navigate to="/appeal" replace />;
   if (adminOnly && !user.isAdmin) return <Navigate to="/" replace />;
   return children;
 }
@@ -88,6 +90,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/appeal" element={<Appeal />} />
           <Route path="/success" element={<Success />} />
           <Route path="/apply" element={
             <ProtectedRoute><Apply /></ProtectedRoute>
