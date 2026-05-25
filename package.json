@@ -2,8 +2,8 @@
   "name": "discord-staff-portal",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "npm run build; node server.js",
+    "dev": "npm run build; node server.js",
     "build": "cd client && npm install && npm run build"
   },
   "dependencies": {
