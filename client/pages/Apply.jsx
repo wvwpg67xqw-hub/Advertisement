@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
 
@@ -11,8 +11,6 @@ export default function Apply() {
   const [searchParams] = useSearchParams();
 
   const [form, setForm] = useState({
-    username: user?.username || '',
-    userId: user?.userId || '',
     role: searchParams.get('role') || '',
     age: '',
     timezone: '',
@@ -23,22 +21,12 @@ export default function Apply() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    setForm(f => ({
-      ...f,
-      username: user?.username || '',
-      userId: user?.userId || '',
-    }));
-  }, [user]);
-
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     const required = ['role', 'age', 'timezone', 'experience', 'motivation', 'availability'];
     for (const field of required) {
-      if (!form[field]?.trim()) {
-        return setError(`Please fill in all fields.`);
-      }
+      if (!form[field]?.trim()) return setError('Please fill in all fields.');
     }
     setLoading(true);
     try {
@@ -67,20 +55,29 @@ export default function Apply() {
         <p className="page-subtitle">Take your time and answer thoughtfully — quality answers improve your chances.</p>
       </div>
 
+      {/* Applicant identity banner (pulled from Discord session) */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 10, padding: '14px 18px', marginBottom: 24,
+      }}>
+        {user?.avatar && (
+          <img src={user.avatar} alt="" style={{ width: 44, height: 44, borderRadius: '50%', flexShrink: 0 }} />
+        )}
+        <div>
+          <div style={{ fontWeight: 600 }}>{user?.username}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Applying as · ID {user?.userId}</div>
+        </div>
+        <span style={{
+          marginLeft: 'auto', background: 'rgba(88,101,242,0.15)',
+          color: '#7289da', padding: '3px 10px', borderRadius: 999,
+          fontSize: 11, fontWeight: 600,
+        }}>via Discord</span>
+      </div>
+
       <div className="card">
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {error && <div className="alert alert-error">{error}</div>}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div className="form-group">
-              <label className="form-label">Discord Username</label>
-              <input className="form-input" value={form.username} readOnly style={{ opacity: 0.7 }} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">User ID</label>
-              <input className="form-input" value={form.userId} readOnly style={{ opacity: 0.7 }} />
-            </div>
-          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div className="form-group">
