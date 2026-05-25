@@ -2,15 +2,17 @@ import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
+import crypto from 'crypto';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 
 import discordPkg from 'discord.js';
-const { REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = discordPkg;
+const { REST, Routes } = discordPkg;
 
 import client from './botClient.js';
 import db from './db.js';
+import { getClientIp, ipBlacklistMiddleware, rateLimit, checkVpn, isDiscordBot, sendBreachAlert } from './security.js';
 import applicationRoutes from './routes/applications.js';
 import adminRoutes from './routes/admin.js';
 import { setDiscordClient } from './routes/admin.js';
@@ -86,16 +88,34 @@ const CLIENT_ID             = process.env.CLIENT_ID;
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Trust first proxy (FeatherPanel / Replit reverse proxy) for real IPs
+app.set('trust proxy', 1);
+
+app.use(express.json({ limit: '50kb' }));
+app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 app.use(cors({ origin: true, credentials: true }));
 
+// Session — secure cookie in production, httpOnly always
+const isProduction = process.env.NODE_ENV === 'production';
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'changeme-super-secret-key',
+  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+  cookie: {
+    secure: isProduction,
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  },
 }));
+
+// ── Global Security Middleware ────────────────────────────────────────────────
+
+// Block IP-blacklisted addresses immediately
+app.use(ipBlacklistMiddleware);
+
+// Global rate limit: 150 req / 15 min per IP (basic DDoS mitigation)
+app.use(rateLimit('global', 150, 15 * 60 * 1000));
 
 // ── Seed initial admin from env ───────────────────────────────────────────────
 
@@ -112,22 +132,44 @@ if (ADMIN_ID) {
 
 // ── Discord OAuth ─────────────────────────────────────────────────────────────
 
-app.get('/api/auth/login', (req, res) => {
+// Stricter rate limit on login entry point
+app.get('/api/auth/login', rateLimit('login', 20, 15 * 60 * 1000), (req, res) => {
   if (!DISCORD_CLIENT_ID || !DISCORD_REDIRECT_URI) {
     return res.status(500).send('Discord OAuth not configured. Set DISCORD_CLIENT_ID and DISCORD_REDIRECT_URI.');
   }
+
+  // CSRF protection: generate a random state, store in session
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.oauthState = state;
+
   const params = new URLSearchParams({
     client_id: DISCORD_CLIENT_ID,
     redirect_uri: DISCORD_REDIRECT_URI,
     response_type: 'code',
     scope: 'identify',
+    state,
   });
   res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
 });
 
-app.get('/api/auth/callback', async (req, res) => {
-  const { code } = req.query;
+app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (req, res) => {
+  const { code, state } = req.query;
+  const ip = getClientIp(req);
+
   if (!code) return res.redirect('/?error=no_code');
+
+  // CSRF state check
+  if (!state || state !== req.session.oauthState) {
+    await sendBreachAlert({ type: 'OAuth CSRF Attempt', ip, detail: 'State parameter mismatch', userId: null, username: null });
+    return res.redirect('/?error=invalid_state');
+  }
+  delete req.session.oauthState;
+
+  // IP blacklist double-check at login
+  if (db.isIpBlacklisted(ip)) {
+    return res.redirect('/?error=access_denied');
+  }
+
   try {
     const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
       method: 'POST',
@@ -152,6 +194,46 @@ app.get('/api/auth/callback', async (req, res) => {
     if (!userRes.ok) return res.redirect('/?error=user_fetch_failed');
     const discordUser = await userRes.json();
 
+    // Block Discord bot accounts
+    if (isDiscordBot(discordUser)) {
+      console.warn(`🚫 Bot account login attempt: ${discordUser.id}`);
+      await sendBreachAlert({
+        type: 'Bot Account Login Attempt',
+        ip,
+        detail: `Discord bot account tried to log in: ${discordUser.username} (${discordUser.id})`,
+        userId: discordUser.id,
+        username: discordUser.username,
+      });
+      return res.redirect('/?error=bots_not_allowed');
+    }
+
+    // Block blacklisted users
+    if (db.isBlacklisted(discordUser.id)) {
+      console.warn(`🚫 Blacklisted user login attempt: ${discordUser.id}`);
+      await sendBreachAlert({
+        type: 'Blacklisted User Login',
+        ip,
+        detail: `Blacklisted user attempted login: ${discordUser.username} (${discordUser.id})`,
+        userId: discordUser.id,
+        username: discordUser.username,
+      });
+      return res.redirect('/?error=blacklisted');
+    }
+
+    // VPN / proxy check — runs async, blocks if detected
+    const vpnDetected = await checkVpn(ip);
+    if (vpnDetected) {
+      console.warn(`🚫 VPN/proxy login attempt from ${ip} by ${discordUser.username}`);
+      await sendBreachAlert({
+        type: 'VPN / Proxy Login Attempt',
+        ip,
+        detail: `User attempted to log in through a VPN or proxy: ${discordUser.username} (${discordUser.id})`,
+        userId: discordUser.id,
+        username: discordUser.username,
+      });
+      return res.redirect('/?error=vpn_not_allowed');
+    }
+
     const avatar = discordUser.avatar
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(discordUser.id) % 6n)}.png`;
@@ -161,7 +243,12 @@ app.get('/api/auth/callback', async (req, res) => {
     db.upsertUser(user.userId, user.username, user.avatar);
 
     req.session.user = user;
-    res.redirect('/');
+    // Regenerate session ID on login to prevent session fixation
+    req.session.regenerate((err) => {
+      if (err) console.error('Session regenerate error:', err);
+      req.session.user = user;
+      res.redirect('/');
+    });
   } catch (err) {
     console.error('OAuth callback error:', err);
     res.redirect('/?error=oauth_error');
@@ -276,23 +363,59 @@ const botHandlers = {
 client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isButton()) {
-      const [type, action, id] = interaction.customId.split('_');
+      const id = interaction.customId;
 
-      if (type === 'app') {
-        const application = db.getApplication(Number(id));
+      // ── Security alert actions (owner DM buttons) ──────────────────────────
+      if (id.startsWith('sec_bl_')) {
+        const targetUserId = id.slice(7);
+        if (!targetUserId || targetUserId === 'none') {
+          return interaction.reply({ content: '⚠️ No user ID to blacklist', ephemeral: true });
+        }
+        const admin = db.getAdmin(interaction.user.id);
+        if (!admin) return interaction.reply({ content: '❌ Not authorized', ephemeral: true });
+        try {
+          db.insertBlacklist(targetUserId, 'Unknown', 'Security alert — blacklisted via DM button');
+          console.log(`🚫 User ${targetUserId} blacklisted via security DM button by ${interaction.user.id}`);
+          return interaction.reply({ content: `✅ User \`${targetUserId}\` has been blacklisted from the portal.`, ephemeral: true });
+        } catch {
+          return interaction.reply({ content: `⚠️ User \`${targetUserId}\` was already blacklisted.`, ephemeral: true });
+        }
+      }
+
+      if (id.startsWith('sec_ipbl_')) {
+        const ip = id.slice(9);
+        const admin = db.getAdmin(interaction.user.id);
+        if (!admin) return interaction.reply({ content: '❌ Not authorized', ephemeral: true });
+        try {
+          db.addIpBlacklist(ip, 'Security alert — IP banned via DM button', interaction.user.id);
+          console.log(`🚫 IP ${ip} blacklisted via security DM button by ${interaction.user.id}`);
+          return interaction.reply({ content: `✅ IP \`${ip}\` has been blacklisted.`, ephemeral: true });
+        } catch {
+          return interaction.reply({ content: `⚠️ IP \`${ip}\` was already blacklisted.`, ephemeral: true });
+        }
+      }
+
+      if (id === 'sec_dismiss') {
+        return interaction.reply({ content: '✅ Alert dismissed.', ephemeral: true });
+      }
+
+      // ── Application review buttons ─────────────────────────────────────────
+      if (id.startsWith('app_')) {
+        const [, action, appId] = id.split('_');
+        const application = db.getApplication(Number(appId));
 
         if (!application) {
           return interaction.reply({ content: '❌ Application not found', ephemeral: true });
         }
 
         if (action === 'accept') {
-          db.updateApplicationStatus(Number(id), 'accepted');
-          return interaction.reply({ content: `✅ Accepted application #${id}`, ephemeral: true });
+          db.updateApplicationStatus(Number(appId), 'accepted');
+          return interaction.reply({ content: `✅ Accepted application #${appId}`, ephemeral: true });
         }
 
         if (action === 'deny') {
-          db.updateApplicationStatus(Number(id), 'denied');
-          return interaction.reply({ content: `❌ Denied application #${id}`, ephemeral: true });
+          db.updateApplicationStatus(Number(appId), 'denied');
+          return interaction.reply({ content: `❌ Denied application #${appId}`, ephemeral: true });
         }
       }
 

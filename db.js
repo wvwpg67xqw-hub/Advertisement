@@ -100,7 +100,7 @@ const db = {
     writeCol('applications', rows);
   },
 
-  // ── Blacklist ──────────────────────────────────────────────────────────────
+  // ── User Blacklist ─────────────────────────────────────────────────────────
   getBlacklist() {
     return readCol('web_blacklist').sort((a, b) => b.createdAt - a.createdAt);
   },
@@ -123,6 +123,32 @@ const db = {
 
   isBlacklisted(userId) {
     return !!readCol('web_blacklist').find(b => b.userId === userId);
+  },
+
+  // ── IP Blacklist ───────────────────────────────────────────────────────────
+  getIpBlacklist() {
+    return readCol('ip_blacklist').sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  addIpBlacklist(ip, reason, addedBy) {
+    const rows = readCol('ip_blacklist');
+    if (rows.find(b => b.ip === ip)) throw new Error('IP already blacklisted');
+    const entry = { id: nextId('ip_blacklist'), ip, reason: reason || 'No reason given', addedBy: addedBy || 'system', createdAt: ts() };
+    rows.push(entry);
+    writeCol('ip_blacklist', rows);
+    return entry;
+  },
+
+  removeIpBlacklist(id) {
+    const rows = readCol('ip_blacklist');
+    const next = rows.filter(b => b.id !== Number(id));
+    writeCol('ip_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  isIpBlacklisted(ip) {
+    if (!ip || ip === 'unknown') return false;
+    return !!readCol('ip_blacklist').find(b => b.ip === ip);
   },
 };
 

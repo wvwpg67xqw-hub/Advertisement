@@ -54,7 +54,7 @@ router.post('/applications/:id/deny', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-// ── Blacklist ─────────────────────────────────────────────────────────────────
+// ── User Blacklist ─────────────────────────────────────────────────────────────
 
 router.get('/blacklist', requireAdmin, (req, res) => {
   res.json(db.getBlacklist());
@@ -63,8 +63,9 @@ router.get('/blacklist', requireAdmin, (req, res) => {
 router.post('/blacklist', requireAdmin, (req, res) => {
   const { userId, username, reason } = req.body;
   if (!userId || !username || !reason) return res.status(400).json({ error: 'Missing fields' });
+  if (String(reason).length > 500) return res.status(400).json({ error: 'Reason too long (max 500 chars)' });
   try {
-    db.insertBlacklist(userId, username, reason);
+    db.insertBlacklist(String(userId).slice(0, 30), String(username).slice(0, 100), String(reason).slice(0, 500));
     res.json({ success: true });
   } catch {
     res.status(409).json({ error: 'Already blacklisted' });
@@ -73,6 +74,35 @@ router.post('/blacklist', requireAdmin, (req, res) => {
 
 router.delete('/blacklist/:id', requireAdmin, (req, res) => {
   const result = db.deleteBlacklist(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  res.json({ success: true });
+});
+
+// ── IP Blacklist ───────────────────────────────────────────────────────────────
+
+router.get('/ip-blacklist', requireAdmin, (req, res) => {
+  res.json(db.getIpBlacklist());
+});
+
+router.post('/ip-blacklist', requireAdmin, (req, res) => {
+  const { ip, reason } = req.body;
+  if (!ip) return res.status(400).json({ error: 'IP address required' });
+  // Validate basic IP format
+  const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const ipv6 = /^[0-9a-fA-F:]{2,39}$/;
+  if (!ipv4.test(ip) && !ipv6.test(ip)) {
+    return res.status(400).json({ error: 'Invalid IP address format' });
+  }
+  try {
+    db.addIpBlacklist(String(ip).slice(0, 45), String(reason || 'Manual').slice(0, 500), req.session.user?.userId);
+    res.json({ success: true });
+  } catch {
+    res.status(409).json({ error: 'IP already blacklisted' });
+  }
+});
+
+router.delete('/ip-blacklist/:id', requireAdmin, (req, res) => {
+  const result = db.removeIpBlacklist(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ success: true });
 });
@@ -87,7 +117,7 @@ router.post('/admins', requireAdmin, (req, res) => {
   const { userId, username, role } = req.body;
   if (!userId || !username) return res.status(400).json({ error: 'Missing fields' });
   try {
-    db.insertAdmin(userId, username, role || 'admin');
+    db.insertAdmin(String(userId).slice(0, 30), String(username).slice(0, 100), role || 'admin');
     res.json({ success: true });
   } catch {
     res.status(409).json({ error: 'Admin already exists' });
@@ -108,10 +138,13 @@ router.get('/roles', requireAdmin, (req, res) => {
 
 // ── Discord Channel Lock / Unlock ─────────────────────────────────────────────
 
+const VALID_CHANNEL_ID = /^\d{17,20}$/;
+
 async function discordChannelRequest(method, channelId, body = null) {
   const TOKEN = process.env.TOKEN;
   const GUILD_ID = process.env.DISCORD_GUILD_ID;
   if (!TOKEN || !GUILD_ID) throw new Error('Missing TOKEN or DISCORD_GUILD_ID');
+  if (!VALID_CHANNEL_ID.test(channelId)) throw new Error('Invalid channel ID');
   const res = await fetch(
     `https://discord.com/api/v10/channels/${channelId}/permissions/${GUILD_ID}`,
     { method, headers: { Authorization: `Bot ${TOKEN}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : null }
