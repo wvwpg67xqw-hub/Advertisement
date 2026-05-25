@@ -13,11 +13,8 @@ import express from 'express';
 
 import {
   incrementMessageCount,
-  setSnipeCache,
   isAdChannel,
   trackAdPost,
-  getAdPostsByUser,
-  clearAdPostsByUser,
 } from './database.js';
 
 import {
@@ -79,11 +76,11 @@ import {
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
-// ✅ FIXED: LemonHost uses process.env.PORT
-const PORT = process.env.PORT;
+// ✅ PORT FIX (THIS IS WHAT YOU ASKED FOR)
+const PORT = process.env.PORT || 3000;
 
 if (!TOKEN || !CLIENT_ID) {
-  console.error("❌ Missing TOKEN or CLIENT_ID");
+  console.error("❌ Missing TOKEN or CLIENT_ID in .env");
   process.exit(1);
 }
 
@@ -103,10 +100,14 @@ const client = new Client({
 });
 
 // ─────────────────────────────────────────────
-// EXPRESS HEALTH SERVER
+// EXPRESS SERVER (HEALTH + WEBSITE BASE)
 // ─────────────────────────────────────────────
 
 const app = express();
+
+app.get("/", (req, res) => {
+  res.send("🚀 Bot is running");
+});
 
 app.get("/health", (req, res) => {
   res.json({
@@ -118,39 +119,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.get("/", (req, res) => {
-  res.redirect("/health");
-});
-
-// ✅ FIXED LISTENER
 app.listen(PORT, () => {
-  console.log(`✅ Health server running on port ${PORT}`);
+  console.log(`🌐 Server running on port ${PORT}`);
 });
 
 // ─────────────────────────────────────────────
-// SELF PINGER
-// ─────────────────────────────────────────────
-
-function startSelfPinger() {
-  const domains = process.env.REPLIT_DOMAINS;
-
-  if (!domains) {
-    console.log("⚠️ Self-pinger disabled");
-    return;
-  }
-
-  const host = domains.split(",")[0].trim();
-  const url = `https://${host}/health`;
-
-  console.log(`🔁 Self-pinger active → ${url}`);
-
-  setInterval(() => {
-    fetch(url).catch(() => {});
-  }, 4 * 60 * 1000);
-}
-
-// ─────────────────────────────────────────────
-// COMMAND HANDLERS
+// COMMAND HANDLERS MAP
 // ─────────────────────────────────────────────
 
 const handlers = {
@@ -209,61 +183,43 @@ const handlers = {
 };
 
 // ─────────────────────────────────────────────
-// COMMAND REGISTRATION
+// REGISTER COMMANDS
 // ─────────────────────────────────────────────
 
 async function registerCommands() {
   const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-  const all = [...commandDefs, ...setupCommands].map(c => c.toJSON());
+  const allCommands = [...commandDefs, ...setupCommands].map(c => c.toJSON());
 
   try {
-    console.log("🗑 Clearing ALL old guild commands...");
+    console.log("🧹 Clearing old commands...");
 
     for (const guild of client.guilds.cache.values()) {
-      await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, guild.id),
-        { body: [] }
-      );
-
-      console.log(`✅ Cleared guild commands in ${guild.name}`);
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, guild.id), {
+        body: [],
+      });
     }
 
-    console.log("🗑 Clearing ALL old global commands...");
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: [] });
 
-    await rest.put(
-      Routes.applicationCommands(CLIENT_ID),
-      { body: [] }
-    );
+    console.log("📥 Registering new commands...");
+    await rest.put(Routes.applicationCommands(CLIENT_ID), {
+      body: allCommands,
+    });
 
-    console.log("✅ Old global commands deleted");
-
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    console.log("📥 Registering fresh global commands...");
-
-    await rest.put(
-      Routes.applicationCommands(CLIENT_ID),
-      { body: all }
-    );
-
-    console.log("✅ Fresh global commands registered");
-
+    console.log("✅ Commands registered successfully");
   } catch (err) {
-    console.error("❌ Failed to register commands:", err);
+    console.error("❌ Command registration failed:", err);
   }
 }
 
 // ─────────────────────────────────────────────
-// READY
+// READY EVENT
 // ─────────────────────────────────────────────
 
 client.once("ready", async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-
+  console.log(`🤖 Logged in as ${client.user.tag}`);
   await registerCommands();
-
-  startSelfPinger();
 });
 
 // ─────────────────────────────────────────────
@@ -272,13 +228,6 @@ client.once("ready", async () => {
 
 client.on("interactionCreate", async (interaction) => {
   try {
-    if (interaction.isButton()) {
-      if (interaction.customId.startsWith("req:")) {
-        return handleRequestButton(interaction);
-      }
-      return;
-    }
-
     if (!interaction.isChatInputCommand()) return;
 
     const handler = handlers[interaction.commandName];
@@ -291,12 +240,11 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     await handler(interaction);
-
   } catch (err) {
     console.error(err);
 
     const msg = {
-      content: "❌ Error occurred",
+      content: "❌ Something went wrong",
       ephemeral: true,
     };
 
@@ -309,45 +257,16 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ─────────────────────────────────────────────
-// MESSAGE SYSTEM
+// MESSAGE SYSTEM (AD TRACKING)
 // ─────────────────────────────────────────────
 
-const adCooldown = new Map();
-
-const AD_LINKS = [
-  "https://discord.gg/CU8DHHM5dk",
-  "https://discord.gg/GQV2mPcSzF",
-  "https://discord.gg/SfVkFuts2E",
-  "https://discord.gg/G4z9DWFQzT",
-];
-
-function buildAdEmbed() {
-  return new EmbedBuilder()
-    .setTitle("📈 Advertise Your Server")
-    .setColor(0x2b2d31)
-    .setDescription(AD_LINKS.map((l, i) => `**${i + 1}.** ${l}`).join("\n"))
-    .setTimestamp();
-}
-
 client.on("messageCreate", async (msg) => {
-  if (msg.author.bot || !msg.guild) return;
+  if (!msg.guild || msg.author.bot) return;
 
   incrementMessageCount(msg.guild.id, msg.author.id);
 
   if (isAdChannel(msg.guild.id, msg.channel.id)) {
     trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
-
-    const key = `${msg.author.id}:${msg.channel.id}`;
-    const last = adCooldown.get(key) || 0;
-
-    if (Date.now() - last > 10 * 60 * 1000) {
-      adCooldown.set(key, Date.now());
-
-      await msg.reply({
-        embeds: [buildAdEmbed()],
-        allowedMentions: { repliedUser: false },
-      }).catch(() => {});
-    }
   }
 });
 
