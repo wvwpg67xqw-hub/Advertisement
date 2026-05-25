@@ -1,25 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
 
-const roles = ['Moderator', 'Human Resources', 'Partnership'];
-const timezones = ['UTC-12', 'UTC-11', 'UTC-10', 'UTC-9', 'UTC-8 (PST)', 'UTC-7 (MST)', 'UTC-6 (CST)', 'UTC-5 (EST)', 'UTC-4', 'UTC-3', 'UTC-2', 'UTC-1', 'UTC+0 (GMT)', 'UTC+1 (CET)', 'UTC+2 (EET)', 'UTC+3', 'UTC+4', 'UTC+5', 'UTC+5:30 (IST)', 'UTC+6', 'UTC+7', 'UTC+8 (CST)', 'UTC+9 (JST)', 'UTC+10 (AEST)', 'UTC+11', 'UTC+12'];
+const timezones = ['UTC-12','UTC-11','UTC-10','UTC-9','UTC-8 (PST)','UTC-7 (MST)','UTC-6 (CST)','UTC-5 (EST)','UTC-4','UTC-3','UTC-2','UTC-1','UTC+0 (GMT)','UTC+1 (CET)','UTC+2 (EET)','UTC+3','UTC+4','UTC+5','UTC+5:30 (IST)','UTC+6','UTC+7','UTC+8 (CST)','UTC+9 (JST)','UTC+10 (AEST)','UTC+11','UTC+12'];
 
 export default function Apply() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [roles, setRoles] = useState([]);
 
   const [form, setForm] = useState({
     role: searchParams.get('role') || '',
-    age: '',
-    timezone: '',
-    experience: '',
-    motivation: '',
-    availability: '',
+    age: '', timezone: '', experience: '', motivation: '', availability: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/roles')
+      .then(r => r.json())
+      .then(data => setRoles(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -46,7 +49,7 @@ export default function Apply() {
     }
   }
 
-  const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
+  const set = field => e => setForm(f => ({ ...f, [field]: e.target.value }));
 
   return (
     <div className="page-container" style={{ maxWidth: 700 }}>
@@ -55,24 +58,14 @@ export default function Apply() {
         <p className="page-subtitle">Take your time and answer thoughtfully — quality answers improve your chances.</p>
       </div>
 
-      {/* Applicant identity banner (pulled from Discord session) */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 10, padding: '14px 18px', marginBottom: 24,
-      }}>
-        {user?.avatar && (
-          <img src={user.avatar} alt="" style={{ width: 44, height: 44, borderRadius: '50%', flexShrink: 0 }} />
-        )}
+      {/* Identity banner */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px', marginBottom: 24 }}>
+        {user?.avatar && <img src={user.avatar} alt="" style={{ width: 44, height: 44, borderRadius: '50%', flexShrink: 0 }} />}
         <div>
           <div style={{ fontWeight: 600 }}>{user?.username}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Applying as · ID {user?.userId}</div>
         </div>
-        <span style={{
-          marginLeft: 'auto', background: 'rgba(88,101,242,0.15)',
-          color: '#7289da', padding: '3px 10px', borderRadius: 999,
-          fontSize: 11, fontWeight: 600,
-        }}>via Discord</span>
+        <span style={{ marginLeft: 'auto', background: 'rgba(88,101,242,0.15)', color: '#7289da', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600 }}>via Discord</span>
       </div>
 
       <div className="card">
@@ -84,7 +77,7 @@ export default function Apply() {
               <label className="form-label">Role Applying For *</label>
               <select className="form-input" value={form.role} onChange={set('role')}>
                 <option value="">Select a role</option>
-                {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                {roles.map(r => <option key={r.id} value={r.name}>{r.emoji} {r.name}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -103,34 +96,17 @@ export default function Apply() {
 
           <div className="form-group">
             <label className="form-label">Previous Experience *</label>
-            <textarea
-              className="form-input"
-              placeholder="Describe any relevant previous experience (moderation, HR, partnerships, etc.)"
-              value={form.experience}
-              onChange={set('experience')}
-              style={{ minHeight: 100 }}
-            />
+            <textarea className="form-input" placeholder="Describe any relevant previous experience." value={form.experience} onChange={set('experience')} style={{ minHeight: 100 }} />
           </div>
 
           <div className="form-group">
             <label className="form-label">Why Do You Want This Role? *</label>
-            <textarea
-              className="form-input"
-              placeholder="Tell us your motivation for applying and what you'd bring to the team."
-              value={form.motivation}
-              onChange={set('motivation')}
-              style={{ minHeight: 120 }}
-            />
+            <textarea className="form-input" placeholder="Tell us your motivation for applying and what you'd bring to the team." value={form.motivation} onChange={set('motivation')} style={{ minHeight: 120 }} />
           </div>
 
           <div className="form-group">
             <label className="form-label">Weekly Availability *</label>
-            <input
-              className="form-input"
-              placeholder="e.g. 15–20 hours/week, weekdays evenings and weekends"
-              value={form.availability}
-              onChange={set('availability')}
-            />
+            <input className="form-input" placeholder="e.g. 15–20 hours/week, weekdays evenings and weekends" value={form.availability} onChange={set('availability')} />
           </div>
 
           <div style={{ display: 'flex', gap: 12, paddingTop: 4 }}>

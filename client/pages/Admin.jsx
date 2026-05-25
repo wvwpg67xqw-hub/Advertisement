@@ -17,6 +17,8 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// ── Applications ──────────────────────────────────────────────
+
 function ApplicationsTab() {
   const [apps, setApps] = useState([]);
   const [filter, setFilter] = useState('pending');
@@ -27,8 +29,7 @@ function ApplicationsTab() {
   const load = useCallback(async () => {
     setLoading(true);
     const res = await api(`/api/admin/applications?status=${filter}`);
-    const data = await res.json();
-    setApps(Array.isArray(data) ? data : []);
+    setApps(await res.json().catch(() => []));
     setLoading(false);
   }, [filter]);
 
@@ -42,7 +43,7 @@ function ApplicationsTab() {
     load();
   }
 
-  const fmt = (ts) => new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const fmt = ts => new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <div>
@@ -60,31 +61,22 @@ function ApplicationsTab() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
       ) : apps.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">📭</div>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>No {filter} applications</div>
-          <div style={{ fontSize: 13 }}>Applications will appear here once submitted.</div>
-        </div>
+        <div className="empty-state"><div className="empty-state-icon">📭</div><div style={{ fontWeight: 600 }}>No {filter} applications</div></div>
       ) : (
         <div className="table-container">
           <table>
-            <thead>
-              <tr>
-                <th>Applicant</th>
-                <th>Role</th>
-                <th>Age</th>
-                <th>Timezone</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Applicant</th><th>Role</th><th>Age</th><th>Timezone</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {apps.map(app => (
                 <tr key={app.id}>
                   <td>
-                    <div style={{ fontWeight: 500 }}>{app.username}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{app.userId}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {app.avatar && <img src={app.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />}
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{app.username}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{app.userId}</div>
+                      </div>
+                    </div>
                   </td>
                   <td><span style={{ background: 'var(--surface2)', padding: '3px 8px', borderRadius: 6, fontSize: 13 }}>{app.role}</span></td>
                   <td>{app.age}</td>
@@ -96,12 +88,8 @@ function ApplicationsTab() {
                       <button className="btn btn-ghost btn-sm" onClick={() => setSelected(app)}>View</button>
                       {app.status === 'pending' && (
                         <>
-                          <button className="btn btn-success btn-sm" disabled={actioning === app.id} onClick={() => action(app.id, 'accept')}>
-                            {actioning === app.id ? '...' : '✓'}
-                          </button>
-                          <button className="btn btn-danger btn-sm" disabled={actioning === app.id} onClick={() => action(app.id, 'deny')}>
-                            {actioning === app.id ? '...' : '✕'}
-                          </button>
+                          <button className="btn btn-success btn-sm" disabled={actioning === app.id} onClick={() => action(app.id, 'accept')}>{actioning === app.id ? '...' : '✓'}</button>
+                          <button className="btn btn-danger btn-sm" disabled={actioning === app.id} onClick={() => action(app.id, 'deny')}>{actioning === app.id ? '...' : '✕'}</button>
                         </>
                       )}
                     </div>
@@ -117,25 +105,20 @@ function ApplicationsTab() {
         <Modal title={`Application — ${selected.username}`} onClose={() => setSelected(null)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {[
-                ['Role', selected.role],
-                ['Age', selected.age],
-                ['Timezone', selected.timezone],
-                ['Availability', selected.availability],
-              ].map(([label, val]) => (
-                <div key={label}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 14 }}>{val}</div>
+              {[['Role', selected.role], ['Age', selected.age], ['Timezone', selected.timezone], ['Availability', selected.availability]].map(([l, v]) => (
+                <div key={l}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{l}</div>
+                  <div style={{ fontSize: 14 }}>{v}</div>
                 </div>
               ))}
             </div>
-            {[['Experience', selected.experience], ['Motivation', selected.motivation]].map(([label, val]) => (
-              <div key={label}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{label}</div>
-                <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.7, color: 'var(--text-muted)' }}>{val}</div>
+            {[['Experience', selected.experience], ['Motivation', selected.motivation]].map(([l, v]) => (
+              <div key={l}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{l}</div>
+                <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.7, color: 'var(--text-muted)' }}>{v}</div>
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 8 }}><span className={`badge badge-${selected.status}`}>{selected.status}</span></div>
+            <span className={`badge badge-${selected.status}`}>{selected.status}</span>
           </div>
           {selected.status === 'pending' && (
             <div className="modal-actions">
@@ -149,6 +132,230 @@ function ApplicationsTab() {
   );
 }
 
+// ── Roles ─────────────────────────────────────────────────────
+
+function RolesTab() {
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name: '', description: '', emoji: '📋', color: '#6c63ff' });
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const res = await api('/api/admin/roles');
+    setRoles(await res.json().catch(() => []));
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  function openAdd() { setForm({ name: '', description: '', emoji: '📋', color: '#6c63ff' }); setErr(''); setEditing(null); setShowAdd(true); }
+  function openEdit(role) { setForm({ name: role.name, description: role.description, emoji: role.emoji, color: role.color }); setErr(''); setEditing(role); setShowAdd(true); }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setErr('');
+    if (!form.name.trim()) return setErr('Name is required');
+    setSaving(true);
+    const res = editing
+      ? await api(`/api/admin/roles/${editing.id}`, { method: 'PUT', body: JSON.stringify(form) })
+      : await api('/api/admin/roles', { method: 'POST', body: JSON.stringify(form) });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error); setSaving(false); return; }
+    setShowAdd(false);
+    load();
+    setSaving(false);
+  }
+
+  async function handleToggle(role) {
+    await api(`/api/admin/roles/${role.id}/toggle`, { method: 'PATCH' });
+    load();
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Delete this role? Existing applications using it are unaffected.')) return;
+    await api(`/api/admin/roles/${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }));
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Control which staff positions appear on the application page.</p>
+        <button className="btn btn-primary btn-sm" onClick={openAdd}>+ New Role</button>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {roles.map(role => (
+            <div key={role.id} style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 10, padding: '14px 16px',
+              opacity: role.active ? 1 : 0.5,
+            }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: role.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                {role.emoji}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {role.name}
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: role.color, display: 'inline-block' }} />
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {role.description || '—'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: role.active ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                  {role.active ? 'Active' : 'Hidden'}
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={() => handleToggle(role)}>
+                  {role.active ? 'Hide' : 'Show'}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(role)}>Edit</button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(role.id)}>Delete</button>
+              </div>
+            </div>
+          ))}
+          {roles.length === 0 && (
+            <div className="empty-state"><div className="empty-state-icon">📋</div><div style={{ fontWeight: 600 }}>No roles yet</div></div>
+          )}
+        </div>
+      )}
+
+      {showAdd && (
+        <Modal title={editing ? 'Edit Role' : 'New Role'} onClose={() => setShowAdd(false)}>
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {err && <div className="alert alert-error">{err}</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Role Name *</label>
+                <input className="form-input" placeholder="e.g. Moderator" value={form.name} onChange={set('name')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Emoji</label>
+                <input className="form-input" placeholder="📋" maxLength={4} value={form.emoji} onChange={set('emoji')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Colour</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="color" value={form.color} onChange={set('color')} style={{ width: 44, height: 38, padding: 2, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface2)', cursor: 'pointer' }} />
+                  <input className="form-input" value={form.color} onChange={set('color')} style={{ flex: 1 }} />
+                </div>
+              </div>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Description</label>
+                <textarea className="form-input" placeholder="What does this role do?" value={form.description} onChange={set('description')} style={{ minHeight: 80 }} />
+              </div>
+            </div>
+            {/* Preview */}
+            <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 22 }}>{form.emoji || '📋'}</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>{form.name || 'Role Name'}</div>
+                <div style={{ fontSize: 11, color: form.color, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Open Applications</div>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? '...' : editing ? 'Save Changes' : 'Create Role'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Channels ──────────────────────────────────────────────────
+
+function ChannelsTab() {
+  const [channelId, setChannelId] = useState('');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(null);
+
+  async function handleAction(action) {
+    const id = channelId.trim();
+    if (!id) return setResult({ error: 'Please enter a channel ID.' });
+    setResult(null);
+    setLoading(action);
+    try {
+      const res = await api(`/api/admin/channels/${id}/${action}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) setResult({ error: data.error || 'Something went wrong.' });
+      else setResult({ success: true, action, channelId: id });
+    } catch {
+      setResult({ error: 'Network error. Check that the server is running.' });
+    }
+    setLoading(null);
+  }
+
+  return (
+    <div>
+      <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24, lineHeight: 1.7 }}>
+        Lock a channel to prevent anyone from sending messages, or unlock it to restore normal access.<br />
+        Requires <code style={{ background: 'var(--surface2)', padding: '1px 6px', borderRadius: 4 }}>TOKEN</code> and <code style={{ background: 'var(--surface2)', padding: '1px 6px', borderRadius: 4 }}>DISCORD_GUILD_ID</code> to be set, and the bot must have <strong>Manage Channels</strong> permission.
+      </p>
+
+      <div className="card" style={{ maxWidth: 480 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div className="form-group">
+            <label className="form-label">Channel ID</label>
+            <input
+              className="form-input"
+              placeholder="e.g. 1234567890123456789"
+              value={channelId}
+              onChange={e => { setChannelId(e.target.value); setResult(null); }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Right-click a channel in Discord (Developer Mode on) → Copy Channel ID
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <button
+              className="btn btn-danger"
+              disabled={!!loading}
+              onClick={() => handleAction('lock')}
+            >
+              {loading === 'lock' ? <div className="spinner" /> : '🔒 Lock Channel'}
+            </button>
+            <button
+              className="btn btn-success"
+              disabled={!!loading}
+              onClick={() => handleAction('unlock')}
+            >
+              {loading === 'unlock' ? <div className="spinner" /> : '🔓 Unlock Channel'}
+            </button>
+          </div>
+
+          {result && (
+            result.error ? (
+              <div className="alert alert-error">{result.error}</div>
+            ) : (
+              <div className="alert alert-success">
+                {result.action === 'lock'
+                  ? `✅ Channel ${result.channelId} has been locked.`
+                  : `✅ Channel ${result.channelId} has been unlocked.`}
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Blacklist ─────────────────────────────────────────────────
+
 function BlacklistTab() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -157,37 +364,25 @@ function BlacklistTab() {
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    const res = await api('/api/admin/blacklist');
-    const data = await res.json();
-    setList(Array.isArray(data) ? data : []);
-    setLoading(false);
-  };
-
+  const load = async () => { setLoading(true); const res = await api('/api/admin/blacklist'); setList(await res.json().catch(() => [])); setLoading(false); };
   useEffect(() => { load(); }, []);
 
   async function handleAdd(e) {
-    e.preventDefault();
-    setErr('');
+    e.preventDefault(); setErr('');
     if (!form.userId || !form.username || !form.reason) return setErr('All fields are required');
     setSaving(true);
     const res = await api('/api/admin/blacklist', { method: 'POST', body: JSON.stringify(form) });
     const data = await res.json();
     if (!res.ok) { setErr(data.error); setSaving(false); return; }
-    setShowAdd(false);
-    setForm({ userId: '', username: '', reason: '' });
-    load();
-    setSaving(false);
+    setShowAdd(false); setForm({ userId: '', username: '', reason: '' }); load(); setSaving(false);
   }
 
   async function handleRemove(id) {
     if (!confirm('Remove this blacklist entry?')) return;
-    await api(`/api/admin/blacklist/${id}`, { method: 'DELETE' });
-    load();
+    await api(`/api/admin/blacklist/${id}`, { method: 'DELETE' }); load();
   }
 
-  const fmt = (ts) => new Date(ts * 1000).toLocaleDateString();
+  const fmt = ts => new Date(ts * 1000).toLocaleDateString();
 
   return (
     <div>
@@ -195,49 +390,33 @@ function BlacklistTab() {
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{list.length} entr{list.length !== 1 ? 'ies' : 'y'}</span>
         <button className="btn btn-danger btn-sm" onClick={() => setShowAdd(true)}>+ Add to Blacklist</button>
       </div>
-
-      {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
-      ) : list.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">✅</div>
-          <div style={{ fontWeight: 600 }}>Blacklist is empty</div>
-        </div>
-      ) : (
-        <div className="table-container">
-          <table>
-            <thead><tr><th>User</th><th>User ID</th><th>Reason</th><th>Date</th><th></th></tr></thead>
-            <tbody>
-              {list.map(entry => (
-                <tr key={entry.id}>
-                  <td style={{ fontWeight: 500 }}>{entry.username}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-muted)' }}>{entry.userId}</td>
-                  <td style={{ fontSize: 13 }}>{entry.reason}</td>
-                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{fmt(entry.createdAt)}</td>
-                  <td><button className="btn btn-danger btn-sm" onClick={() => handleRemove(entry.id)}>Remove</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
+      {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+        : list.length === 0 ? <div className="empty-state"><div className="empty-state-icon">✅</div><div style={{ fontWeight: 600 }}>Blacklist is empty</div></div>
+        : (
+          <div className="table-container">
+            <table>
+              <thead><tr><th>User</th><th>User ID</th><th>Reason</th><th>Date</th><th></th></tr></thead>
+              <tbody>
+                {list.map(entry => (
+                  <tr key={entry.id}>
+                    <td style={{ fontWeight: 500 }}>{entry.username}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-muted)' }}>{entry.userId}</td>
+                    <td style={{ fontSize: 13 }}>{entry.reason}</td>
+                    <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{fmt(entry.createdAt)}</td>
+                    <td><button className="btn btn-danger btn-sm" onClick={() => handleRemove(entry.id)}>Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       {showAdd && (
         <Modal title="Add to Blacklist" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {err && <div className="alert alert-error">{err}</div>}
-            <div className="form-group">
-              <label className="form-label">Discord Username</label>
-              <input className="form-input" placeholder="username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">User ID</label>
-              <input className="form-input" placeholder="123456789012345678" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Reason</label>
-              <textarea className="form-input" placeholder="Reason for blacklist..." value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
-            </div>
+            <div className="form-group"><label className="form-label">Discord Username</label><input className="form-input" placeholder="username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">User ID</label><input className="form-input" placeholder="123456789012345678" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">Reason</label><textarea className="form-input" placeholder="Reason for blacklist..." value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} /></div>
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
               <button type="submit" className="btn btn-danger" disabled={saving}>{saving ? '...' : 'Blacklist'}</button>
@@ -249,6 +428,8 @@ function BlacklistTab() {
   );
 }
 
+// ── Admins ────────────────────────────────────────────────────
+
 function AdminsTab() {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -257,34 +438,22 @@ function AdminsTab() {
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    const res = await api('/api/admin/admins');
-    const data = await res.json();
-    setAdmins(Array.isArray(data) ? data : []);
-    setLoading(false);
-  };
-
+  const load = async () => { setLoading(true); const res = await api('/api/admin/admins'); setAdmins(await res.json().catch(() => [])); setLoading(false); };
   useEffect(() => { load(); }, []);
 
   async function handleAdd(e) {
-    e.preventDefault();
-    setErr('');
+    e.preventDefault(); setErr('');
     if (!form.userId || !form.username) return setErr('User ID and username are required');
     setSaving(true);
     const res = await api('/api/admin/admins', { method: 'POST', body: JSON.stringify(form) });
     const data = await res.json();
     if (!res.ok) { setErr(data.error); setSaving(false); return; }
-    setShowAdd(false);
-    setForm({ userId: '', username: '', role: 'admin' });
-    load();
-    setSaving(false);
+    setShowAdd(false); setForm({ userId: '', username: '', role: 'admin' }); load(); setSaving(false);
   }
 
   async function handleRemove(id) {
     if (!confirm('Remove this admin?')) return;
-    await api(`/api/admin/admins/${id}`, { method: 'DELETE' });
-    load();
+    await api(`/api/admin/admins/${id}`, { method: 'DELETE' }); load();
   }
 
   return (
@@ -293,51 +462,33 @@ function AdminsTab() {
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{admins.length} admin{admins.length !== 1 ? 's' : ''}</span>
         <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Admin</button>
       </div>
-
-      {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
-      ) : admins.length === 0 ? (
-        <div className="empty-state"><div className="empty-state-icon">👥</div><div style={{ fontWeight: 600 }}>No admins found</div></div>
-      ) : (
-        <div className="table-container">
-          <table>
-            <thead><tr><th>Username</th><th>User ID</th><th>Role</th><th></th></tr></thead>
-            <tbody>
-              {admins.map(a => (
-                <tr key={a.id}>
-                  <td style={{ fontWeight: 500 }}>{a.username}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-muted)' }}>{a.userId}</td>
-                  <td>
-                    <span style={{
-                      background: a.role === 'owner' ? 'rgba(245,158,11,0.15)' : 'rgba(108,99,255,0.15)',
-                      color: a.role === 'owner' ? 'var(--warning)' : 'var(--accent)',
-                      padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, textTransform: 'uppercase'
-                    }}>{a.role}</span>
-                  </td>
-                  <td>
-                    {a.role !== 'owner' && (
-                      <button className="btn btn-danger btn-sm" onClick={() => handleRemove(a.id)}>Remove</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
+      {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+        : admins.length === 0 ? <div className="empty-state"><div className="empty-state-icon">👥</div><div style={{ fontWeight: 600 }}>No admins found</div></div>
+        : (
+          <div className="table-container">
+            <table>
+              <thead><tr><th>Username</th><th>User ID</th><th>Role</th><th></th></tr></thead>
+              <tbody>
+                {admins.map(a => (
+                  <tr key={a.id}>
+                    <td style={{ fontWeight: 500 }}>{a.username}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-muted)' }}>{a.userId}</td>
+                    <td>
+                      <span style={{ background: a.role === 'owner' ? 'rgba(245,158,11,0.15)' : 'rgba(108,99,255,0.15)', color: a.role === 'owner' ? 'var(--warning)' : 'var(--accent)', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>{a.role}</span>
+                    </td>
+                    <td>{a.role !== 'owner' && <button className="btn btn-danger btn-sm" onClick={() => handleRemove(a.id)}>Remove</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       {showAdd && (
         <Modal title="Add Admin" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {err && <div className="alert alert-error">{err}</div>}
-            <div className="form-group">
-              <label className="form-label">Discord Username</label>
-              <input className="form-input" placeholder="username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">User ID</label>
-              <input className="form-input" placeholder="123456789012345678" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} />
-            </div>
+            <div className="form-group"><label className="form-label">Discord Username</label><input className="form-input" placeholder="username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">User ID</label><input className="form-input" placeholder="123456789012345678" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} /></div>
             <div className="form-group">
               <label className="form-label">Role</label>
               <select className="form-input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
@@ -357,34 +508,42 @@ function AdminsTab() {
   );
 }
 
+// ── Main Admin Page ───────────────────────────────────────────
+
 export default function Admin() {
   const [tab, setTab] = useState('applications');
 
   const tabs = [
     { id: 'applications', label: '📋 Applications' },
-    { id: 'blacklist', label: '🚫 Blacklist' },
-    { id: 'admins', label: '👑 Admins' },
+    { id: 'roles',        label: '🎭 Roles' },
+    { id: 'channels',     label: '🔒 Channels' },
+    { id: 'blacklist',    label: '🚫 Blacklist' },
+    { id: 'admins',       label: '👑 Admins' },
   ];
 
   return (
     <div className="page-container">
       <div className="page-header">
         <h1 className="page-title">⚙️ Admin Dashboard</h1>
-        <p className="page-subtitle">Manage staff applications, blacklist, and admin access.</p>
+        <p className="page-subtitle">Manage applications, roles, channels, blacklist, and admin access.</p>
       </div>
 
-      <div className="tabs" style={{ marginBottom: 24 }}>
-        {tabs.map(t => (
-          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
+      <div style={{ overflowX: 'auto', marginBottom: 24 }}>
+        <div className="tabs" style={{ width: 'max-content' }}>
+          {tabs.map(t => (
+            <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="card">
         {tab === 'applications' && <ApplicationsTab />}
-        {tab === 'blacklist' && <BlacklistTab />}
-        {tab === 'admins' && <AdminsTab />}
+        {tab === 'roles'        && <RolesTab />}
+        {tab === 'channels'     && <ChannelsTab />}
+        {tab === 'blacklist'    && <BlacklistTab />}
+        {tab === 'admins'       && <AdminsTab />}
       </div>
     </div>
   );
