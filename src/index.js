@@ -7,9 +7,14 @@ import {
   REST,
   Routes,
   EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } from 'discord.js';
 
 import express from 'express';
+
+import db from './database.js';
 
 import {
   incrementMessageCount,
@@ -75,9 +80,9 @@ import {
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-
-// ✅ PORT FIX (THIS IS WHAT YOU ASKED FOR)
 const PORT = process.env.PORT || 3000;
+
+const APPLICATION_CHANNEL_ID = process.env.APPLICATION_CHANNEL_ID;
 
 if (!TOKEN || !CLIENT_ID) {
   console.error("❌ Missing TOKEN or CLIENT_ID in .env");
@@ -100,22 +105,17 @@ const client = new Client({
 });
 
 // ─────────────────────────────────────────────
-// EXPRESS SERVER (HEALTH + WEBSITE BASE)
+// EXPRESS SERVER
 // ─────────────────────────────────────────────
 
 const app = express();
 
-app.get("/", (req, res) => {
-  res.send("🚀 Bot is running");
-});
-
+app.get("/", (req, res) => res.send("🚀 Bot running"));
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    bot: client.isReady() ? "online" : "starting",
     uptime: process.uptime(),
     guilds: client.guilds.cache.size,
-    timestamp: new Date().toISOString(),
   });
 });
 
@@ -124,7 +124,7 @@ app.listen(PORT, () => {
 });
 
 // ─────────────────────────────────────────────
-// COMMAND HANDLERS MAP
+// COMMANDS MAP
 // ─────────────────────────────────────────────
 
 const handlers = {
@@ -183,51 +183,54 @@ const handlers = {
 };
 
 // ─────────────────────────────────────────────
-// REGISTER COMMANDS
-// ─────────────────────────────────────────────
-
-async function registerCommands() {
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-
-  const allCommands = [...commandDefs, ...setupCommands].map(c => c.toJSON());
-
-  try {
-    console.log("🧹 Clearing old commands...");
-
-    for (const guild of client.guilds.cache.values()) {
-      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, guild.id), {
-        body: [],
-      });
-    }
-
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: [] });
-
-    console.log("📥 Registering new commands...");
-    await rest.put(Routes.applicationCommands(CLIENT_ID), {
-      body: allCommands,
-    });
-
-    console.log("✅ Commands registered successfully");
-  } catch (err) {
-    console.error("❌ Command registration failed:", err);
-  }
-}
-
-// ─────────────────────────────────────────────
-// READY EVENT
-// ─────────────────────────────────────────────
-
-client.once("ready", async () => {
-  console.log(`🤖 Logged in as ${client.user.tag}`);
-  await registerCommands();
-});
-
-// ─────────────────────────────────────────────
-// INTERACTIONS
+// COMMAND HANDLER
 // ─────────────────────────────────────────────
 
 client.on("interactionCreate", async (interaction) => {
   try {
+    // ───────── BUTTON SYSTEM (ACCEPT / DENY) ─────────
+    if (interaction.isButton()) {
+      const [type, action, id] = interaction.customId.split("_");
+
+      if (type === "app") {
+        const app = db.prepare(
+          "SELECT * FROM applications WHERE id = ?"
+        ).get(Number(id));
+
+        if (!app) {
+          return interaction.reply({
+            content: "❌ Application not found",
+            ephemeral: true,
+          });
+        }
+
+        if (action === "accept") {
+          db.prepare(
+            "UPDATE applications SET status = 'accepted' WHERE id = ?"
+          ).run(Number(id));
+
+          return interaction.reply({
+            content: `✅ Accepted application #${id}`,
+            ephemeral: true,
+          });
+        }
+
+        if (action === "deny") {
+          db.prepare(
+            "UPDATE applications SET status = 'denied' WHERE id = ?"
+          ).run(Number(id));
+
+          return interaction.reply({
+            content: `❌ Denied application #${id}`,
+            ephemeral: true,
+          });
+        }
+      }
+
+      return;
+    }
+
+    // ───────── SLASH COMMANDS ─────────
     if (!interaction.isChatInputCommand()) return;
 
     const handler = handlers[interaction.commandName];
@@ -240,15 +243,13 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     await handler(interaction);
+
   } catch (err) {
     console.error(err);
 
-    const msg = {
-      content: "❌ Something went wrong",
-      ephemeral: true,
-    };
+    const msg = { content: "❌ Error occurred", ephemeral: true };
 
-    if (interaction.replied || interaction.deferred) {
+    if (interaction.replied) {
       interaction.followUp(msg).catch(() => {});
     } else {
       interaction.reply(msg).catch(() => {});
@@ -257,7 +258,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ─────────────────────────────────────────────
-// MESSAGE SYSTEM (AD TRACKING)
+// MESSAGE TRACKING
 // ─────────────────────────────────────────────
 
 client.on("messageCreate", async (msg) => {
@@ -267,7 +268,20 @@ client.on("messageCreate", async (msg) => {
 
   if (isAdChannel(msg.guild.id, msg.channel.id)) {
     trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
+
+    const embed = new EmbedBuilder()
+      .setTitle("📈 Advertise Here")
+      .setColor(0x2b2d31)
+      .setDescription("Use approved ad channels only.");
   }
+});
+
+// ─────────────────────────────────────────────
+// READY
+// ─────────────────────────────────────────────
+
+client.once("ready", async () => {
+  console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
 // ─────────────────────────────────────────────
