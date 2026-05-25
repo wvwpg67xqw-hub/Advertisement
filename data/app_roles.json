@@ -1,0 +1,29 @@
+[
+  {
+    "id": 1,
+    "name": "Moderator",
+    "description": "Enforce community rules, manage disputes, handle reports, and maintain a safe environment for all members.",
+    "emoji": "🔨",
+    "color": "#6c63ff",
+    "active": 1,
+    "sort_order": 0
+  },
+  {
+    "id": 2,
+    "name": "Human Resources",
+    "description": "Onboard new staff, handle staff issues, manage promotions, and ensure team wellbeing and cohesion.",
+    "emoji": "🤝",
+    "color": "#22c55e",
+    "active": 1,
+    "sort_order": 1
+  },
+  {
+    "id": 3,
+    "name": "Partnership",
+    "description": "Build relationships with other communities, negotiate partnership deals, and grow our network.",
+    "emoji": "🌐",
+    "color": "#f59e0b",
+    "active": 1,
+    "sort_order": 2
+  }
+]
