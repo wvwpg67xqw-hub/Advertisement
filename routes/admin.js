@@ -4,6 +4,37 @@ import { requireAdmin } from '../auth.js';
 
 const router = Router();
 
+// ── Webhook helper ────────────────────────────────────────────
+
+async function sendDecisionWebhook(app, decision, adminUser) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  const accepted = decision === 'accepted';
+  const embed = {
+    title: accepted ? '✅ Application Accepted' : '❌ Application Denied',
+    color: accepted ? 0x22c55e : 0xef4444,
+    thumbnail: app.avatar ? { url: app.avatar } : undefined,
+    fields: [
+      { name: '👤 Applicant', value: `**${app.username}**\n\`${app.userId}\``, inline: true },
+      { name: '📌 Role',      value: app.role,                                  inline: true },
+      { name: '🛡️ Reviewed by', value: adminUser?.username || 'Admin',         inline: true },
+    ],
+    footer: { text: 'Staff Portal • Application System' },
+    timestamp: new Date().toISOString(),
+  };
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+  } catch (err) {
+    console.error('Decision webhook failed:', err.message);
+  }
+}
+
 // ── Applications ──────────────────────────────────────────────
 
 router.get('/applications', requireAdmin, (req, res) => {
@@ -18,15 +49,23 @@ router.get('/applications', requireAdmin, (req, res) => {
   res.json(db.prepare(query).all(...params));
 });
 
-router.post('/applications/:id/accept', requireAdmin, (req, res) => {
-  const result = db.prepare("UPDATE applications SET status = 'accepted' WHERE id = ?").run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Application not found' });
+router.post('/applications/:id/accept', requireAdmin, async (req, res) => {
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  if (!app) return res.status(404).json({ error: 'Application not found' });
+  if (app.status !== 'pending') return res.status(409).json({ error: `Application is already ${app.status}` });
+
+  db.prepare("UPDATE applications SET status = 'accepted' WHERE id = ?").run(req.params.id);
+  sendDecisionWebhook(app, 'accepted', req.session.user);
   res.json({ success: true });
 });
 
-router.post('/applications/:id/deny', requireAdmin, (req, res) => {
-  const result = db.prepare("UPDATE applications SET status = 'denied' WHERE id = ?").run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Application not found' });
+router.post('/applications/:id/deny', requireAdmin, async (req, res) => {
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  if (!app) return res.status(404).json({ error: 'Application not found' });
+  if (app.status !== 'pending') return res.status(409).json({ error: `Application is already ${app.status}` });
+
+  db.prepare("UPDATE applications SET status = 'denied' WHERE id = ?").run(req.params.id);
+  sendDecisionWebhook(app, 'denied', req.session.user);
   res.json({ success: true });
 });
 
