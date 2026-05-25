@@ -1,0 +1,56 @@
+v22.22.3
+:/home/container$ if [ ! -d .git ]; then git clone https://github.com/wvwpg67xqw-hub/Advertisement .; fi; if [[ "${AUTO_UPDATE}" == "1" ]]; then git pull; fi; if [ -f /home/container/package.json ]; then npm install; fi; if [[ "${MAIN_FILE}" == "*.js" ]]; then node index.js; else node index.js; fi # Added by FeatherPanel (Server Startup)
+\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K
+up to date, audited 139 packages in 5s
+-[1G[0K
+-[1G[0K34 packages are looking for funding
+-[1G[0K  run `npm fund` for details
+-[1G[0K
+1 [33m[1mmoderate[22m[39m severity vulnerability
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+-[1G[0K/home/container/node_modules/bindings/bindings.js:126
+  err = new Error(
+        ^
+
+Error: Could not locate the bindings file. Tried:
+ → /home/container/node_modules/better-sqlite3/build/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/build/Debug/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/out/Debug/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/Debug/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/out/Release/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/Release/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/build/default/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/compiled/22.22.3/linux/x64/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/addon-build/release/install-root/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/addon-build/debug/install-root/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/addon-build/default/install-root/better_sqlite3.node
+ → /home/container/node_modules/better-sqlite3/lib/binding/node-v127-linux-x64/better_sqlite3.node
+    at bindings [90m(/home/container/[39mnode_modules/[4mbindings[24m/bindings.js:126:9[90m)[39m
+    at new Database [90m(/home/container/[39mnode_modules/[4mbetter-sqlite3[24m/lib/database.js:48:64[90m)[39m
+    at [90mfile:///home/container/[39mdb.js:10:12
+[90m    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)[39m
+[90m    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)[39m
+[90m    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)[39m {
+  tries: [
+    [32m'/home/container/node_modules/better-sqlite3/build/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/build/Debug/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/build/Release/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/out/Debug/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/Debug/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/out/Release/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/Release/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/build/default/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/compiled/22.22.3/linux/x64/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/addon-build/release/install-root/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/addon-build/debug/install-root/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/addon-build/default/install-root/better_sqlite3.node'[39m,
+    [32m'/home/container/node_modules/better-sqlite3/lib/binding/node-v127-linux-x64/better_sqlite3.node'[39m
+  ]
+}
+
+Node.js v22.22.3
