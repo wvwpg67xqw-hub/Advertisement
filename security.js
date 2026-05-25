@@ -1,8 +1,8 @@
 import discordPkg from 'discord.js';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = discordPkg;
 
-import client from './botClient.js';
 import db from './db.js';
+import { sendDM } from './dmRest.js';
 
 // ── Get Real Client IP ─────────────────────────────────────────────────────────
 
@@ -72,9 +72,7 @@ export async function checkVpn(ip) {
   if (process.env.DISABLE_VPN_CHECK === 'true') return false;
 
   const cached = vpnCache.get(ip);
-  if (cached && Date.now() - cached.checkedAt < 30 * 60 * 1000) {
-    return cached.isVpn;
-  }
+  if (cached && Date.now() - cached.checkedAt < 30 * 60 * 1000) return cached.isVpn;
 
   try {
     const keyParam = process.env.PROXYCHECK_KEY ? `&key=${process.env.PROXYCHECK_KEY}` : '';
@@ -102,50 +100,41 @@ export function isDiscordBot(discordUser) {
   return false;
 }
 
-// ── Breach Alert → Owner DM ───────────────────────────────────────────────────
+// ── Breach Alert → Owner DM (via REST, no gateway needed) ─────────────────────
 
 export async function sendBreachAlert({ type, ip, detail, userId, username }) {
-  const ownerId = process.env.OWNER_ID || process.env.ADMIN_ID;
-  if (!ownerId) return;
-  if (!client.isReady()) return;
+  const ownerId = process.env.OWNER_ID || '1453592157607825595';
 
-  try {
-    const owner = await client.users.fetch(ownerId).catch(() => null);
-    if (!owner) return;
+  const embed = new EmbedBuilder()
+    .setTitle(`🚨 Security Alert: ${type}`)
+    .setColor(0xff3333)
+    .addFields(
+      { name: '📌 Event',    value: String(detail || 'N/A'),                                                    inline: false },
+      { name: '🌐 IP',       value: String(ip || 'unknown'),                                                    inline: true  },
+      { name: '👤 User',     value: userId ? `${username || 'Unknown'}\n\`${userId}\`` : 'Not logged in',       inline: true  },
+    )
+    .setTimestamp()
+    .setFooter({ text: 'Staff Portal · Security' });
 
-    const dmChannel = await owner.createDM().catch(() => null);
-    if (!dmChannel) return;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`sec_bl_${userId || 'none'}`)
+      .setLabel('Blacklist User')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!userId),
+    new ButtonBuilder()
+      .setCustomId(`sec_ipbl_${ip}`)
+      .setLabel('IP Blacklist')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!ip || ip === 'unknown'),
+    new ButtonBuilder()
+      .setCustomId('sec_dismiss')
+      .setLabel('Dismiss')
+      .setStyle(ButtonStyle.Secondary),
+  );
 
-    const embed = new EmbedBuilder()
-      .setTitle(`🚨 Security Alert: ${type}`)
-      .setColor(0xff3333)
-      .addFields(
-        { name: '📌 Event', value: String(detail || 'N/A'), inline: false },
-        { name: '🌐 IP Address', value: String(ip || 'unknown'), inline: true },
-        { name: '👤 User', value: userId ? `${username || 'Unknown'}\n\`${userId}\`` : 'Not logged in', inline: true },
-      )
-      .setTimestamp()
-      .setFooter({ text: 'Discord Staff Portal · Security' });
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`sec_bl_${userId || 'none'}`)
-        .setLabel('Blacklist User')
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(!userId),
-      new ButtonBuilder()
-        .setCustomId(`sec_ipbl_${ip}`)
-        .setLabel('IP Blacklist')
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(!ip || ip === 'unknown'),
-      new ButtonBuilder()
-        .setCustomId('sec_dismiss')
-        .setLabel('Dismiss')
-        .setStyle(ButtonStyle.Secondary),
-    );
-
-    await dmChannel.send({ embeds: [embed], components: [row] });
-  } catch (err) {
-    console.error('⚠️  Breach alert DM failed:', err.message);
-  }
+  await sendDM(ownerId, {
+    embeds: [embed.toJSON()],
+    components: [row.toJSON()],
+  });
 }

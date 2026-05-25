@@ -12,6 +12,7 @@ const { REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle
 
 import client from './botClient.js';
 import db from './db.js';
+import { sendDM } from './dmRest.js';
 import { getClientIp, ipBlacklistMiddleware, rateLimit, checkVpn, isDiscordBot, sendBreachAlert } from './security.js';
 import applicationRoutes from './routes/applications.js';
 import adminRoutes from './routes/admin.js';
@@ -47,7 +48,7 @@ const DISCORD_REDIRECT_URI  = process.env.DISCORD_REDIRECT_URI;
 const TOKEN                 = process.env.TOKEN;
 const CLIENT_ID             = process.env.CLIENT_ID;
 
-// Hard-coded owner — always gets alerts and is auto-seeded as admin
+// Owner ID — receives all login/appeal/security DMs
 const OWNER_ID = process.env.OWNER_ID || '1453592157607825595';
 
 // ── Express Setup ─────────────────────────────────────────────────────────────
@@ -73,113 +74,91 @@ app.use(rateLimit('global', 150, 15 * 60 * 1000));
 
 // ── Seed Owner as Admin ───────────────────────────────────────────────────────
 
-try {
-  db.seedAdmin(OWNER_ID, process.env.ADMIN_USERNAME || 'Owner', 'owner');
-} catch { /* already seeded */ }
-
-const ADMIN_ID       = process.env.ADMIN_ID;
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'Owner';
-if (ADMIN_ID && ADMIN_ID !== OWNER_ID) {
-  try { db.seedAdmin(ADMIN_ID, ADMIN_USERNAME, 'owner'); } catch { /* already seeded */ }
+try { db.seedAdmin(OWNER_ID, process.env.ADMIN_USERNAME || 'Owner', 'owner'); } catch {}
+if (process.env.ADMIN_ID && process.env.ADMIN_ID !== OWNER_ID) {
+  try { db.seedAdmin(process.env.ADMIN_ID, process.env.ADMIN_USERNAME || 'Owner', 'owner'); } catch {}
 }
 
-// ── Login Alert DM ────────────────────────────────────────────────────────────
+// ── DM Helpers (all use REST — no gateway dependency) ─────────────────────────
 
 async function sendLoginAlert({ userId, username, avatar, isNew, isAdmin, isBlacklisted }) {
-  if (userId === OWNER_ID) return;
-  if (!client.isReady()) return;
-  try {
-    const owner = await client.users.fetch(OWNER_ID).catch(() => null);
-    if (!owner) return;
-    const dmChannel = await owner.createDM().catch(() => null);
-    if (!dmChannel) return;
+  if (userId === OWNER_ID) return; // don't alert on owner's own logins
 
-    // Calculate Discord account age from snowflake
-    const DISCORD_EPOCH = 1420070400000n;
-    const createdAt = new Date(Number((BigInt(userId) >> 22n) + DISCORD_EPOCH));
-    const accountAgeMs = Date.now() - createdAt.getTime();
-    const accountAgeDays = Math.floor(accountAgeMs / 86400000);
-    const accountAgeStr = accountAgeDays > 365
-      ? `${Math.floor(accountAgeDays / 365)}y ${Math.floor((accountAgeDays % 365) / 30)}m`
-      : `${accountAgeDays}d`;
+  const DISCORD_EPOCH = 1420070400000n;
+  const createdAt = new Date(Number((BigInt(userId) >> 22n) + DISCORD_EPOCH));
+  const days = Math.floor((Date.now() - createdAt.getTime()) / 86400000);
+  const accountAge = days > 365 ? `${Math.floor(days/365)}y ${Math.floor((days%365)/30)}m` : `${days} days`;
 
-    const statusBadge = isBlacklisted ? '🚫 BANNED' : isAdmin ? '🛡️ Admin' : '👤 Member';
+  const statusBadge = isBlacklisted ? '🚫 BANNED' : isAdmin ? '🛡️ Admin' : '👤 Member';
 
-    const embed = new EmbedBuilder()
-      .setTitle(`${isNew ? '🆕 New User' : '🔄 User Login'} — ${username}`)
-      .setColor(isBlacklisted ? 0xff3333 : isNew ? 0x22c55e : 0x5865f2)
-      .setThumbnail(avatar)
-      .addFields(
-        { name: '👤 User',          value: `${username}\n\`${userId}\``,     inline: true },
-        { name: '📋 Status',        value: statusBadge,                       inline: true },
-        { name: '🗓️ Account Age',  value: accountAgeStr,                     inline: true },
-        { name: '📅 Login Time',    value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: false },
-      )
-      .setFooter({ text: 'Discord Staff Portal · Login Notification' });
+  const embed = new EmbedBuilder()
+    .setTitle(`${isNew ? '🆕 New User Joined' : '🔄 User Logged In'}: ${username}`)
+    .setColor(isBlacklisted ? 0xff3333 : isNew ? 0x22c55e : 0x5865f2)
+    .setThumbnail(avatar)
+    .addFields(
+      { name: '👤 User',         value: `**${username}**\n\`${userId}\``,          inline: true  },
+      { name: '📋 Status',       value: statusBadge,                                inline: true  },
+      { name: '🗓️ Account Age', value: accountAge,                                 inline: true  },
+      { name: '🕒 Time',         value: `<t:${Math.floor(Date.now()/1000)}:F>`,    inline: false },
+    )
+    .setFooter({ text: 'Staff Portal · Login Alert' })
+    .setTimestamp();
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`portal_admin_${userId}`)
-        .setLabel(isAdmin ? 'Remove Admin' : 'Make Admin')
-        .setStyle(isAdmin ? ButtonStyle.Secondary : ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`portal_ban_${userId}`)
-        .setLabel(isBlacklisted ? 'Already Banned' : 'Ban User')
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(!!isBlacklisted),
-    );
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`portal_admin_${userId}`)
+      .setLabel(isAdmin ? '🛡️ Remove Admin' : '🛡️ Make Admin')
+      .setStyle(isAdmin ? ButtonStyle.Secondary : ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`portal_ban_${userId}`)
+      .setLabel('🚫 Ban User')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!!isBlacklisted),
+  );
 
-    await dmChannel.send({ embeds: [embed], components: [row] });
-  } catch (err) {
-    console.error('⚠️  Login alert DM failed:', err.message);
-  }
+  const ok = await sendDM(OWNER_ID, {
+    embeds: [embed.toJSON()],
+    components: [row.toJSON()],
+  });
+  if (ok) console.log(`📬 Login alert sent for ${username} (${userId})`);
 }
 
-// ── Appeal DM ─────────────────────────────────────────────────────────────────
-
 async function sendAppealAlert({ appealId, userId, username, avatar, reason, banReason }) {
-  if (!client.isReady()) return;
-  try {
-    const owner = await client.users.fetch(OWNER_ID).catch(() => null);
-    if (!owner) return;
-    const dmChannel = await owner.createDM().catch(() => null);
-    if (!dmChannel) return;
+  const embed = new EmbedBuilder()
+    .setTitle(`📬 Ban Appeal #${appealId} — ${username}`)
+    .setColor(0xf59e0b)
+    .setThumbnail(avatar)
+    .addFields(
+      { name: '👤 User',          value: `**${username}**\n\`${userId}\``,  inline: true  },
+      { name: '🔢 Appeal #',      value: String(appealId),                   inline: true  },
+      { name: '🚫 Ban Reason',    value: banReason || 'No reason recorded',  inline: false },
+      { name: '📝 Appeal Reason', value: reason.slice(0, 1024),              inline: false },
+    )
+    .setTimestamp()
+    .setFooter({ text: 'Staff Portal · Ban Appeals' });
 
-    const embed = new EmbedBuilder()
-      .setTitle(`📬 Ban Appeal — ${username}`)
-      .setColor(0xf59e0b)
-      .setThumbnail(avatar)
-      .addFields(
-        { name: '👤 User',         value: `${username}\n\`${userId}\``, inline: true },
-        { name: '🔢 Appeal #',     value: String(appealId),             inline: true },
-        { name: '🚫 Ban Reason',   value: banReason || 'No reason on record', inline: false },
-        { name: '📝 Appeal Reason', value: reason.slice(0, 1024),       inline: false },
-      )
-      .setTimestamp()
-      .setFooter({ text: 'Discord Staff Portal · Ban Appeals' });
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`appeal_accept_${appealId}`)
+      .setLabel('✅ Accept — Unban')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`appeal_deny_${appealId}`)
+      .setLabel('❌ Deny Appeal')
+      .setStyle(ButtonStyle.Danger),
+  );
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`appeal_accept_${appealId}`)
-        .setLabel('✅ Accept Appeal')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`appeal_deny_${appealId}`)
-        .setLabel('❌ Deny Appeal')
-        .setStyle(ButtonStyle.Danger),
-    );
-
-    await dmChannel.send({ embeds: [embed], components: [row] });
-  } catch (err) {
-    console.error('⚠️  Appeal alert DM failed:', err.message);
-  }
+  await sendDM(OWNER_ID, {
+    embeds: [embed.toJSON()],
+    components: [row.toJSON()],
+  });
 }
 
 // ── Discord OAuth ─────────────────────────────────────────────────────────────
 
 app.get('/api/auth/login', rateLimit('login', 20, 15 * 60 * 1000), (req, res) => {
   if (!DISCORD_CLIENT_ID || !DISCORD_REDIRECT_URI) {
-    return res.status(500).send('Discord OAuth not configured.');
+    return res.status(500).send('Discord OAuth not configured. Set DISCORD_CLIENT_ID and DISCORD_REDIRECT_URI.');
   }
   const state = crypto.randomBytes(16).toString('hex');
   req.session.oauthState = state;
@@ -199,9 +178,8 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
 
   if (!code) return res.redirect('/?error=no_code');
 
-  // CSRF state check
   if (!state || state !== req.session.oauthState) {
-    await sendBreachAlert({ type: 'OAuth CSRF Attempt', ip, detail: 'State mismatch', userId: null, username: null });
+    sendBreachAlert({ type: 'OAuth CSRF Attempt', ip, detail: 'State mismatch on callback', userId: null, username: null });
     return res.redirect('/?error=invalid_state');
   }
   delete req.session.oauthState;
@@ -217,23 +195,28 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
         grant_type: 'authorization_code', code, redirect_uri: DISCORD_REDIRECT_URI,
       }),
     });
-    if (!tokenRes.ok) { console.error('Token exchange failed:', await tokenRes.text()); return res.redirect('/?error=token_failed'); }
+    if (!tokenRes.ok) {
+      console.error('Token exchange failed:', await tokenRes.text());
+      return res.redirect('/?error=token_failed');
+    }
     const { access_token } = await tokenRes.json();
 
-    const userRes = await fetch('https://discord.com/api/users/@me', { headers: { Authorization: `Bearer ${access_token}` } });
+    const userRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
     if (!userRes.ok) return res.redirect('/?error=user_fetch_failed');
     const discordUser = await userRes.json();
 
     // Block bot accounts
     if (isDiscordBot(discordUser)) {
-      await sendBreachAlert({ type: 'Bot Account Login', ip, detail: `${discordUser.username} (${discordUser.id})`, userId: discordUser.id, username: discordUser.username });
+      sendBreachAlert({ type: 'Bot Account Login Attempt', ip, detail: `${discordUser.username} (${discordUser.id})`, userId: discordUser.id, username: discordUser.username });
       return res.redirect('/?error=bots_not_allowed');
     }
 
-    // VPN check
+    // VPN / proxy check
     const vpnDetected = await checkVpn(ip);
     if (vpnDetected) {
-      await sendBreachAlert({ type: 'VPN/Proxy Login', ip, detail: `${discordUser.username} (${discordUser.id})`, userId: discordUser.id, username: discordUser.username });
+      sendBreachAlert({ type: 'VPN/Proxy Login Attempt', ip, detail: `${discordUser.username} (${discordUser.id})`, userId: discordUser.id, username: discordUser.username });
       return res.redirect('/?error=vpn_not_allowed');
     }
 
@@ -243,14 +226,13 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
 
     const isBlacklisted = db.isBlacklisted(discordUser.id);
     const isAdmin       = !!db.getAdmin(discordUser.id);
-
-    // Always allow login — blacklisted users see the appeal page instead
-    const { isNew } = db.upsertUser(discordUser.id, discordUser.username, avatar);
+    const { isNew }     = db.upsertUser(discordUser.id, discordUser.username, avatar);
 
     const user = { userId: discordUser.id, username: discordUser.username, avatar, isBlacklisted };
 
-    // Send login alert DM to owner (non-blocking)
-    sendLoginAlert({ userId: discordUser.id, username: discordUser.username, avatar, isNew, isAdmin, isBlacklisted }).catch(() => {});
+    // Fire login alert DM (non-blocking)
+    sendLoginAlert({ userId: discordUser.id, username: discordUser.username, avatar, isNew, isAdmin, isBlacklisted })
+      .catch(err => console.error('Login alert failed:', err.message));
 
     req.session.regenerate((err) => {
       if (err) console.error('Session regenerate error:', err);
@@ -268,10 +250,7 @@ app.get('/api/auth/me', (req, res) => {
   const { userId } = req.session.user;
   const admin = db.getAdmin(userId);
   const blacklisted = db.isBlacklisted(userId);
-  // Keep session blacklist flag in sync
-  if (blacklisted !== req.session.user.isBlacklisted) {
-    req.session.user.isBlacklisted = blacklisted;
-  }
+  req.session.user.isBlacklisted = blacklisted;
   res.json({ ...req.session.user, isAdmin: !!admin, isBlacklisted: blacklisted });
 });
 
@@ -285,7 +264,6 @@ app.get('/api/roles', (req, res) => res.json(db.getActiveRoles()));
 
 // ── Ban Appeals ───────────────────────────────────────────────────────────────
 
-// Require the user to be logged in and blacklisted to submit an appeal
 function requireBlacklisted(req, res, next) {
   if (!req.session?.user) return res.status(401).json({ error: 'Not authenticated' });
   if (!db.isBlacklisted(req.session.user.userId)) return res.status(403).json({ error: 'You are not banned.' });
@@ -301,30 +279,20 @@ app.get('/api/appeals/mine', (req, res) => {
 
 app.post('/api/appeals', requireBlacklisted, rateLimit('appeals', 2, 24 * 60 * 60 * 1000), async (req, res) => {
   const { reason } = req.body;
-  if (!reason || !String(reason).trim()) return res.status(400).json({ error: 'Appeal reason required' });
-  if (String(reason).length > 2000) return res.status(400).json({ error: 'Appeal too long (max 2000 chars)' });
+  if (!reason?.trim()) return res.status(400).json({ error: 'Appeal reason required' });
+  if (reason.length > 2000) return res.status(400).json({ error: 'Appeal too long (max 2000 chars)' });
 
   const { userId, username, avatar } = req.session.user;
 
-  // Check for existing pending appeal
   const existing = db.getUserAppeal(userId);
-  if (existing && existing.status === 'pending') {
-    return res.status(409).json({ error: 'You already have a pending appeal.' });
-  }
-  if (existing && existing.status === 'denied') {
-    return res.status(403).json({ error: 'Your appeal has already been denied.' });
-  }
+  if (existing?.status === 'pending') return res.status(409).json({ error: 'You already have a pending appeal.' });
+  if (existing?.status === 'denied')  return res.status(403).json({ error: 'Your appeal was already denied.' });
 
   const banEntry = db.getBlacklistEntry(userId);
-  const { id: appealId } = db.insertAppeal({ userId, username, avatar, reason: String(reason).trim() });
+  const { id: appealId } = db.insertAppeal({ userId, username, avatar, reason: reason.trim() });
 
-  // Send DM to owner (non-blocking)
-  sendAppealAlert({
-    appealId,
-    userId, username, avatar,
-    reason: String(reason).trim(),
-    banReason: banEntry?.reason,
-  }).catch(() => {});
+  sendAppealAlert({ appealId, userId, username, avatar, reason: reason.trim(), banReason: banEntry?.reason })
+    .catch(err => console.error('Appeal alert failed:', err.message));
 
   res.json({ success: true, appealId });
 });
@@ -347,9 +315,7 @@ if (existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
 } else {
-  app.get('/', (_req, res) => res.send(`<html><body style="background:#0b0b10;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column">
-    <h1>⚙️ Discord Staff Portal</h1><p>Build the frontend: <code>npm run build</code></p>
-  </body></html>`));
+  app.get('/', (_req, res) => res.send(`<html><body style="background:#0b0b10;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column"><h1>⚙️ Discord Staff Portal</h1><p>Build client: <code>npm run build</code></p></body></html>`));
 }
 
 // ── Start HTTP server ─────────────────────────────────────────────────────────
@@ -386,61 +352,57 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
       const id = interaction.customId;
 
-      // Only the owner can use these DM control buttons
+      // All portal/appeal/security DM buttons are owner-only
       if (id.startsWith('portal_') || id.startsWith('appeal_') || id.startsWith('sec_')) {
         if (interaction.user.id !== OWNER_ID) {
           return interaction.reply({ content: '❌ Only the portal owner can use these buttons.', ephemeral: true });
         }
       }
 
-      // ── Portal: Make / Remove Admin ────────────────────────────────────────
+      // ── Portal: Toggle Admin ───────────────────────────────────────────────
       if (id.startsWith('portal_admin_')) {
         const targetId = id.slice(13);
-        const isAdmin = !!db.getAdmin(targetId);
-        if (isAdmin) {
+        const existing = db.getAdmin(targetId);
+        if (existing) {
           db.deleteAdminByUserId(targetId);
-          return interaction.reply({ content: `✅ Removed admin from \`${targetId}\`.`, ephemeral: true });
-        } else {
-          // Try to get username from users store
-          const rows = await import('./jsondb.js').then(m => m.readCol('users'));
-          const u = rows.find(r => r.userId === targetId);
-          try {
-            db.insertAdmin(targetId, u?.username || 'Unknown', 'admin');
-            return interaction.reply({ content: `✅ \`${u?.username || targetId}\` is now an admin.`, ephemeral: true });
-          } catch {
-            return interaction.reply({ content: `⚠️ That user is already an admin.`, ephemeral: true });
-          }
+          return interaction.reply({ content: `✅ Admin access removed from \`${targetId}\`.`, ephemeral: true });
+        }
+        const { readCol } = await import('./jsondb.js');
+        const u = readCol('users').find(r => r.userId === targetId);
+        try {
+          db.insertAdmin(targetId, u?.username || 'Unknown', 'admin');
+          return interaction.reply({ content: `✅ **${u?.username || targetId}** is now a portal admin.`, ephemeral: true });
+        } catch {
+          return interaction.reply({ content: `⚠️ Already an admin.`, ephemeral: true });
         }
       }
 
       // ── Portal: Ban User ───────────────────────────────────────────────────
       if (id.startsWith('portal_ban_')) {
         const targetId = id.slice(11);
-        const rows = await import('./jsondb.js').then(m => m.readCol('users'));
-        const u = rows.find(r => r.userId === targetId);
+        const { readCol } = await import('./jsondb.js');
+        const u = readCol('users').find(r => r.userId === targetId);
         try {
-          db.insertBlacklist(targetId, u?.username || 'Unknown', 'Banned by owner via login alert');
-          return interaction.reply({ content: `🚫 \`${u?.username || targetId}\` has been banned from the portal.`, ephemeral: true });
+          db.insertBlacklist(targetId, u?.username || 'Unknown', 'Banned via login alert DM');
+          return interaction.reply({ content: `🚫 **${u?.username || targetId}** has been banned from the portal.`, ephemeral: true });
         } catch {
           return interaction.reply({ content: `⚠️ That user is already banned.`, ephemeral: true });
         }
       }
 
-      // ── Security Alert: Blacklist User ─────────────────────────────────────
+      // ── Security: Blacklist User ───────────────────────────────────────────
       if (id.startsWith('sec_bl_')) {
-        const targetUserId = id.slice(7);
-        if (!targetUserId || targetUserId === 'none') {
-          return interaction.reply({ content: '⚠️ No user ID to blacklist.', ephemeral: true });
-        }
+        const targetId = id.slice(7);
+        if (!targetId || targetId === 'none') return interaction.reply({ content: '⚠️ No user ID available.', ephemeral: true });
         try {
-          db.insertBlacklist(targetUserId, 'Unknown', 'Security alert — blacklisted via DM');
-          return interaction.reply({ content: `✅ User \`${targetUserId}\` blacklisted.`, ephemeral: true });
+          db.insertBlacklist(targetId, 'Unknown', 'Security alert — blacklisted via DM');
+          return interaction.reply({ content: `✅ \`${targetId}\` blacklisted.`, ephemeral: true });
         } catch {
           return interaction.reply({ content: `⚠️ Already blacklisted.`, ephemeral: true });
         }
       }
 
-      // ── Security Alert: IP Blacklist ───────────────────────────────────────
+      // ── Security: IP Blacklist ─────────────────────────────────────────────
       if (id.startsWith('sec_ipbl_')) {
         const ip = id.slice(9);
         try {
@@ -452,7 +414,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (id === 'sec_dismiss') {
-        return interaction.reply({ content: '✅ Alert dismissed.', ephemeral: true });
+        return interaction.reply({ content: '✅ Dismissed.', ephemeral: true });
       }
 
       // ── Appeal: Accept ─────────────────────────────────────────────────────
@@ -460,16 +422,10 @@ client.on('interactionCreate', async (interaction) => {
         const appealId = Number(id.slice(14));
         const appeal = db.getAppeal(appealId);
         if (!appeal) return interaction.reply({ content: '❌ Appeal not found.', ephemeral: true });
-        if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Appeal already ${appeal.status}.`, ephemeral: true });
-
+        if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Already ${appeal.status}.`, ephemeral: true });
         db.updateAppealStatus(appealId, 'accepted');
-        // Unban the user
         db.deleteBlacklistByUserId(appeal.userId);
-
-        return interaction.reply({
-          content: `✅ Appeal #${appealId} accepted. \`${appeal.username}\` has been unbanned from the portal.`,
-          ephemeral: true,
-        });
+        return interaction.reply({ content: `✅ Appeal #${appealId} accepted. **${appeal.username}** has been unbanned.`, ephemeral: true });
       }
 
       // ── Appeal: Deny ───────────────────────────────────────────────────────
@@ -477,21 +433,16 @@ client.on('interactionCreate', async (interaction) => {
         const appealId = Number(id.slice(12));
         const appeal = db.getAppeal(appealId);
         if (!appeal) return interaction.reply({ content: '❌ Appeal not found.', ephemeral: true });
-        if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Appeal already ${appeal.status}.`, ephemeral: true });
-
+        if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Already ${appeal.status}.`, ephemeral: true });
         db.updateAppealStatus(appealId, 'denied');
-
-        return interaction.reply({
-          content: `❌ Appeal #${appealId} denied. \`${appeal.username}\` remains banned.`,
-          ephemeral: true,
-        });
+        return interaction.reply({ content: `❌ Appeal #${appealId} denied. **${appeal.username}** stays banned.`, ephemeral: true });
       }
 
-      // ── Application Review ─────────────────────────────────────────────────
+      // ── Application review ─────────────────────────────────────────────────
       if (id.startsWith('app_')) {
         const parts = id.split('_');
         const action = parts[1];
-        const appId = parts[2];
+        const appId  = parts[2];
         const application = db.getApplication(Number(appId));
         if (!application) return interaction.reply({ content: '❌ Application not found', ephemeral: true });
         if (action === 'accept') { db.updateApplicationStatus(Number(appId), 'accepted'); return interaction.reply({ content: `✅ Accepted #${appId}`, ephemeral: true }); }
@@ -544,5 +495,5 @@ client.once('ready', async () => {
 if (TOKEN) {
   client.login(TOKEN).catch(err => console.error('❌ Discord login failed:', err.message));
 } else {
-  console.warn('⚠️  TOKEN not set — Discord bot will not start.');
+  console.warn('⚠️  TOKEN not set — Discord bot will not start. Add TOKEN to Secrets.');
 }

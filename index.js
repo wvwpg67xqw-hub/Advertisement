@@ -1,8 +1,11 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
-const distPath = './client/dist';
+// Kill any process already holding the port so restarts never get EADDRINUSE
+const port = process.env.PORT || 25849;
+try { execSync(`fuser -k ${port}/tcp 2>/dev/null || true`); } catch {}
 
+const distPath = './client/dist';
 if (existsSync('./client/package.json') && !existsSync(distPath)) {
   try {
     console.log('🔨 Building client...');
