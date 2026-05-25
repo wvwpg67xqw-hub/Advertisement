@@ -1,14 +1,14 @@
-import { DatabaseSync } from 'node:sqlite';
+import Database from 'better-sqlite3';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
 
 const dataDir = join(process.cwd(), 'data');
 mkdirSync(dataDir, { recursive: true });
 
-const db = new DatabaseSync(join(dataDir, 'bot.db'));
+const db = new Database(join(dataDir, 'bot.db'));
 
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 // Migrate ad_channels/ad_posts tables
 db.exec(`
