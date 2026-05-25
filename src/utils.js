@@ -103,18 +103,63 @@ export function buildWarnEmbed(fields) {
 
 export function buildAdWarnEmbed(fields) {
   const embed = new EmbedBuilder()
-    .setColor(0xFF6600)
-    .setTitle('📢 Advertisement Warning Issued')
+    .setColor(0xED4245)
+    .setAuthor({
+      name: 'AK Moderation',
+    })
+    .setTitle("You've been warned")
+    .setDescription(
+      '### Notice\nYou were found breaking a rule! DM Modmail to dispute this warn.'
+    )
     .addFields(
-      { name: 'User', value: `<@${fields.userId}> (${fields.userId})`, inline: true },
-      { name: 'Moderator', value: `<@${fields.moderatorId}>`, inline: true },
-      { name: 'Case ID', value: fields.caseId, inline: true },
-      { name: 'Reason', value: fields.reason }
+      {
+        name: '› Username',
+        value: `<@${fields.userId}> (${fields.userId})`,
+        inline: false,
+      },
+      {
+        name: 'Moderated By',
+        value: `<@${fields.moderatorId}>`,
+        inline: true,
+      },
+      {
+        name: 'Case ID',
+        value: fields.caseId,
+        inline: true,
+      },
+      {
+        name: 'Duration',
+        value: 'Permanent',
+        inline: true,
+      },
+      {
+        name: 'Warnings',
+        value: `${fields.totalWarns || 1}`,
+        inline: true,
+      },
+      {
+        name: 'Reason',
+        value: fields.reason,
+        inline: false,
+      },
+      {
+        name: 'Location',
+        value:
+          fields.channelId && fields.messageId
+            ? `Channel: <#${fields.channelId}> (Message ID: ${fields.messageId})`
+            : 'Unknown',
+        inline: false,
+      }
     )
     .setTimestamp();
+
   if (fields.messageContent) {
-    embed.addFields({ name: 'Deleted Message', value: fields.messageContent.slice(0, 1024) });
+    embed.addFields({
+      name: 'Deleted Message',
+      value: fields.messageContent.slice(0, 1024),
+    });
   }
+
   return embed;
 }
 
