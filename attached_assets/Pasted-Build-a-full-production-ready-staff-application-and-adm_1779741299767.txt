@@ -1,0 +1,173 @@
+Build a full production-ready staff application and admin dashboard web application.
+
+The project must include:
+
+- React (Vite) frontend
+- Node.js + Express backend API
+- SQLite (or Prisma SQLite) database
+- Authentication system (session-based or OAuth-style backend login flow)
+- Fully functional admin panel and application system
+
+────────────────────────────
+📦 PACKAGE MANAGER RULE
+────────────────────────────
+
+This project MUST use NPM only.
+
+- Do NOT use pnpm or yarn anywhere
+- package.json scripts must use npm conventions
+- Installation must be: npm install
+- Running must be: npm run build and node server.js
+
+────────────────────────────
+📁 PROJECT STRUCTURE
+────────────────────────────
+
+Root files:
+
+/server.js
+/db.js
+/auth.js
+/package.json
+/.env
+
+/routes/
+  applications.js
+  admin.js
+  blacklist.js
+
+/client/
+  index.html
+  main.jsx
+  App.jsx
+
+  /pages/
+    Home.jsx
+    Apply.jsx
+    Login.jsx
+    Success.jsx
+    Admin.jsx
+    NotFound.jsx
+
+  /components/
+
+────────────────────────────
+🌐 FRONTEND FEATURES
+────────────────────────────
+
+HOME PAGE:
+- Display 3 roles:
+  Moderator
+  Human Resources
+  Partnership
+- Each role has description and apply button
+
+APPLICATION PAGE:
+- Form fields:
+  username
+  user id
+  role selection
+  age
+  timezone
+  experience
+  motivation
+  availability
+
+- Sends data to backend API
+- Redirects to success page after submission
+
+LOGIN PAGE:
+- Required login before applying
+- Session stored after login
+
+ADMIN DASHBOARD:
+- View all applications
+- Filter by status: pending / accepted / denied
+- Accept / deny applications
+- Blacklist system:
+  add entry
+  remove entry
+- Admin management system:
+  add admin by ID
+  remove admin
+
+────────────────────────────
+🔐 BACKEND API ROUTES
+────────────────────────────
+
+AUTH:
+GET /api/auth/login
+GET /api/auth/callback
+GET /api/auth/me
+
+APPLICATIONS:
+POST /api/applications
+GET /api/admin/applications?status=
+POST /api/admin/applications/:id/accept
+POST /api/admin/applications/:id/deny
+
+BLACKLIST:
+GET /api/admin/blacklist
+POST /api/admin/blacklist
+DELETE /api/admin/blacklist/:id
+
+ADMINS:
+GET /api/admin/admins
+POST /api/admin/admins
+DELETE /api/admin/admins/:id
+
+────────────────────────────
+🧠 DATABASE SCHEMA
+────────────────────────────
+
+users:
+- id
+- username
+- avatar
+- role
+
+applications:
+- id
+- userId
+- username
+- role
+- age
+- timezone
+- experience
+- motivation
+- availability
+- status
+- createdAt
+
+blacklist:
+- id
+- userId
+- username
+- reason
+- createdAt
+
+admins:
+- id
+- userId
+- username
+- role
+
+────────────────────────────
+⚙️ REQUIREMENTS
+────────────────────────────
+
+- Must be fully working with NO placeholders
+- Must use dotenv for configuration
+- Must be clean, production-ready code
+- Must be responsive UI (modern dark theme preferred)
+- Must not require external services beyond database
+
+────────────────────────────
+🚀 OUTPUT
+────────────────────────────
+
+Project must run with:
+
+npm install
+npm run build
+node server.js

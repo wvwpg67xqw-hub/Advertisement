@@ -1,20 +1,13 @@
 {
-  "name": "advertisement",
+  "name": "discord-bot",
   "type": "module",
   "scripts": {
-    "dev": "ts-node index.ts",
-    "build:web": "vite build --config web/vite.config.ts",
-    "start": "node dist/index.js"
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "dotenv": "^16.4.5",
-    "discord.js": "^14.16.3",
-    "cors": "^2.8.5",
-    "axios": "^1.6.8"
-  },
-  "devDependencies": {
-    "typescript": "^5.5.4",
-    "ts-node": "^10.9.2"
+    "express": "^5.2.1",
+    "dotenv": "^17.4.2",
+    "discord.js": "^14.16.3"
   }
 }
