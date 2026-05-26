@@ -1,0 +1,31 @@
+v22.22.3
+:/home/container$ if [ ! -d .git ]; then git clone https://github.com/wvwpg67xqw-hub/Advertisement .; fi; if [[ "${AUTO_UPDATE}" == "1" ]]; then git pull; fi; if [ -f /home/container/package.json ]; then npm install; fi; if [[ "${MAIN_FILE}" == "*.js" ]]; then node index.js; else node index.js; fi # Added by FeatherPanel (Server Startup)
+\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K
+up to date, audited 109 packages in 4s
+|[1G[0K
+|[1G[0K26 packages are looking for funding
+|[1G[0K  run `npm fund` for details
+|[1G[0K
+1 [33m[1mmoderate[22m[39m severity vulnerability
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+|[1G[0K🚀 Staff Portal running on port 25849
+🤖 Logged in as Eclipse moderation#7062
+(node:27) DeprecationWarning: The ready event has been renamed to clientReady to distinguish it from the gateway READY event and will only emit under that name in v15. Please use clientReady instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✅ Registered 43 slash commands globally
+TypeError: Cannot set properties of undefined (setting 'is_hub')
+    at setNetworkHub [90m(file:///home/container/[39msrc/database.js:43:18[90m)[39m
+    at handleSetupNetworkHub [90m(file:///home/container/[39msrc/setup.js:383:3[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:508:11[90m)[39m
+[90m    at Client.emit (node:events:519:28)[39m
+    at InteractionCreateAction.handle [90m(/home/container/[39mnode_modules/[4mdiscord.js[24m/src/client/actions/InteractionCreate.js:103:12[90m)[39m
+    at module.exports [as INTERACTION_CREATE] [90m(/home/container/[39mnode_modules/[4mdiscord.js[24m/src/client/websocket/handlers/INTERACTION_CREATE.js:4:36[90m)[39m
+    at WebSocketManager.handlePacket [90m(/home/container/[39mnode_modules/[4mdiscord.js[24m/src/client/websocket/WebSocketManager.js:352:31[90m)[39m
+    at WebSocketManager.<anonymous> [90m(/home/container/[39mnode_modules/[4mdiscord.js[24m/src/client/websocket/WebSocketManager.js:236:12[90m)[39m
+    at WebSocketManager.emit [90m(/home/container/[39mnode_modules/[4m@vladfrangu/async_event_emitter[24m/dist/index.cjs:2504:31[90m)[39m
+    at WebSocketShard.<anonymous> [90m(/home/container/[39mnode_modules/[4m@discordjs/ws[24m/dist/index.js:1190:51[90m)[39m
+(node:27) Warning: Supplying "ephemeral" for interaction response options is deprecated. Utilize flags instead.
