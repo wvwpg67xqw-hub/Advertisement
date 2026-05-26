@@ -2,7 +2,7 @@ import pkg from 'discord.js';
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = pkg;
 import {
   addWarn, getWarns, getWarnCount, getWarnLeaderboard,
-  addAdWarn, getAdWarns, removeAdWarn,
+  addAdWarn, getAdWarns, removeAdWarn, getAdWarnCountByModerator,
   addStrike, getStrikes, getStrikeCount, removeStrike,
   jailUser, unjailUser, isJailed,
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
@@ -300,9 +300,14 @@ const totalWarns = getAdWarns(
   target.id
 ).length;
 
+const moderatorAdWarnCount = getAdWarnCountByModerator(interaction.guildId, interaction.user.id);
+
 const embed = buildAdWarnEmbed({
   userId: target.id,
   moderatorId: interaction.user.id,
+  moderatorUsername: interaction.user.username,
+  moderatorAdWarnCount,
+  guildName: interaction.guild?.name || 'Moderation',
   caseId,
   reason,
   messageContent: deletedContent,

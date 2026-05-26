@@ -102,62 +102,38 @@ export function buildWarnEmbed(fields) {
 }
 
 export function buildAdWarnEmbed(fields) {
+  const guildName = fields.guildName || 'Moderation';
+  const moderatorDisplay = fields.moderatorUsername
+    ? `${fields.moderatorUsername} (${fields.moderatorAdWarnCount ?? 0} adwarns issued)`
+    : `<@${fields.moderatorId}>`;
+
   const embed = new EmbedBuilder()
     .setColor(0xED4245)
-    .setAuthor({
-      name: 'AK Moderation',
-    })
+    .setAuthor({ name: `🚨 ${guildName} Moderation` })
     .setTitle("You've been warned")
-    .setDescription(
-      '### Notice\nYou were found breaking a rule! DM Modmail to dispute this warn.'
-    )
+    .setDescription('### Notice\nYou were found breaking a rule! DM Modmail to dispute this warn.')
     .addFields(
-      {
-        name: '› Username',
-        value: `<@${fields.userId}> (${fields.userId})`,
-        inline: false,
-      },
-      {
-        name: 'Moderated By',
-        value: `<@${fields.moderatorId}>`,
-        inline: true,
-      },
-      {
-        name: 'Case ID',
-        value: fields.caseId,
-        inline: true,
-      },
-      {
-        name: 'Duration',
-        value: 'Permanent',
-        inline: true,
-      },
-      {
-        name: 'Warnings',
-        value: `${fields.totalWarns || 1}`,
-        inline: true,
-      },
-      {
-        name: 'Reason',
-        value: fields.reason,
-        inline: false,
-      },
+      { name: '🧑 Username',     value: `<@${fields.userId}> (${fields.userId})`, inline: false },
+      { name: '🛡️ Moderated By', value: moderatorDisplay, inline: false },
+      { name: '📁 Case ID',      value: fields.caseId, inline: true },
+      { name: '⏰ Duration',     value: 'Permanent', inline: true },
+      { name: '🔧 Warnings',     value: `${fields.totalWarns || 1}`, inline: true },
+      { name: '📝 Reason',       value: fields.reason, inline: false },
       {
         name: 'Location',
-        value:
-          fields.channelId && fields.messageId
-            ? `Channel: <#${fields.channelId}> (Message ID: ${fields.messageId})`
+        value: fields.channelId && fields.messageId
+          ? `Channel: <#${fields.channelId}> (Message ID: ${fields.messageId})`
+          : fields.channelId
+            ? `Channel: <#${fields.channelId}>`
             : 'Unknown',
         inline: false,
       }
     )
+    .setFooter({ text: `Powered by ${guildName}` })
     .setTimestamp();
 
   if (fields.messageContent) {
-    embed.addFields({
-      name: 'Deleted Message',
-      value: fields.messageContent.slice(0, 1024),
-    });
+    embed.addFields({ name: 'Deleted Message', value: fields.messageContent.slice(0, 1024) });
   }
 
   return embed;

@@ -492,7 +492,6 @@ export async function handleSetupRequests(interaction) {
     { key: 'blacklist_request_channel_id',    name: 'blacklist-requests',   label: '⛔ Blacklist Requests' },
     { key: 'network_ban_request_channel_id',  name: 'network-ban-requests', label: '🌐 Network Ban Requests' },
     { key: 'partnership_request_channel_id',  name: 'partnership-requests', label: '🤝 Partnership Requests' },
-    { key: 'ad_warn_log_channel_id',          name: 'ad-warn-log',          label: '📢 Ad Warn Log' },
   ];
 
   try {

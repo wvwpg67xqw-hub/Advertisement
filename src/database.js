@@ -145,6 +145,10 @@ export function removeAdWarn(guildId, caseId) {
   return rows.length !== next.length;
 }
 
+export function getAdWarnCountByModerator(guildId, moderatorId) {
+  return readCol('ad_warns').filter(r => r.guild_id === guildId && r.moderator_id === moderatorId).length;
+}
+
 // ─── Strikes ──────────────────────────────────────────────────────────────────
 
 export function addStrike(guildId, userId, moderatorId, reason) {
