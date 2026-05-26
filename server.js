@@ -444,31 +444,97 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // ── Application review ─────────────────────────────────────────────────
-      if (id.startsWith('app_')) {
-        const parts = id.split('_');
-        const action = parts[1];
-        const appId  = parts[2];
-        const application = db.getApplication(Number(appId));
-        if (!application) return interaction.reply({ content: '❌ Application not found', ephemeral: true });
-        if (action === 'accept') { db.updateApplicationStatus(Number(appId), 'accepted'); return interaction.reply({ content: `✅ Accepted #${appId}`, ephemeral: true }); }
-        if (action === 'deny')   { db.updateApplicationStatus(Number(appId), 'denied');   return interaction.reply({ content: `❌ Denied #${appId}`, ephemeral: true }); }
+if (id.startsWith('app_')) {
+  const parts = id.split('_');
+  const action = parts[1];
+  const appId = parts[2];
+
+  const application = db.getApplication(Number(appId));
+
+  if (!application) {
+    return interaction.reply({
+      content: '❌ Application not found',
+      ephemeral: true
+    });
+  }
+
+  // MAIN SERVER ID
+  const guildId = process.env.MAIN_GUILD_ID;
+
+  // ROLE MAP (ENV SECRETS)
+  const roleMap = {
+    Moderator: process.env.MODERATOR_ROLE_ID,
+    HR: process.env.HR_ROLE_ID,
+    Partnership: process.env.PARTNERSHIP_ROLE_ID,
+  };
+
+  // ── ACCEPT APPLICATION ─────────────────────────────
+  if (action === 'accept') {
+
+    db.updateApplicationStatus(Number(appId), 'accepted');
+
+    try {
+      const guild = await client.guilds.fetch(guildId);
+
+      const member = await guild.members
+        .fetch(application.userId)
+        .catch(() => null);
+
+      if (member) {
+
+        const roleId = roleMap[application.role];
+
+        if (roleId) {
+          await member.roles.add(roleId);
+        }
+
+        await member.send({
+          content: `✅ Your application for **${application.role}** has been accepted!`
+        }).catch(() => null);
       }
 
-      if (handleRequestButton) await handleRequestButton(interaction);
-      return;
+    } catch (err) {
+      console.error('Role assignment failed:', err);
     }
 
-    if (!interaction.isChatInputCommand()) return;
-    const handler = botHandlers[interaction.commandName];
-    if (!handler) return interaction.reply({ content: '❌ Unknown command', flags: 64 });
-    await handler(interaction);
-  } catch (err) {
-    console.error(err);
-    const msg = { content: `❌ An error occurred: ${err.message}`, flags: 64 };
-    if (interaction.replied || interaction.deferred) interaction.followUp(msg).catch(() => {});
-    else interaction.reply(msg).catch(() => {});
+    return interaction.reply({
+      content: `✅ Accepted #${appId} and role assigned.`,
+      ephemeral: true
+    });
   }
-});
+
+  // ── DENY APPLICATION ─────────────────────────────
+  if (action === 'deny') {
+
+    db.updateApplicationStatus(Number(appId), 'denied');
+
+    try {
+      const guild = await client.guilds.fetch(guildId);
+
+      const member = await guild.members
+        .fetch(application.userId)
+        .catch(() => null);
+
+      if (member) {
+        await member.send({
+          content: `❌ Your application for **${application.role}** was denied.`
+        }).catch(() => null);
+      }
+
+    } catch (err) {
+      console.error(err);
+    }
+
+    return interaction.reply({
+      content: `❌ Denied #${appId}`,
+      ephemeral: true
+    });
+  }
+}
+
+if (handleRequestButton) await handleRequestButton(interaction);
+return;
+}
 
 // ── Message Tracking ──────────────────────────────────────────────────────────
 
