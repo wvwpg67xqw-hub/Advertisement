@@ -119,7 +119,7 @@ export const setupCommands = [
   // /setup-requests — auto-create request channels category
   new SlashCommandBuilder()
     .setName('setup-requests')
-    .setDescription('Auto-create a Requests category with ban, blacklist, network-ban, and partnership channels')
+    .setDescription('Auto-create a Requests category with ban, blacklist, network-ban, partnership, and ad-warn channels')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('category-name')
@@ -492,6 +492,7 @@ export async function handleSetupRequests(interaction) {
     { key: 'blacklist_request_channel_id',    name: 'blacklist-requests',   label: '⛔ Blacklist Requests' },
     { key: 'network_ban_request_channel_id',  name: 'network-ban-requests', label: '🌐 Network Ban Requests' },
     { key: 'partnership_request_channel_id',  name: 'partnership-requests', label: '🤝 Partnership Requests' },
+    { key: 'ad_warn_log_channel_id',          name: 'ad-warn-log',          label: '📢 Ad Warn Log' },
   ];
 
   try {
