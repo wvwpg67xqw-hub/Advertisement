@@ -532,9 +532,28 @@ if (id.startsWith('app_')) {
   }
 }
 
-if (handleRequestButton) await handleRequestButton(interaction);
-return;
-}
+    } // end isButton()
+
+    if (interaction.isCommand()) {
+      const name = interaction.commandName;
+      const handler = botHandlers[name];
+      if (handler) {
+        await handler(interaction);
+      } else if (setupCommands.some(c => c.name === name)) {
+        // handled by setup handlers above via botHandlers mapping
+      }
+    }
+
+    if (handleRequestButton) await handleRequestButton(interaction);
+  } catch (err) {
+    console.error('Interaction error:', err);
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
+      }
+    } catch {}
+  }
+});
 
 // ── Message Tracking ──────────────────────────────────────────────────────────
 
