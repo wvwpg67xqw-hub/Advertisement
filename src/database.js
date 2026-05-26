@@ -21,8 +21,8 @@ export function getGuild(guildId) {
 }
 
 export function setGuildConfig(guildId, fields) {
-  const rows = readCol('guilds');
   getGuild(guildId);
+  const rows = readCol('guilds');
   const i = rows.findIndex(g => g.guild_id === guildId);
   const allowed = [
     'log_channel_id', 'warn_log_channel_id', 'strike_log_channel_id',
@@ -37,16 +37,16 @@ export function setGuildConfig(guildId, fields) {
 }
 
 export function setNetworkHub(guildId, isHub) {
-  const rows = readCol('guilds');
   getGuild(guildId);
+  const rows = readCol('guilds');
   const i = rows.findIndex(g => g.guild_id === guildId);
   rows[i].is_hub = isHub ? 1 : 0;
   writeCol('guilds', rows);
 }
 
 export function setHubGuildId(guildId, hubGuildId) {
-  const rows = readCol('guilds');
   getGuild(guildId);
+  const rows = readCol('guilds');
   const i = rows.findIndex(g => g.guild_id === guildId);
   rows[i].hub_guild_id = hubGuildId;
   writeCol('guilds', rows);
@@ -57,8 +57,8 @@ export function clearNetworkHub(guildId) {
 }
 
 export function clearHubGuildId(guildId) {
-  const rows = readCol('guilds');
   getGuild(guildId);
+  const rows = readCol('guilds');
   const i = rows.findIndex(g => g.guild_id === guildId);
   rows[i].hub_guild_id = null;
   writeCol('guilds', rows);
@@ -69,8 +69,8 @@ export function getNetworkMembers(hubGuildId) {
 }
 
 export function setCommandRoles(guildId, command, roleIds) {
-  const rows = readCol('guilds');
   getGuild(guildId);
+  const rows = readCol('guilds');
   const i = rows.findIndex(g => g.guild_id === guildId);
   if (!rows[i].command_roles) rows[i].command_roles = {};
   rows[i].command_roles[command] = roleIds;

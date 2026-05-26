@@ -355,7 +355,7 @@ client.on('interactionCreate', async (interaction) => {
       // All portal/appeal/security DM buttons are owner-only
       if (id.startsWith('portal_') || id.startsWith('appeal_') || id.startsWith('sec_')) {
         if (interaction.user.id !== OWNER_ID) {
-          return interaction.reply({ content: '❌ Only the portal owner can use these buttons.', ephemeral: true });
+          return interaction.reply({ content: '❌ Only the portal owner can use these buttons.', flags: 64 });
         }
       }
 
@@ -455,11 +455,11 @@ client.on('interactionCreate', async (interaction) => {
 
     if (!interaction.isChatInputCommand()) return;
     const handler = botHandlers[interaction.commandName];
-    if (!handler) return interaction.reply({ content: '❌ Unknown command', ephemeral: true });
+    if (!handler) return interaction.reply({ content: '❌ Unknown command', flags: 64 });
     await handler(interaction);
   } catch (err) {
     console.error(err);
-    const msg = { content: '❌ An error occurred', ephemeral: true };
+    const msg = { content: '❌ An error occurred', flags: 64 };
     if (interaction.replied || interaction.deferred) interaction.followUp(msg).catch(() => {});
     else interaction.reply(msg).catch(() => {});
   }
@@ -475,7 +475,7 @@ client.on('messageCreate', async (msg) => {
 
 // ── Bot Ready ─────────────────────────────────────────────────────────────────
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
   setDiscordClient(client);
   if (CLIENT_ID) {
