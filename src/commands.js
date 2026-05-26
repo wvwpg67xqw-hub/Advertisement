@@ -593,21 +593,8 @@ async function handleRequest(interaction, type) {
   const config = getGuild(interaction.guildId);
   const buttons = [buildRequestButtons(type, target.id, interaction.guildId)];
 
-  // Always log in the current server if it has a channel set
+  // Log in this server's own request channel only — no forwarding to any hub
   await sendLog(interaction.guild, config, `${type}-request`, embed, buttons);
-
-  // If this server is linked to a hub, also forward to the hub's request channel
-  if (config.hub_guild_id) {
-    const hubGuild = interaction.client.guilds.cache.get(config.hub_guild_id);
-    if (hubGuild) {
-      const hubConfig = getGuild(config.hub_guild_id);
-      const forwardedEmbed = buildRequestEmbed({
-        type, requesterId: interaction.user.id, targetId: target.id, reason, proof,
-      }).addFields({ name: '📡 Origin Server', value: `${interaction.guild.name} (${interaction.guildId})`, inline: true });
-      // Buttons in hub still use originGuildId so Accept bans from the correct server
-      await sendLog(hubGuild, hubConfig, `${type}-request`, forwardedEmbed, buttons);
-    }
-  }
 
   await interaction.reply({ content: '✅ Request submitted.', flags: 64 });
 }
