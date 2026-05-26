@@ -349,6 +349,11 @@ const botHandlers = {
 
 client.on('interactionCreate', async (interaction) => {
   try {
+    // If guild isn't in cache yet (e.g. bot just restarted), fetch it before proceeding
+    if (interaction.guildId && !interaction.guild) {
+      try { await client.guilds.fetch(interaction.guildId); } catch {}
+    }
+
     if (interaction.isButton()) {
       const id = interaction.customId;
 
@@ -459,7 +464,7 @@ client.on('interactionCreate', async (interaction) => {
     await handler(interaction);
   } catch (err) {
     console.error(err);
-    const msg = { content: '❌ An error occurred', flags: 64 };
+    const msg = { content: `❌ An error occurred: ${err.message}`, flags: 64 };
     if (interaction.replied || interaction.deferred) interaction.followUp(msg).catch(() => {});
     else interaction.reply(msg).catch(() => {});
   }
