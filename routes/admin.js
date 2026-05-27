@@ -103,7 +103,13 @@ async function assignRolesOnAccept(app, reviewerUsername) {
     await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
     await member.send({
-      content: `✅ Your application for **${app.role}** has been accepted! Welcome to the team.`,
+      embeds: [new EmbedBuilder()
+        .setTitle('🎉 Application Accepted!')
+        .setColor(0x22c55e)
+        .setDescription(`Congratulations! Your application for **${app.role}** has been accepted.\n\nPlease join the staff server using the link below and introduce yourself.`)
+        .addFields({ name: '📨 Staff Server', value: '[Click here to join](https://discord.gg/AZhhKXs7wA)', inline: false })
+        .setFooter({ text: 'Welcome to the team!' })
+        .setTimestamp()],
     }).catch(() => null);
 
     // Post to staff updates channel

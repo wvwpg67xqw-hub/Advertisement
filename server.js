@@ -542,7 +542,13 @@ if (id.startsWith('app_')) {
         await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
         await member.send({
-          content: `✅ Your application for **${application.role}** has been accepted!`
+          embeds: [new EmbedBuilder()
+            .setTitle('🎉 Application Accepted!')
+            .setColor(0x22c55e)
+            .setDescription(`Congratulations! Your application for **${application.role}** has been accepted.\n\nPlease join the staff server using the link below and introduce yourself.`)
+            .addFields({ name: '📨 Staff Server', value: '[Click here to join](https://discord.gg/AZhhKXs7wA)', inline: false })
+            .setFooter({ text: 'Welcome to the team!' })
+            .setTimestamp()],
         }).catch(() => null);
 
         const botConfig = getBotGuild(guildId);
