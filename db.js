@@ -9,6 +9,14 @@ if (!readCol('app_roles').length) {
   ]);
 }
 
+function parseApp(app) {
+  if (!app) return null;
+  return {
+    ...app,
+    answers: app.answers ? JSON.parse(app.answers) : [],
+  };
+}
+
 const db = {
   // ── Users ──────────────────────────────────────────────────────────────────
   upsertUser(userId, username, avatar) {
@@ -77,7 +85,7 @@ const db = {
 
   // ── Applications ───────────────────────────────────────────────────────────
   getApplication(id) {
-    return readCol('applications').find(a => a.id === Number(id)) ?? null;
+    return parseApp(readCol('applications').find(a => a.id === Number(id)) ?? null);
   },
 
   getApplications(status) {
@@ -85,7 +93,7 @@ const db = {
     if (status && ['pending', 'accepted', 'denied'].includes(status)) {
       rows = rows.filter(a => a.status === status);
     }
-    return rows.sort((a, b) => b.createdAt - a.createdAt);
+    return rows.sort((a, b) => b.createdAt - a.createdAt).map(parseApp);
   },
 
   getPendingApplication(userId, role) {
@@ -94,10 +102,19 @@ const db = {
     ) ?? null;
   },
 
-  insertApplication({ userId, username, avatar, role, age, timezone, experience, motivation, availability }) {
+  insertApplication({ userId, username, avatar, role, answers }) {
     const rows = readCol('applications');
     const id = nextId('applications');
-    rows.push({ id, userId, username, avatar: avatar ?? null, role, age, timezone, experience, motivation, availability, status: 'pending', createdAt: ts() });
+    const age = Array.isArray(answers) ? (answers[0] || '') : '';
+    const timezone = Array.isArray(answers) ? (answers[1] || '') : '';
+    rows.push({
+      id, userId, username, avatar: avatar ?? null, role,
+      age, timezone,
+      answers: Array.isArray(answers) ? JSON.stringify(answers) : null,
+      discord_message_id: null,
+      discord_thread_id: null,
+      status: 'pending', createdAt: ts(),
+    });
     writeCol('applications', rows);
     return { lastInsertRowid: id };
   },
@@ -107,6 +124,16 @@ const db = {
     const i = rows.findIndex(a => a.id === Number(id));
     if (i >= 0) rows[i].status = status;
     writeCol('applications', rows);
+  },
+
+  updateApplicationDiscordIds(id, messageId, threadId) {
+    const rows = readCol('applications');
+    const i = rows.findIndex(a => a.id === Number(id));
+    if (i >= 0) {
+      rows[i].discord_message_id = messageId ?? null;
+      rows[i].discord_thread_id = threadId ?? null;
+      writeCol('applications', rows);
+    }
   },
 
   // ── User Blacklist ─────────────────────────────────────────────────────────
@@ -192,7 +219,6 @@ const db = {
 
   getUserAppeal(userId) {
     const rows = readCol('appeals');
-    // Return most recent appeal for this user
     return rows
       .filter(a => a.userId === userId)
       .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;

@@ -103,22 +103,60 @@ function ApplicationsTab() {
 
       {selected && (
         <Modal title={`Application — ${selected.username}`} onClose={() => setSelected(null)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {[['Role', selected.role], ['Age', selected.age], ['Timezone', selected.timezone], ['Availability', selected.availability]].map(([l, v]) => (
-                <div key={l}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{l}</div>
-                  <div style={{ fontSize: 14 }}>{v}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '65vh', overflowY: 'auto', paddingRight: 4 }}>
+            {/* Meta row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              {[['Role', selected.role], ['Age', selected.age || '—'], ['Timezone', selected.timezone || '—']].map(([l, v]) => (
+                <div key={l} style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{l}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{v}</div>
                 </div>
               ))}
             </div>
-            {[['Experience', selected.experience], ['Motivation', selected.motivation]].map(([l, v]) => (
-              <div key={l}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{l}</div>
-                <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.7, color: 'var(--text-muted)' }}>{v}</div>
-              </div>
-            ))}
-            <span className={`badge badge-${selected.status}`}>{selected.status}</span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className={`badge badge-${selected.status}`}>{selected.status}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Application #{selected.id}</span>
+              {selected.discord_thread_id && (
+                <span style={{ fontSize: 12, color: '#7289da' }}>🧵 Has Discord thread</span>
+              )}
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
+            {/* Q&A answers */}
+            {Array.isArray(selected.answers) && selected.answers.length > 0 ? (
+              selected.answers.map((ans, i) => (
+                <div key={i}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 5 }}>
+                    Q{i + 1}
+                  </div>
+                  <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 14px', fontSize: 13, lineHeight: 1.7 }}>{ans || '—'}</div>
+                </div>
+              ))
+            ) : (
+              /* Legacy applications without structured answers */
+              <>
+                {selected.experience && (
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 5 }}>Experience</div>
+                    <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 14px', fontSize: 13, lineHeight: 1.7 }}>{selected.experience}</div>
+                  </div>
+                )}
+                {selected.motivation && (
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 5 }}>Motivation</div>
+                    <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 14px', fontSize: 13, lineHeight: 1.7 }}>{selected.motivation}</div>
+                  </div>
+                )}
+                {selected.availability && (
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 5 }}>Availability</div>
+                    <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 14px', fontSize: 13, lineHeight: 1.7 }}>{selected.availability}</div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           {selected.status === 'pending' && (
             <div className="modal-actions">

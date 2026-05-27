@@ -466,9 +466,9 @@ if (id.startsWith('app_')) {
 
   // ROLE MAP — main role, team role
   const roleMap = {
-    Moderator:   { role: '1495222811755806740', team: '1501681813398093955' },
-    HR:          { role: '1495222820400009246', team: '1501681511324451028' },
-    Partnership: { role: '1495222796517773335', team: '1501681321343193160' },
+    Moderator:          { role: '1495222811755806740', team: '1501681813398093955' },
+    'Human Resources':  { role: '1495222820400009246', team: '1501681511324451028' },
+    Partnership:        { role: '1495222796517773335', team: '1501681321343193160' },
   };
 
   // ── ACCEPT APPLICATION ─────────────────────────────
@@ -507,6 +507,22 @@ if (id.startsWith('app_')) {
       console.error('Role assignment failed:', err);
     }
 
+    // Post decision to thread
+    if (application.discord_thread_id) {
+      try {
+        const thread = await client.channels.fetch(application.discord_thread_id).catch(() => null);
+        if (thread) {
+          const decisionEmbed = new EmbedBuilder()
+            .setTitle('✅ Application Accepted')
+            .setColor(0x22c55e)
+            .setDescription(`**${application.username}** has been accepted for **${application.role}**.\nRoles have been assigned.`)
+            .addFields({ name: '🛡️ Reviewed by', value: `<@${interaction.user.id}>`, inline: true })
+            .setTimestamp();
+          await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
+        }
+      } catch {}
+    }
+
     return interaction.reply({
       content: `✅ Accepted #${appId} and role assigned.`,
       ephemeral: true
@@ -533,6 +549,22 @@ if (id.startsWith('app_')) {
 
     } catch (err) {
       console.error(err);
+    }
+
+    // Post decision to thread
+    if (application.discord_thread_id) {
+      try {
+        const thread = await client.channels.fetch(application.discord_thread_id).catch(() => null);
+        if (thread) {
+          const decisionEmbed = new EmbedBuilder()
+            .setTitle('❌ Application Denied')
+            .setColor(0xef4444)
+            .setDescription(`**${application.username}**'s application for **${application.role}** has been denied.`)
+            .addFields({ name: '🛡️ Reviewed by', value: `<@${interaction.user.id}>`, inline: true })
+            .setTimestamp();
+          await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
+        }
+      } catch {}
     }
 
     return interaction.reply({

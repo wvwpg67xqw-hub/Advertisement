@@ -9,6 +9,77 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = discordPk
 
 const router = Router();
 
+// ── Questions per role (must match client/pages/Apply.jsx) ───────────────────
+
+export const ROLE_QUESTIONS = {
+  Moderator: [
+    'How old are you?',
+    'What is your timezone?',
+    'How many hours per week can you dedicate to moderating?',
+    'Have you moderated a Discord server before? If so, describe your experience.',
+    'What is the first thing you do when you see two members arguing in chat?',
+    'A member reports someone for posting hate speech. Walk us through exactly what you would do.',
+    'How do you handle a rule violation committed by a well-known or senior community member?',
+    'What do you think is the most important quality a moderator should have, and why?',
+    'Describe a time you had to make a difficult or unpopular decision. How did you handle it?',
+    'Moderation can be stressful. How do you manage burnout or frustration on the job?',
+    "Are you familiar with Discord's Terms of Service and Community Guidelines? Summarise your understanding.",
+    'Which moderation bots or tools have you worked with before?',
+    'How would you respond to a coordinated raid or mass-spam event in the server?',
+    'A user claims you moderated them unfairly and demands an explanation. How do you respond?',
+    'How do you remain unbiased when moderating a conflict between someone you know and a stranger?',
+    'You disagree with a decision made by a senior staff member. What do you do?',
+    'Describe how you would word a formal warning to a member who broke a rule.',
+    'Three incidents happen at the same time. How do you decide what to handle first?',
+    "Why do you want to be part of this community's staff team specifically?",
+    'Is there anything else you would like us to know about you?',
+  ],
+  'Human Resources': [
+    'How old are you?',
+    'What is your timezone?',
+    'How many hours per week can you dedicate to HR duties?',
+    'Do you have previous HR or staff management experience? If so, describe it.',
+    'A staff member has been repeatedly inactive without giving notice. How do you handle it?',
+    'Two staff members are in conflict and come to you separately. How do you approach the situation?',
+    'Describe how you would onboard a newly accepted staff member from day one.',
+    'How do you approach addressing performance issues with a staff member sensitively?',
+    'How would you identify signs of low morale within the team and what would you do about it?',
+    'What qualities do you specifically look for when reviewing a staff application?',
+    'A staff member shares something confidential with you. How do you handle that information?',
+    'A staff member is struggling to keep up with their duties. What support do you offer?',
+    'How would you approach the process of demoting or removing a staff member fairly?',
+    'What ideas do you have to improve staff engagement, retention, and team culture?',
+    'How do you ensure every staff member feels heard and treated equally regardless of rank?',
+    'Describe a real situation where you resolved a conflict between people on a team.',
+    'How comfortable are you with documentation such as keeping records and writing reports?',
+    'What does a healthy and productive staff team look like to you?',
+    "Why do you specifically want to join this community's HR team?",
+    'Is there anything else you would like us to know about you?',
+  ],
+  Partnership: [
+    'How old are you?',
+    'What is your timezone?',
+    'How many hours per week can you dedicate to partnership duties?',
+    'Do you have any previous partnership, networking, or community relations experience?',
+    'How do you decide whether a community is a good fit for a partnership?',
+    'Walk us through exactly how you would reach out to a potential partner server for the first time.',
+    'How do you measure whether a partnership has been successful?',
+    'What would make you decline or end an existing partnership?',
+    'How would you maintain a long-term partnership and keep both sides engaged over time?',
+    'Describe your communication style when writing on behalf of this community.',
+    'One of our partner servers is behaving inappropriately or violating our guidelines. What do you do?',
+    'How comfortable are you writing partnership announcements, ad copy, or promotional content?',
+    'How do you stay organised when managing a large number of active partnerships at once?',
+    'What types of communities would you prioritise when looking for new partnerships?',
+    'How do you handle a situation where a partnership pitch is rejected?',
+    'Describe a time you successfully built a professional relationship or networked with someone new.',
+    'How many Discord servers are you currently active in and what are your roles there?',
+    'In your view, what makes a partnership genuinely beneficial for both communities?',
+    "Why do you specifically want to join this community's partnership team?",
+    'Is there anything else you would like us to know about you?',
+  ],
+};
+
 // ── Input sanitisation helpers ────────────────────────────────────────────────
 
 function sanitize(value) {
@@ -27,20 +98,14 @@ router.post(
   rateLimit('applications', 5, 60 * 60 * 1000),
   async (req, res) => {
     try {
-      const { role, age, timezone, experience, motivation, availability } = req.body;
+      const { role, answers } = req.body;
       const { userId, username, avatar } = req.session.user;
 
-      if (!role || !age || !timezone || !experience || !motivation || !availability) {
-        return res.status(400).json({ error: 'All fields are required' });
-      }
-
-      // Length guards
-      if (String(age).length > 10) return res.status(400).json({ error: 'Age value too long' });
-      if (String(timezone).length > 60) return res.status(400).json({ error: 'Timezone value too long' });
-      if (String(experience).length > 2000) return res.status(400).json({ error: 'Experience must be under 2000 characters' });
-      if (String(motivation).length > 2000) return res.status(400).json({ error: 'Motivation must be under 2000 characters' });
-      if (String(availability).length > 500) return res.status(400).json({ error: 'Availability must be under 500 characters' });
+      if (!role) return res.status(400).json({ error: 'Role is required' });
       if (String(role).length > 100) return res.status(400).json({ error: 'Invalid role' });
+      if (!Array.isArray(answers) || answers.length !== 20) {
+        return res.status(400).json({ error: 'All 20 questions must be answered' });
+      }
 
       if (isBlacklisted(userId)) {
         return res.status(403).json({ error: 'You are blacklisted and cannot apply' });
@@ -51,79 +116,109 @@ router.post(
         return res.status(400).json({ error: 'Invalid or inactive role selected' });
       }
 
+      const questions = ROLE_QUESTIONS[validRole.name] || [];
+      if (questions.length === 0) {
+        return res.status(400).json({ error: 'No questions defined for this role' });
+      }
+
+      // Validate & sanitize each answer
+      const cleanAnswers = [];
+      for (let i = 0; i < 20; i++) {
+        const raw = answers[i];
+        if (!raw || !String(raw).trim()) {
+          return res.status(400).json({ error: `Question ${i + 1} requires an answer` });
+        }
+        cleanAnswers.push(truncate(raw, 1024));
+      }
+
       const existing = db.getPendingApplication(userId, validRole.name);
       if (existing) {
         return res.status(409).json({ error: 'You already have a pending application for this role' });
       }
 
-      const cleanAge = truncate(age, 10);
-      const cleanTimezone = truncate(timezone, 60);
-      const cleanExperience = truncate(experience, 2000);
-      const cleanMotivation = truncate(motivation, 2000);
-      const cleanAvailability = truncate(availability, 500);
-
       const result = db.insertApplication({
-        userId,
-        username,
-        avatar,
+        userId, username, avatar,
         role: validRole.name,
-        age: cleanAge,
-        timezone: cleanTimezone,
-        experience: cleanExperience,
-        motivation: cleanMotivation,
-        availability: cleanAvailability,
+        answers: cleanAnswers,
       });
 
       const applicationId = result.lastInsertRowid;
 
-      // ── Discord Embed ────────────────────────────────
-      const embed = new EmbedBuilder()
+      // ── Discord: Preview embed ──────────────────────────────────────────────
+
+      const previewEmbed = new EmbedBuilder()
         .setTitle('📋 New Staff Application')
         .setColor(0x5865f2)
+        .setThumbnail(avatar || null)
         .addFields(
-          { name: '👤 Applicant', value: `${username}\n\`${userId}\``, inline: true },
-          { name: '📌 Role', value: validRole.name, inline: true },
-          { name: '🎂 Age', value: cleanAge, inline: true },
-          { name: '🌍 Timezone', value: cleanTimezone, inline: true },
-          { name: '📅 Availability', value: cleanAvailability, inline: false },
-          { name: '📖 Experience', value: cleanExperience, inline: false },
-          { name: '💬 Motivation', value: cleanMotivation, inline: false },
+          { name: '👤 Applicant', value: `**${username}**\n\`${userId}\``, inline: true },
+          { name: '📌 Role', value: `${validRole.emoji || ''} ${validRole.name}`, inline: true },
+          { name: '\u200b', value: '\u200b', inline: true },
+          { name: '🎂 Age', value: cleanAnswers[0] || 'N/A', inline: true },
+          { name: '🌍 Timezone', value: cleanAnswers[1] || 'N/A', inline: true },
+          { name: '⏰ Hours/week', value: cleanAnswers[2] || 'N/A', inline: true },
+          {
+            name: `📝 ${questions[3] || 'Q4'}`,
+            value: (cleanAnswers[3] || 'N/A').slice(0, 300) + (cleanAnswers[3]?.length > 300 ? '…' : ''),
+            inline: false,
+          },
         )
-        .setFooter({
-          text: `Application ID: ${applicationId} · IP: ${getClientIp(req)}`
-        })
+        .setFooter({ text: `Application #${applicationId} · Full answers in thread below · IP: ${getClientIp(req)}` })
         .setTimestamp();
 
-      // ── Buttons ────────────────────────────────
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`app_accept_${applicationId}`)
-          .setLabel('Accept')
+          .setLabel('✅ Accept')
           .setStyle(ButtonStyle.Success),
-
         new ButtonBuilder()
           .setCustomId(`app_deny_${applicationId}`)
-          .setLabel('Deny')
+          .setLabel('❌ Deny')
           .setStyle(ButtonStyle.Danger),
       );
 
-      // ── HARD CODED CHANNEL ────────────────────────────────
-      const channelId = "1503147704522637494";
-
+      const channelId = '1503147704522637494';
       const channel = await client.channels.fetch(channelId).catch(() => null);
-      if (!channel) {
-        return res.status(500).json({ error: 'Cannot find Discord channel' });
+
+      if (channel) {
+        try {
+          const msg = await channel.send({ embeds: [previewEmbed], components: [row] });
+
+          // ── Create a thread with full Q&A ────────────────────────────────
+          const thread = await msg.startThread({
+            name: `${username} — ${validRole.name} #${applicationId}`,
+            autoArchiveDuration: 10080,
+          }).catch(() => null);
+
+          if (thread) {
+            // Send full Q&A split into chunks of 10 (embed field limit)
+            for (let chunk = 0; chunk < 2; chunk++) {
+              const start = chunk * 10;
+              const fields = questions.slice(start, start + 10).map((q, i) => ({
+                name: `Q${start + i + 1}. ${q.slice(0, 250)}`,
+                value: (cleanAnswers[start + i] || 'No answer').slice(0, 1024),
+              }));
+              if (fields.length === 0) continue;
+              const chunkEmbed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle(chunk === 0 ? `📋 Full Application — ${username} (Questions 1–10)` : 'Questions 11–20')
+                .addFields(fields);
+              if (chunk === 0) {
+                chunkEmbed.setDescription(`**Applicant:** ${username} (\`${userId}\`)\n**Role:** ${validRole.name}\n**Submitted:** <t:${Math.floor(Date.now() / 1000)}:F>`);
+              }
+              await thread.send({ embeds: [chunkEmbed] }).catch(() => null);
+            }
+
+            db.updateApplicationDiscordIds(applicationId, msg.id, thread.id);
+          } else {
+            db.updateApplicationDiscordIds(applicationId, msg.id, null);
+          }
+        } catch (discordErr) {
+          console.error('Discord send error:', discordErr.message);
+        }
       }
 
-      await channel.send({
-        embeds: [embed],
-        components: [row],
-      });
-
-      return res.json({
-        success: true,
-        message: 'Application submitted successfully',
-      });
+      return res.json({ success: true, message: 'Application submitted successfully' });
 
     } catch (err) {
       console.error(err);
