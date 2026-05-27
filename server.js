@@ -461,11 +461,13 @@ if (id.startsWith('app_')) {
   // MAIN SERVER ID
   const guildId = process.env.MAIN_GUILD_ID;
 
-  // ROLE MAP (ENV SECRETS)
+  const STAFF_ROLE_ID       = '1501682950331301908';
+
+  // ROLE MAP — main role, team role
   const roleMap = {
-    Moderator: process.env.MODERATOR_ROLE_ID,
-    HR: process.env.HR_ROLE_ID,
-    Partnership: process.env.PARTNERSHIP_ROLE_ID,
+    Moderator:   { role: '1495222811755806740', team: '1501681813398093955' },
+    HR:          { role: '1495222820400009246', team: '1501681511324451028' },
+    Partnership: { role: '1495222796517773335', team: '1501681321343193160' },
   };
 
   // ── ACCEPT APPLICATION ─────────────────────────────
@@ -481,12 +483,11 @@ if (id.startsWith('app_')) {
         .catch(() => null);
 
       if (member) {
-
-        const roleId = roleMap[application.role];
-
-        if (roleId) {
-          await member.roles.add(roleId);
-        }
+        const roles = roleMap[application.role];
+        const toAdd = [STAFF_ROLE_ID];
+        if (roles?.role) toAdd.push(roles.role);
+        if (roles?.team) toAdd.push(roles.team);
+        await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
         await member.send({
           content: `✅ Your application for **${application.role}** has been accepted!`
