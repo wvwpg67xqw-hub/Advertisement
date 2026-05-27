@@ -32,7 +32,7 @@ import {
   handleResetMessages, handleResetMessagesAll,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
-} from './src/commands.js';
+} from './src/commands/index.js';
 
 import {
   setupCommands, handleSetup, handleSetupRoles, handleSetupRolesExtra,

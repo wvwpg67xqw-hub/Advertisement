@@ -54,7 +54,7 @@ async function updateDiscordApplicationMessage(app, decision, reviewerDisplay) {
 
 // ── Role map (matches server.js) ──────────────────────────────────────────────
 
-const STAFF_ROLE_ID = '1501682950331301908';
+const STAFF_ROLE_ID = '1502594799683895346';
 const roleMap = {
   Moderator:         { role: '1495222811755806740', team: '1501681813398093955' },
   'Human Resources': { role: '1495222820400009246', team: '1501681511324451028' },

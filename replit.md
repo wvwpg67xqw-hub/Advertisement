@@ -1,48 +1,52 @@
-# Discord Moderation Bot
+# Discord Staff Portal
 
-A full Discord.js v14 moderation and staff-network bot with 35 slash commands, SQLite persistence (via Node's built-in `node:sqlite`), role-based permissions, and a health endpoint for uptime monitoring.
+A full-stack Node.js app: Express backend, React/Vite frontend, Discord.js v14 bot with 35+ slash commands, JSON file-based database, and a web portal for staff management.
 
-## Run & Operate
+## Run
 
-- `pnpm --filter @workspace/discord-bot run dev` — run the Discord bot
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000, unused by bot)
-- `pnpm run typecheck` — full typecheck across all packages
+- Start the app via the **Start application** workflow (runs `node server.js` on port 5000)
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, JavaScript (ES modules)
-- Discord: discord.js v14
-- DB: SQLite via `node:sqlite` (Node 22.5+ built-in, no native compilation needed)
-- HTTP: Express 5 (health endpoint only)
+- Node.js 20, Express, Discord.js v14
+- React + Vite frontend (built to `client/dist/`)
+- JSON file-based DB (`jsondb.js`, `src/database.js`)
+- SQLite-like `db.js` for web portal data
 
 ## Where things live
 
-- `artifacts/discord-bot/src/index.js` — Bot entry point, event handlers, health server
-- `artifacts/discord-bot/src/commands.js` — All 35 slash command definitions and handlers
-- `artifacts/discord-bot/src/setup.js` — Setup commands (/setup, /setup-roles, etc.)
-- `artifacts/discord-bot/src/database.js` — SQLite schema + all DB helper functions
-- `artifacts/discord-bot/src/utils.js` — Shared helpers: embed builders, permission checks, duration parsing
-- `artifacts/discord-bot/data/bot.db` — SQLite database (auto-created on first run)
+### Bot / Backend
+- `server.js` — Express server entry point, Discord client, interaction router
+- `src/commands/` — Slash commands split by category:
+  - `index.js` — aggregates all defs and re-exports all handlers
+  - `moderation.js` — warn, ad-warn, mute, unmute, ban, fire, jail, unjail
+  - `staff-management.js` — promote, demote-user, strike, strike-remove
+  - `requests.js` — ban-request, blacklist-request, network-ban-request, partnership-request
+  - `network.js` — network-ban, network-unban
+  - `utility.js` — messages, message-leaderboard, case-info, balance, snipe, reset-messages
+  - `breaks.js` — current-breaks, break-request, break-end, manage-break
+  - `staff.js` — resign-request, apply, update
+  - `shared.js` — shared helpers (deny, noConfig) and `STAFF_ROLE_ID` constant
+- `src/setup.js` — Setup commands (/setup, /setup-roles, /setup-resign, etc.)
+- `src/database.js` — JSON DB helpers
+- `src/utils.js` — Embed builders, permission checks, duration parsing, sendLog
+- `routes/admin.js` — Admin API routes (role assignment, application approval)
+- `routes/staff.js` — Staff API routes (referral link, modmail test)
+- `routes/applications.js` — Applications API
 
-## Architecture decisions
+### Frontend
+- `client/` — React/Vite SPA
+- `client/pages/` — Home, Apply, Admin, Staff, Appeal, Login, Success, NotFound
 
-- **node:sqlite over better-sqlite3**: better-sqlite3 requires Python/node-gyp for native compilation which isn't available in this environment. Node 24's built-in `node:sqlite` module provides the same synchronous API with zero dependencies.
-- **Role-based permissions via DB**: Each server stores a JSON map of `{commandName: [roleId, ...]}` in the guilds table. Admins always bypass checks. Commands with no roles set default to `ManageGuild` permission.
-- **Single-file command handlers**: All command logic lives in `commands.js` with a router map in `index.js` — easy to extend without touching the entry point.
-- **Health endpoint for UptimeRobot**: Bot runs a small Express server on PORT 5000 at `/health` for external uptime monitoring.
+## Hardcoded constants
 
-## Product — Commands
-
-| Category | Commands |
-|---|---|
-| Setup | `/setup` `/setup-roles` `/setup-roles-extra` `/setup-roles-wizard` `/setup-status` `/setup-edit` |
-| Warnings | `/warn` `/warns` `/warn-leaderboard` |
-| Ad Warnings | `/ad-warn` `/remove-ad-warn` |
-| Moderation | `/mute` `/unmute` `/ban` `/fire` `/promote` `/demote-user` |
-| Strikes | `/strike` `/strike-remove` |
-| Jail | `/jail` `/unjail` |
-| Requests | `/ban-request` `/blacklist-request` `/network-ban-request` `/partnership-request` |
-| Utility | `/messages` `/message-leaderboard` `/case-info` `/balance` `/snipe` `/current-breaks` `/break` `/break-end` `/reset-messages` `/reset-messages-all` |
+| Constant | Value | Where |
+|---|---|---|
+| `STAFF_ROLE_ID` | `1502594799683895346` | `src/commands/shared.js`, `routes/admin.js` |
+| Main guild ID | from `MAIN_GUILD_ID` env | `server.js` |
+| Mod task channel | `1502489464851796099` | `routes/admin.js` |
+| HR task channel | `1502489463001972799` | `routes/admin.js` |
+| Management task channel | `1502489591725166673` | `routes/admin.js` |
 
 ## Environment Variables
 
@@ -50,11 +54,13 @@ A full Discord.js v14 moderation and staff-network bot with 35 slash commands, S
 |---|---|---|
 | `TOKEN` | Yes | Discord bot token |
 | `CLIENT_ID` | Yes | Discord application/client ID |
-| `PORT` | Auto | Port for Express health server (default: 5000) |
+| `MAIN_GUILD_ID` | Yes | Main (public) Discord server ID |
+| `SESSION_SECRET` | Yes | Express session secret |
+| `DISCORD_CLIENT_ID` | Yes | OAuth2 client ID |
+| `DISCORD_CLIENT_SECRET` | Yes | OAuth2 client secret |
+| `PORT` | Auto | Express port (default 5000) |
 
-## Gotchas
+## User preferences
 
-- Run `/setup` in your server first to configure log channels and roles before using moderation commands.
-- The `node:sqlite` module emits an ExperimentalWarning on startup — this is expected and harmless.
-- Discord limits string option choices to 25. Commands like `warns`, `messages`, `balance`, `snipe`, `break`, `break-end`, and `current-breaks` are intentionally open to all users and excluded from the role permission system.
-- Slash commands are registered globally (not per-guild) — changes can take up to 1 hour to propagate across all servers.
+- Commands split into separate files by category for easy management
+- Staff role ID hardcoded as `1502594799683895346`
