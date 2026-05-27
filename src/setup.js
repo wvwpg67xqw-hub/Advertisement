@@ -162,6 +162,36 @@ export const setupCommands = [
     .setName('network-status')
     .setDescription('Show the network hub and all linked servers with their bot reachability')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  // /setup-break — dedicated break configuration
+  new SlashCommandBuilder()
+    .setName('setup-break')
+    .setDescription('Configure the break system (request channel + break roles)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addChannelOption(o => o.setName('request-channel').setDescription('Channel where break requests are posted for approval'))
+    .addRoleOption(o => o.setName('staff-break-role').setDescription('Role given to staff while on break in THIS server'))
+    .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff while on break in the MAIN server')),
+
+  // /setup-roles-bulk — assign roles to a whole group of commands at once
+  new SlashCommandBuilder()
+    .setName('setup-roles-bulk')
+    .setDescription('Set allowed roles for a whole group of commands at once')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o =>
+      o.setName('group').setDescription('Which group of commands to configure').setRequired(true)
+        .addChoices(
+          { name: 'moderation  (warn, mute, unmute, ban, ad-warn)', value: 'moderation' },
+          { name: 'staff-management  (fire, promote, demote, strike, jail)', value: 'staff-management' },
+          { name: 'requests  (ban-req, blacklist-req, network-ban-req, partnership-req)', value: 'requests' },
+          { name: 'admin  (leaderboards, case-info, reset-messages)', value: 'admin' },
+          { name: 'all  (every command above)', value: 'all' },
+        )
+    )
+    .addRoleOption(o => o.setName('role1').setDescription('Allowed role 1').setRequired(true))
+    .addRoleOption(o => o.setName('role2').setDescription('Allowed role 2'))
+    .addRoleOption(o => o.setName('role3').setDescription('Allowed role 3'))
+    .addRoleOption(o => o.setName('role4').setDescription('Allowed role 4'))
+    .addRoleOption(o => o.setName('role5').setDescription('Allowed role 5')),
 ];
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -320,6 +350,100 @@ export async function handleSetupEdit(interaction) {
 
 export async function handleSetupRolesWizard(interaction) {
   return handleSetupRoles(interaction);
+}
+
+// ─── Command groups for bulk role assignment ───────────────────────────────────
+
+const COMMAND_GROUPS = {
+  moderation: ['warn', 'warn-leaderboard', 'ad-warn', 'remove-ad-warn', 'mute', 'unmute', 'ban'],
+  'staff-management': ['fire', 'promote', 'demote-user', 'strike', 'strike-remove', 'jail', 'unjail'],
+  requests: ['ban-request', 'blacklist-request', 'network-ban-request', 'partnership-request'],
+  admin: ['message-leaderboard', 'case-info', 'reset-messages', 'reset-messages-all'],
+};
+COMMAND_GROUPS.all = Object.values(COMMAND_GROUPS).flat();
+
+export async function handleSetupBreak(interaction) {
+  const requestChannel = interaction.options.getChannel('request-channel');
+  const staffBreakRole = interaction.options.getRole('staff-break-role');
+  const mainBreakRole  = interaction.options.getRole('main-break-role');
+
+  if (!requestChannel && !staffBreakRole && !mainBreakRole) {
+    const config = getGuild(interaction.guildId);
+    const ch = id => id ? `<#${id}>` : '`Not set`';
+    const rl = id => id ? `<@&${id}>` : '`Not set`';
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle('☕ Break Configuration')
+          .setDescription('Current break settings. Run this command with options to update them.')
+          .addFields(
+            { name: '📢 Request Channel', value: ch(config.break_request_channel_id), inline: true },
+            { name: '🏷️ Break Role (Staff Server)', value: rl(config.break_role_id), inline: true },
+            { name: '🏷️ Break Role (Main Server)', value: rl(config.main_break_role_id), inline: true },
+          )
+          .setTimestamp()
+      ],
+      flags: 64,
+    });
+  }
+
+  const fields = {};
+  if (requestChannel) fields.break_request_channel_id = requestChannel.id;
+  if (staffBreakRole) fields.break_role_id = staffBreakRole.id;
+  if (mainBreakRole)  fields.main_break_role_id = mainBreakRole.id;
+
+  setGuildConfig(interaction.guildId, fields);
+
+  const saved = getGuild(interaction.guildId);
+  const ch = id => id ? `<#${id}>` : '`Not set`';
+  const rl = id => id ? `<@&${id}>` : '`Not set`';
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Break System Configured')
+        .addFields(
+          { name: '📢 Request Channel', value: ch(saved.break_request_channel_id), inline: true },
+          { name: '🏷️ Break Role (Staff Server)', value: rl(saved.break_role_id), inline: true },
+          { name: '🏷️ Break Role (Main Server)', value: rl(saved.main_break_role_id), inline: true },
+        )
+        .setFooter({ text: 'Staff can now use /break to submit a break request.' })
+        .setTimestamp()
+    ],
+  });
+}
+
+export async function handleSetupRolesBulk(interaction) {
+  const group = interaction.options.getString('group');
+  const roles = [];
+  for (let i = 1; i <= 5; i++) {
+    const r = interaction.options.getRole(`role${i}`);
+    if (r) roles.push(r.id);
+  }
+
+  const commands = COMMAND_GROUPS[group] || [];
+  for (const cmd of commands) {
+    setCommandRoles(interaction.guildId, cmd, roles);
+  }
+
+  const roleList = roles.map(id => `<@&${id}>`).join(', ');
+  const cmdList  = commands.map(c => `\`/${c}\``).join(', ');
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle(`✅ Bulk Roles Set — ${group}`)
+        .addFields(
+          { name: '🏷️ Roles', value: roleList, inline: false },
+          { name: `📋 Commands updated (${commands.length})`, value: cmdList.slice(0, 1024), inline: false },
+        )
+        .setFooter({ text: 'Use /setup-roles to fine-tune individual commands.' })
+        .setTimestamp()
+    ],
+  });
 }
 
 export async function handleNetworkStatus(interaction) {

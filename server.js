@@ -35,6 +35,7 @@ import {
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
   handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin,
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
+  handleSetupBreak, handleSetupRolesBulk,
 } from './src/setup.js';
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild } from './src/database.js';
@@ -382,6 +383,7 @@ const botHandlers = {
   'setup-requests': handleSetupRequests, 'setup-ad-channels': handleSetupAdChannels,
   'setup-network-hub': handleSetupNetworkHub, 'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset, 'network-status': handleNetworkStatus,
+  'setup-break': handleSetupBreak, 'setup-roles-bulk': handleSetupRolesBulk,
   'network-ban': handleNetworkBan, 'network-unban': handleNetworkUnban,
   warn: handleWarn, warns: handleWarns, 'warn-leaderboard': handleWarnLeaderboard,
   'ad-warn': handleAdWarn, 'remove-ad-warn': handleRemoveAdWarn,
