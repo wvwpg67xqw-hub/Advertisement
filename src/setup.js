@@ -172,6 +172,15 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('staff-break-role').setDescription('Role given to staff while on break in THIS server'))
     .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff while on break in the MAIN server')),
 
+  // /setup-resign — configure resign and applications
+  new SlashCommandBuilder()
+    .setName('setup-resign')
+    .setDescription('Configure the resign system and staff applications')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addChannelOption(o => o.setName('resign-channel').setDescription('Channel where resignation requests are posted for approval'))
+    .addRoleOption(o => o.setName('verified-role').setDescription('Role kept in the main server when a member resigns (all others removed)'))
+    .addChannelOption(o => o.setName('applications-channel').setDescription('Channel where staff applications are posted for review')),
+
   // /setup-roles-bulk — assign roles to a whole group of commands at once
   new SlashCommandBuilder()
     .setName('setup-roles-bulk')
@@ -412,6 +421,59 @@ export async function handleSetupBreak(interaction) {
         .setFooter({ text: 'Staff can now use /break to submit a break request.' })
         .setTimestamp()
     ],
+  });
+}
+
+export async function handleSetupResign(interaction) {
+  const resignChannel      = interaction.options.getChannel('resign-channel');
+  const verifiedRole       = interaction.options.getRole('verified-role');
+  const applicationsChannel = interaction.options.getChannel('applications-channel');
+
+  if (!resignChannel && !verifiedRole && !applicationsChannel) {
+    const config = getGuild(interaction.guildId);
+    const ch = id => id ? `<#${id}>` : '`Not set`';
+    const rl = id => id ? `<@&${id}>` : '`Not set`';
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle('📝 Resign & Applications Configuration')
+          .setDescription('Current resign and application settings. Run this command with options to update them.')
+          .addFields(
+            { name: '📢 Resign Channel', value: ch(config.resign_channel_id), inline: true },
+            { name: '✅ Verified Role (kept on resign)', value: rl(config.verified_role_id), inline: true },
+            { name: '📋 Applications Channel', value: ch(config.applications_channel_id), inline: true },
+          )
+          .setTimestamp()
+      ],
+      flags: 64,
+    });
+  }
+
+  const fields = {};
+  if (resignChannel)       fields.resign_channel_id = resignChannel.id;
+  if (verifiedRole)        fields.verified_role_id = verifiedRole.id;
+  if (applicationsChannel) fields.applications_channel_id = applicationsChannel.id;
+
+  setGuildConfig(interaction.guildId, fields);
+
+  const saved = getGuild(interaction.guildId);
+  const ch = id => id ? `<#${id}>` : '`Not set`';
+  const rl = id => id ? `<@&${id}>` : '`Not set`';
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Resign & Applications Configured')
+        .addFields(
+          { name: '📢 Resign Channel', value: ch(saved.resign_channel_id), inline: true },
+          { name: '✅ Verified Role', value: rl(saved.verified_role_id), inline: true },
+          { name: '📋 Applications Channel', value: ch(saved.applications_channel_id), inline: true },
+        )
+        .setTimestamp()
+    ],
+    flags: 64,
   });
 }
 

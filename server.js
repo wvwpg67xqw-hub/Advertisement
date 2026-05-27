@@ -29,6 +29,7 @@ import {
   handleBreakRequest, handleBreakEnd, handleManageBreak,
   handleResetMessages, handleResetMessagesAll,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
+  handleResignRequest, handleApply,
 } from './src/commands.js';
 
 import {
@@ -36,13 +37,16 @@ import {
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
   handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin,
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
-  handleSetupBreak, handleSetupRolesBulk,
+  handleSetupBreak, handleSetupRolesBulk, handleSetupResign,
 } from './src/setup.js';
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild } from './src/database.js';
 import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// In-memory state for pending application approvals (role selection before confirm)
+const pendingApprovals = new Map(); // key: `GUILDID_APPROVERID` → { applicantId, staffRoleId, teamRoleId }
 const PORT = process.env.PORT || 25849;
 
 const DISCORD_CLIENT_ID     = process.env.DISCORD_CLIENT_ID;
@@ -384,7 +388,7 @@ const botHandlers = {
   'setup-requests': handleSetupRequests, 'setup-ad-channels': handleSetupAdChannels,
   'setup-network-hub': handleSetupNetworkHub, 'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset, 'network-status': handleNetworkStatus,
-  'setup-break': handleSetupBreak, 'setup-roles-bulk': handleSetupRolesBulk,
+  'setup-break': handleSetupBreak, 'setup-roles-bulk': handleSetupRolesBulk, 'setup-resign': handleSetupResign,
   'network-ban': handleNetworkBan, 'network-unban': handleNetworkUnban,
   warn: handleWarn, warns: handleWarns, 'warn-leaderboard': handleWarnLeaderboard,
   'ad-warn': handleAdWarn, 'remove-ad-warn': handleRemoveAdWarn,
@@ -398,6 +402,7 @@ const botHandlers = {
   'case-info': handleCaseInfo, balance: handleBalance, snipe: handleSnipe,
   'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll,
+  'resign-request': handleResignRequest, apply: handleApply,
 };
 
 // ── Interaction Handler ───────────────────────────────────────────────────────
@@ -732,7 +737,251 @@ if (id.startsWith('app_')) {
   }
 }
 
+      // ── Resign: Approve ────────────────────────────────────────────────────
+      if (id.startsWith('resign_approve_')) {
+        const targetUserId = id.slice(15);
+        const { getGuild: getResG } = await import('./src/database.js');
+        const config = getResG(interaction.guildId);
+
+        // Kick from staff server
+        const staffMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+
+        // Remove all roles except verified in main server
+        const mainGuildId = process.env.MAIN_GUILD_ID;
+        if (mainGuildId) {
+          try {
+            const mainGuild = client.guilds.cache.get(mainGuildId) || await client.guilds.fetch(mainGuildId).catch(() => null);
+            if (mainGuild) {
+              const mainMember = await mainGuild.members.fetch(targetUserId).catch(() => null);
+              if (mainMember) {
+                const rolesToRemove = mainMember.roles.cache
+                  .filter(r => r.id !== mainGuild.id && !r.managed && r.id !== config.verified_role_id)
+                  .map(r => r.id);
+                if (rolesToRemove.length) await mainMember.roles.remove(rolesToRemove).catch(() => null);
+              }
+            }
+          } catch {}
+        }
+
+        // DM the staff member
+        try {
+          const targetUser = staffMember?.user || await client.users.fetch(targetUserId).catch(() => null);
+          if (targetUser) {
+            await targetUser.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0xef4444)
+                .setTitle('📝 Resignation Approved')
+                .setDescription(`Your resignation has been approved by **${interaction.user.tag}**.\n\nYour staff roles have been removed. Thank you for your service!`)
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        // Kick from staff server after DM
+        if (staffMember) {
+          await staffMember.kick('Resignation approved').catch(() => null);
+        }
+
+        const { EmbedBuilder: EBR } = discordPkg;
+        const approvedEmbed = EBR.from(interaction.message.embeds[0])
+          .setColor(0x22c55e)
+          .addFields({ name: '✅ Approved', value: `by ${interaction.user.tag}`, inline: false });
+
+        const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`resign_approve_${targetUserId}`).setLabel('✅ Approved').setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId(`resign_deny_${targetUserId}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger).setDisabled(true),
+        );
+
+        return interaction.update({ embeds: [approvedEmbed], components: [disabledRow] });
+      }
+
+      // ── Resign: Deny ───────────────────────────────────────────────────────
+      if (id.startsWith('resign_deny_')) {
+        const targetUserId = id.slice(12);
+        const { EmbedBuilder: EBR2 } = discordPkg;
+
+        try {
+          const targetUser = await client.users.fetch(targetUserId).catch(() => null);
+          if (targetUser) {
+            await targetUser.send({
+              embeds: [new EBR2()
+                .setColor(0xFFA500)
+                .setTitle('📝 Resignation Denied')
+                .setDescription(`Your resignation request was denied by **${interaction.user.tag}**.`)
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        const deniedEmbed = EBR2.from(interaction.message.embeds[0])
+          .setColor(0xef4444)
+          .addFields({ name: '❌ Denied', value: `by ${interaction.user.tag}`, inline: false });
+
+        const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`resign_approve_${targetUserId}`).setLabel('✅ Approve Resignation').setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId(`resign_deny_${targetUserId}`).setLabel('❌ Denied').setStyle(ButtonStyle.Danger).setDisabled(true),
+        );
+
+        return interaction.update({ embeds: [deniedEmbed], components: [disabledRow] });
+      }
+
+      // ── Application: Approve — show role pickers ───────────────────────────
+      if (id.startsWith('app_approve_')) {
+        const applicantId = id.slice(12);
+        const { RoleSelectMenuBuilder } = discordPkg;
+        const key = `${interaction.guildId}_${interaction.user.id}`;
+        pendingApprovals.set(key, { applicantId, staffRoleId: null, teamRoleId: null });
+
+        const staffSelect = new RoleSelectMenuBuilder()
+          .setCustomId(`app_role_select_${applicantId}`)
+          .setPlaceholder('Select the staff role to give')
+          .setMinValues(1)
+          .setMaxValues(1);
+
+        const teamSelect = new RoleSelectMenuBuilder()
+          .setCustomId(`app_team_select_${applicantId}`)
+          .setPlaceholder('Select the team role to give')
+          .setMinValues(0)
+          .setMaxValues(1);
+
+        const confirmBtn = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`app_confirm_${applicantId}`)
+            .setLabel('✅ Confirm & Accept Applicant')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`app_deny_${applicantId}`)
+            .setLabel('❌ Deny Instead')
+            .setStyle(ButtonStyle.Danger),
+        );
+
+        return interaction.reply({
+          embeds: [new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🎭 Pick Roles for Applicant')
+            .setDescription(`Pick the roles to assign to <@${applicantId}>, then click **Confirm**.`)
+            .setTimestamp()
+          ],
+          components: [
+            new ActionRowBuilder().addComponents(staffSelect),
+            new ActionRowBuilder().addComponents(teamSelect),
+            confirmBtn,
+          ],
+          flags: 64,
+        });
+      }
+
+      // ── Application: Deny ──────────────────────────────────────────────────
+      if (id.startsWith('app_deny_')) {
+        const applicantId = id.slice(9);
+        const { removeApplication: removeApp } = await import('./src/database.js');
+        removeApp(interaction.guildId, applicantId);
+
+        try {
+          const targetUser = await client.users.fetch(applicantId).catch(() => null);
+          if (targetUser) {
+            await targetUser.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0xef4444)
+                .setTitle('📋 Application Denied')
+                .setDescription('Unfortunately your staff application was not successful this time. You are welcome to apply again in the future.')
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        const { EmbedBuilder: EBApp } = discordPkg;
+        try {
+          const deniedEmbed = EBApp.from(interaction.message.embeds[0])
+            .setColor(0xef4444)
+            .addFields({ name: '❌ Denied', value: `by ${interaction.user.tag}`, inline: false });
+          const disabledRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`app_approve_${applicantId}`).setLabel('✅ Accept Application').setStyle(ButtonStyle.Success).setDisabled(true),
+            new ButtonBuilder().setCustomId(`app_deny_${applicantId}`).setLabel('❌ Denied').setStyle(ButtonStyle.Danger).setDisabled(true),
+          );
+          await interaction.update({ embeds: [deniedEmbed], components: [disabledRow] });
+        } catch {
+          await interaction.reply({ content: '❌ Application denied.', flags: 64 });
+        }
+        return;
+      }
+
+      // ── Application: Confirm (after picking roles) ─────────────────────────
+      if (id.startsWith('app_confirm_')) {
+        const applicantId = id.slice(12);
+        const key = `${interaction.guildId}_${interaction.user.id}`;
+        const pending = pendingApprovals.get(key);
+
+        if (!pending || pending.applicantId !== applicantId) {
+          return interaction.reply({ content: '❌ No pending role selection found. Please click Approve on the application again.', flags: 64 });
+        }
+
+        const { removeApplication: removeAppC } = await import('./src/database.js');
+        removeAppC(interaction.guildId, applicantId);
+        pendingApprovals.delete(key);
+
+        // Apply roles in this guild
+        const member = await interaction.guild.members.fetch(applicantId).catch(() => null);
+        if (member) {
+          if (pending.staffRoleId) await member.roles.add(pending.staffRoleId).catch(() => null);
+          if (pending.teamRoleId)  await member.roles.add(pending.teamRoleId).catch(() => null);
+        }
+
+        // DM the applicant
+        try {
+          const targetUser = member?.user || await client.users.fetch(applicantId).catch(() => null);
+          if (targetUser) {
+            const roleText = [pending.staffRoleId && `<@&${pending.staffRoleId}>`, pending.teamRoleId && `<@&${pending.teamRoleId}>`].filter(Boolean).join(' and ') || 'your new role';
+            await targetUser.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle('🎉 Application Accepted!')
+                .setDescription(`Congratulations! Your staff application has been accepted by **${interaction.user.tag}**.\n\nYou have been given ${roleText}. Welcome to the team!`)
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        return interaction.update({
+          embeds: [new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Application Accepted')
+            .setDescription(`<@${applicantId}> has been accepted and their roles have been applied.`)
+            .setTimestamp()
+          ],
+          components: [],
+        });
+      }
+
     } // end isButton()
+
+    // ── Role Select Menus (application role picking) ───────────────────────────
+    if (interaction.isRoleSelectMenu()) {
+      const sid = interaction.customId;
+      const key  = `${interaction.guildId}_${interaction.user.id}`;
+
+      if (sid.startsWith('app_role_select_')) {
+        const pending = pendingApprovals.get(key);
+        if (pending) {
+          pending.staffRoleId = interaction.values[0] || null;
+          pendingApprovals.set(key, pending);
+        }
+        return interaction.deferUpdate();
+      }
+
+      if (sid.startsWith('app_team_select_')) {
+        const pending = pendingApprovals.get(key);
+        if (pending) {
+          pending.teamRoleId = interaction.values[0] || null;
+          pendingApprovals.set(key, pending);
+        }
+        return interaction.deferUpdate();
+      }
+    }
 
     // ── Break Request Modal Submit ─────────────────────────────────────────────
     if (interaction.isModalSubmit() && interaction.customId.startsWith('break_request_modal_')) {
@@ -800,6 +1049,123 @@ if (id.startsWith('app_')) {
             .setTitle('☕ Break Request Sent')
             .setDescription(`Your request for **${days} day${days !== 1 ? 's' : ''}** has been sent to <#${config.break_request_channel_id}> for approval.${reason ? `\n**Reason:** ${reason}` : ''}`)
             .setTimestamp()
+        ],
+        flags: 64,
+      });
+    }
+
+    // ── Resign Request Modal Submit ────────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('resign_request_modal_')) {
+      const guildId = interaction.customId.slice(21);
+      const reason  = interaction.fields.getTextInputValue('resign_reason').trim();
+      const { getGuild: getRG } = await import('./src/database.js');
+      const config = getRG(guildId);
+
+      if (!config.resign_channel_id) {
+        return interaction.reply({ content: '❌ No resign request channel is configured. Ask an admin to run `/setup-resign`.', flags: 64 });
+      }
+
+      const channel = interaction.guild?.channels?.cache.get(config.resign_channel_id)
+        || await interaction.client.channels.fetch(config.resign_channel_id).catch(() => null);
+      if (!channel) {
+        return interaction.reply({ content: '❌ The configured resign channel could not be found.', flags: 64 });
+      }
+
+      const resignEmbed = new EmbedBuilder()
+        .setColor(0xef4444)
+        .setTitle('📝 Resignation Request')
+        .setDescription(`**${interaction.user.tag}** has submitted a resignation request.`)
+        .addFields(
+          { name: '👤 Staff Member', value: `<@${interaction.user.id}> (\`${interaction.user.id}\`)`, inline: true },
+          { name: '🕒 Requested', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+          { name: '📝 Reason', value: reason, inline: false },
+        )
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .setTimestamp()
+        .setFooter({ text: 'Approve to process the resignation' });
+
+      const resignRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`resign_approve_${interaction.user.id}`)
+          .setLabel('✅ Approve Resignation')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`resign_deny_${interaction.user.id}`)
+          .setLabel('❌ Deny')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await channel.send({ embeds: [resignEmbed], components: [resignRow] });
+
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0xFFA500)
+          .setTitle('📝 Resignation Request Sent')
+          .setDescription(`Your resignation request has been sent for review.\n**Reason:** ${reason}`)
+          .setTimestamp()
+        ],
+        flags: 64,
+      });
+    }
+
+    // ── Application Modal Submit ───────────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('application_modal_')) {
+      const guildId = interaction.customId.slice(18);
+      const why        = interaction.fields.getTextInputValue('app_why').trim();
+      const experience = interaction.fields.getTextInputValue('app_experience').trim();
+      const timezone   = interaction.fields.getTextInputValue('app_timezone').trim();
+      const age        = interaction.fields.getTextInputValue('app_age').trim();
+
+      const { getGuild: getAG, saveApplication: saveApp } = await import('./src/database.js');
+      const config = getAG(guildId);
+
+      if (!config.applications_channel_id) {
+        return interaction.reply({ content: '❌ No applications channel is configured. Ask an admin to run `/setup-resign`.', flags: 64 });
+      }
+
+      const channel = interaction.guild?.channels?.cache.get(config.applications_channel_id)
+        || await interaction.client.channels.fetch(config.applications_channel_id).catch(() => null);
+      if (!channel) {
+        return interaction.reply({ content: '❌ The configured applications channel could not be found.', flags: 64 });
+      }
+
+      saveApp(guildId, interaction.user.id, interaction.user.tag, { why, experience, timezone, age });
+
+      const appEmbed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('📋 Staff Application')
+        .setDescription(`**${interaction.user.tag}** has applied for a staff position.`)
+        .addFields(
+          { name: '👤 Applicant', value: `<@${interaction.user.id}> (\`${interaction.user.id}\`)`, inline: true },
+          { name: '🎂 Age', value: age, inline: true },
+          { name: '🌍 Timezone', value: timezone, inline: true },
+          { name: '❓ Why they want to join', value: why, inline: false },
+          { name: '📜 Experience', value: experience, inline: false },
+          { name: '🕒 Submitted', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+        )
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .setTimestamp()
+        .setFooter({ text: 'Use the buttons below to accept or deny this application' });
+
+      const appRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`app_approve_${interaction.user.id}`)
+          .setLabel('✅ Accept Application')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`app_deny_${interaction.user.id}`)
+          .setLabel('❌ Deny Application')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await channel.send({ embeds: [appEmbed], components: [appRow] });
+
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('✅ Application Submitted')
+          .setDescription('Your application has been submitted and is under review. You will be notified of the outcome.')
+          .setTimestamp()
         ],
         flags: 64,
       });

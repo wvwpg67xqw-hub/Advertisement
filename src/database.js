@@ -15,6 +15,7 @@ export function getGuild(guildId) {
       network_ban_request_channel_id: null, partnership_request_channel_id: null,
       is_hub: 0, hub_guild_id: null,
       break_request_channel_id: null, break_role_id: null, main_break_role_id: null,
+      resign_channel_id: null, verified_role_id: null, applications_channel_id: null,
     };
     rows.push(row);
     writeCol('guilds', rows);
@@ -22,6 +23,9 @@ export function getGuild(guildId) {
   if (!('break_request_channel_id' in row)) row.break_request_channel_id = null;
   if (!('break_role_id' in row)) row.break_role_id = null;
   if (!('main_break_role_id' in row)) row.main_break_role_id = null;
+  if (!('resign_channel_id' in row)) row.resign_channel_id = null;
+  if (!('verified_role_id' in row)) row.verified_role_id = null;
+  if (!('applications_channel_id' in row)) row.applications_channel_id = null;
   return row;
 }
 
@@ -36,6 +40,7 @@ export function setGuildConfig(guildId, fields) {
     'ban_request_channel_id', 'blacklist_request_channel_id',
     'network_ban_request_channel_id', 'partnership_request_channel_id',
     'break_request_channel_id', 'break_role_id', 'main_break_role_id',
+    'resign_channel_id', 'verified_role_id', 'applications_channel_id',
   ];
   for (const [key, val] of Object.entries(fields)) {
     if (allowed.includes(key)) rows[i][key] = val;
@@ -292,6 +297,25 @@ export function getCurrentBreaks(guildId) {
 
 export function isOnBreak(guildId, userId) {
   return !!readCol('breaks').find(r => r.guild_id === guildId && r.user_id === userId);
+}
+
+// ─── Applications ─────────────────────────────────────────────────────────────
+
+export function saveApplication(guildId, userId, username, data) {
+  const rows = readCol('applications').filter(r => !(r.guild_id === guildId && r.user_id === userId));
+  rows.push({ id: nextId('applications'), guild_id: guildId, user_id: userId, username, ...data, submitted_at: ts() });
+  writeCol('applications', rows);
+}
+
+export function getApplication(guildId, userId) {
+  return readCol('applications').find(r => r.guild_id === guildId && r.user_id === userId) ?? null;
+}
+
+export function removeApplication(guildId, userId) {
+  const rows = readCol('applications');
+  const entry = rows.find(r => r.guild_id === guildId && r.user_id === userId);
+  writeCol('applications', rows.filter(r => !(r.guild_id === guildId && r.user_id === userId)));
+  return entry ?? null;
 }
 
 // ─── Blacklist (bot) ──────────────────────────────────────────────────────────

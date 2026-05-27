@@ -10,6 +10,7 @@ import {
   startBreak, endBreak, extendBreak, getCurrentBreaks, isOnBreak,
   getCaseInfo, getGuild, getNetworkMembers,
   addBlacklist,
+  saveApplication, getApplication, removeApplication,
 } from './database.js';
 import {
   safeFetchMember, safeFetchChannel, safeFetchRole,
@@ -226,6 +227,14 @@ export const commandDefs = [
   new SlashCommandBuilder()
     .setName('reset-messages-all')
     .setDescription('Reset message counts for ALL users in this server'),
+
+  new SlashCommandBuilder()
+    .setName('resign-request')
+    .setDescription('Submit a resignation request — a form will open asking for your reason'),
+
+  new SlashCommandBuilder()
+    .setName('apply')
+    .setDescription('Apply for a staff position — a form will open with application questions'),
 ];
 
 // ─── Command Handlers ─────────────────────────────────────────────────────────
@@ -1105,6 +1114,68 @@ export async function handleBreakEnd(interaction) {
         .setTimestamp()
     ]
   });
+}
+
+// RESIGN REQUEST
+export async function handleResignRequest(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId(`resign_request_modal_${interaction.guildId}`)
+    .setTitle('📝 Resignation Request');
+
+  const reasonInput = new TextInputBuilder()
+    .setCustomId('resign_reason')
+    .setLabel('Reason for resigning')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(1000)
+    .setPlaceholder('Why are you resigning?');
+
+  modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+  await interaction.showModal(modal);
+}
+
+// APPLY
+export async function handleApply(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId(`application_modal_${interaction.guildId}`)
+    .setTitle('📋 Staff Application');
+
+  const whyInput = new TextInputBuilder()
+    .setCustomId('app_why')
+    .setLabel('Why do you want to join the staff team?')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(1000);
+
+  const experienceInput = new TextInputBuilder()
+    .setCustomId('app_experience')
+    .setLabel('What experience do you have?')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(1000);
+
+  const timezoneInput = new TextInputBuilder()
+    .setCustomId('app_timezone')
+    .setLabel('What is your timezone?')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(50);
+
+  const ageInput = new TextInputBuilder()
+    .setCustomId('app_age')
+    .setLabel('How old are you?')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(3);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(whyInput),
+    new ActionRowBuilder().addComponents(experienceInput),
+    new ActionRowBuilder().addComponents(timezoneInput),
+    new ActionRowBuilder().addComponents(ageInput),
+  );
+
+  await interaction.showModal(modal);
 }
 
 // RESET MESSAGES
