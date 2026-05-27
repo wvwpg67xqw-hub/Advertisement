@@ -16,8 +16,15 @@ import {
   parseDuration, formatDuration,
   hasCommandPermission, sendLog,
   buildWarnEmbed, buildAdWarnEmbed, buildStrikeEmbed,
-  buildRequestEmbed, buildModEmbed,
+  buildRequestEmbed, buildModEmbed, buildStaffUpdateEmbed,
 } from './utils.js';
+
+const STAFF_ROLE_IDS = [
+  '1501682950331301908',
+  '1495222811755806740', '1501681813398093955',
+  '1495222820400009246', '1501681511324451028',
+  '1495222796517773335', '1501681321343193160',
+];
 
 // ─── Command Definitions ──────────────────────────────────────────────────────
 
@@ -410,14 +417,19 @@ export async function handleFire(interaction) {
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
 
-  const manageable = member.roles.cache.filter(r => r.id !== interaction.guild.id && r.editable);
-  if (manageable.size > 0) await member.roles.remove(manageable, reason).catch(() => {});
+  const staffRolesToRemove = member.roles.cache.filter(r => STAFF_ROLE_IDS.includes(r.id) && r.editable);
+  if (staffRolesToRemove.size > 0) await member.roles.remove(staffRolesToRemove, reason).catch(() => {});
   await interaction.guild.members.ban(target.id, { reason }).catch(() => {});
 
   const embed = buildModEmbed('fire', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
   const config = getGuild(interaction.guildId);
   await sendLog(interaction.guild, config, 'general', embed);
+
+  const staffUpdateEmbed = buildStaffUpdateEmbed('fired', {
+    userId: target.id, moderatorId: interaction.user.id, reason,
+  });
+  await sendLog(interaction.guild, config, 'staff_updates', staffUpdateEmbed);
 }
 
 // PROMOTE
@@ -439,6 +451,11 @@ export async function handlePromote(interaction) {
   await interaction.reply({ embeds: [embed] });
   const config = getGuild(interaction.guildId);
   await sendLog(interaction.guild, config, 'general', embed);
+
+  const staffUpdateEmbed = buildStaffUpdateEmbed('promoted', {
+    userId: target.id, moderatorId: interaction.user.id, role: role.name,
+  });
+  await sendLog(interaction.guild, config, 'staff_updates', staffUpdateEmbed);
 }
 
 // DEMOTE USER

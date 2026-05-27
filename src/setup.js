@@ -27,6 +27,7 @@ export const setupCommands = [
     .addChannelOption(o => o.setName('strike-log').setDescription('Strike log channel'))
     .addChannelOption(o => o.setName('request-log').setDescription('Request log channel'))
     .addChannelOption(o => o.setName('ad-warn-log').setDescription('Ad-warn log channel'))
+    .addChannelOption(o => o.setName('staff-updates').setDescription('Channel for staff hire/fire/promotion announcements'))
     .addRoleOption(o => o.setName('jail-role').setDescription('Role applied to jailed users'))
     .addRoleOption(o => o.setName('muted-role').setDescription('Role applied to muted users')),
 
@@ -79,6 +80,7 @@ export const setupCommands = [
           { name: 'strike-log', value: 'strike_log_channel_id' },
           { name: 'request-log', value: 'request_log_channel_id' },
           { name: 'ad-warn-log', value: 'ad_warn_log_channel_id' },
+          { name: 'staff-updates', value: 'staff_updates_channel_id' },
           { name: 'jail-role', value: 'jail_role_id' },
           { name: 'muted-role', value: 'muted_role_id' },
         )
@@ -165,6 +167,7 @@ export async function handleSetup(interaction) {
   const strikeLog = interaction.options.getChannel('strike-log');
   const requestLog = interaction.options.getChannel('request-log');
   const adWarnLog = interaction.options.getChannel('ad-warn-log');
+  const staffUpdates = interaction.options.getChannel('staff-updates');
   const jailRole = interaction.options.getRole('jail-role');
   const mutedRole = interaction.options.getRole('muted-role');
 
@@ -173,6 +176,7 @@ export async function handleSetup(interaction) {
   if (strikeLog) fields.strike_log_channel_id = strikeLog.id;
   if (requestLog) fields.request_log_channel_id = requestLog.id;
   if (adWarnLog) fields.ad_warn_log_channel_id = adWarnLog.id;
+  if (staffUpdates) fields.staff_updates_channel_id = staffUpdates.id;
   if (jailRole) fields.jail_role_id = jailRole.id;
   if (mutedRole) fields.muted_role_id = mutedRole.id;
 
@@ -253,6 +257,7 @@ export async function handleSetupStatus(interaction) {
       { name: 'Strike Log', value: ch(config.strike_log_channel_id), inline: true },
       { name: 'Request Log', value: ch(config.request_log_channel_id), inline: true },
       { name: 'Ad-Warn Log', value: ch(config.ad_warn_log_channel_id), inline: true },
+      { name: 'Staff Updates', value: ch(config.staff_updates_channel_id), inline: true },
       { name: 'Jail Role', value: rl(config.jail_role_id), inline: true },
       { name: 'Muted Role', value: rl(config.muted_role_id), inline: true },
     )

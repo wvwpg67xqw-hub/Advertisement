@@ -9,6 +9,7 @@ export function getGuild(guildId) {
     row = {
       guild_id: guildId, log_channel_id: null, warn_log_channel_id: null,
       strike_log_channel_id: null, request_log_channel_id: null, ad_warn_log_channel_id: null,
+      staff_updates_channel_id: null,
       jail_role_id: null, muted_role_id: null, command_roles: {},
       ban_request_channel_id: null, blacklist_request_channel_id: null,
       network_ban_request_channel_id: null, partnership_request_channel_id: null,
@@ -26,7 +27,8 @@ export function setGuildConfig(guildId, fields) {
   const i = rows.findIndex(g => g.guild_id === guildId);
   const allowed = [
     'log_channel_id', 'warn_log_channel_id', 'strike_log_channel_id',
-    'request_log_channel_id', 'ad_warn_log_channel_id', 'jail_role_id', 'muted_role_id',
+    'request_log_channel_id', 'ad_warn_log_channel_id', 'staff_updates_channel_id',
+    'jail_role_id', 'muted_role_id',
     'ban_request_channel_id', 'blacklist_request_channel_id',
     'network_ban_request_channel_id', 'partnership_request_channel_id',
   ];

@@ -37,7 +37,8 @@ import {
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild } from './src/database.js';
+import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 25849;
@@ -492,6 +493,14 @@ if (id.startsWith('app_')) {
         await member.send({
           content: `✅ Your application for **${application.role}** has been accepted!`
         }).catch(() => null);
+
+        const botConfig = getBotGuild(guildId);
+        const staffUpdateEmbed = buildStaffUpdateEmbed('hired', {
+          userId: application.userId,
+          moderatorId: interaction.user.id,
+          role: application.role,
+        });
+        await sendLog(member.guild, botConfig, 'staff_updates', staffUpdateEmbed);
       }
 
     } catch (err) {

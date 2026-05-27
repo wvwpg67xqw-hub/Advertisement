@@ -70,6 +70,7 @@ export async function sendLog(guild, config, type, embed, components = null) {
     request: config.request_log_channel_id,
     ad_warn: config.ad_warn_log_channel_id,
     general: config.log_channel_id,
+    staff_updates: config.staff_updates_channel_id,
     'ban-request': config.ban_request_channel_id || config.request_log_channel_id,
     'blacklist-request': config.blacklist_request_channel_id || config.request_log_channel_id,
     'network-ban-request': config.network_ban_request_channel_id || config.request_log_channel_id,
@@ -177,6 +178,40 @@ export function buildRequestEmbed(fields) {
   if (fields.proof) {
     embed.addFields({ name: 'Proof', value: fields.proof });
   }
+  return embed;
+}
+
+export function buildStaffUpdateEmbed(type, fields) {
+  const configs = {
+    hired: {
+      color: 0x57F287,
+      title: '🎉 New Staff Member',
+      desc: `Welcome <@${fields.userId}> to the team as **${fields.role}**!`,
+    },
+    promoted: {
+      color: 0x5865F2,
+      title: '⬆️ Staff Promotion',
+      desc: `<@${fields.userId}> has been promoted to **${fields.role}**!`,
+    },
+    demoted: {
+      color: 0xFFA500,
+      title: '⬇️ Staff Demotion',
+      desc: `<@${fields.userId}> has been demoted from **${fields.role}**.`,
+    },
+    fired: {
+      color: 0xFF4500,
+      title: '🔥 Staff Departure',
+      desc: `<@${fields.userId}> has been removed from the staff team.`,
+    },
+  };
+  const cfg = configs[type] || configs.fired;
+  const embed = new EmbedBuilder()
+    .setColor(cfg.color)
+    .setTitle(cfg.title)
+    .setDescription(cfg.desc)
+    .setTimestamp();
+  if (fields.reason) embed.addFields({ name: 'Reason', value: fields.reason });
+  if (fields.moderatorId) embed.addFields({ name: 'By', value: `<@${fields.moderatorId}>`, inline: true });
   return embed;
 }
 
