@@ -928,18 +928,58 @@ export async function handleCurrentBreaks(interaction) {
 // BREAK
 export async function handleBreak(interaction) {
   const reason = interaction.options.getString('reason');
-  const started = startBreak(interaction.guildId, interaction.user.id, interaction.user.tag, reason);
-  if (!started) {
+
+  if (isOnBreak(interaction.guildId, interaction.user.id)) {
     return interaction.reply({ content: '❌ You are already on break. Use `/break-end` to end it first.', flags: 64 });
   }
+
+  const { getGuild } = await import('./database.js');
+  const config = getGuild(interaction.guildId);
+
+  if (!config.break_request_channel_id) {
+    return interaction.reply({ content: '❌ No break request channel has been configured. Ask an admin to run `/setup` with `break-request-channel`.', flags: 64 });
+  }
+
+  const channel = await safeFetchChannel(interaction.guild, config.break_request_channel_id);
+  if (!channel) {
+    return interaction.reply({ content: '❌ The configured break request channel could not be found.', flags: 64 });
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0xFFA500)
+    .setTitle('☕ Break Request')
+    .setDescription(`**${interaction.user.tag}** is requesting a break.`)
+    .addFields(
+      { name: '👤 Staff Member', value: `<@${interaction.user.id}> (\`${interaction.user.id}\`)`, inline: true },
+      { name: '📝 Reason', value: reason || 'No reason provided', inline: false },
+      { name: '🕒 Requested', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+    )
+    .setThumbnail(interaction.user.displayAvatarURL())
+    .setTimestamp()
+    .setFooter({ text: 'Approve or deny this break request below' });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`break_req_approve_${interaction.user.id}`)
+      .setLabel('✅ Approve Break')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`break_req_deny_${interaction.user.id}`)
+      .setLabel('❌ Deny Break')
+      .setStyle(ButtonStyle.Danger),
+  );
+
+  await channel.send({ embeds: [embed], components: [row] });
+
   await interaction.reply({
     embeds: [
       new EmbedBuilder()
         .setColor(0xFFA500)
-        .setTitle('☕ Break Started')
-        .setDescription(`**${interaction.user.tag}** is now on break.${reason ? `\nReason: ${reason}` : ''}`)
+        .setTitle('☕ Break Request Sent')
+        .setDescription(`Your break request has been sent to <#${config.break_request_channel_id}> for approval.${reason ? `\n**Reason:** ${reason}` : ''}`)
         .setTimestamp()
-    ]
+    ],
+    flags: 64,
   });
 }
 
@@ -949,6 +989,37 @@ export async function handleBreakEnd(interaction) {
   if (!row) {
     return interaction.reply({ content: '❌ You are not currently on break.', flags: 64 });
   }
+
+  const { getGuild } = await import('./database.js');
+  const config = getGuild(interaction.guildId);
+
+  const member = await safeFetchMember(interaction.guild, interaction.user.id);
+
+  if (member) {
+    // Remove break role from staff server
+    if (config.break_role_id) {
+      await member.roles.remove(config.break_role_id).catch(() => null);
+    }
+
+    // Restore saved roles in staff server
+    const savedRoles = row.saved_roles || [];
+    for (const roleId of savedRoles) {
+      await member.roles.add(roleId).catch(() => null);
+    }
+  }
+
+  // Remove break role from main server
+  const mainGuildId = process.env.MAIN_GUILD_ID;
+  if (mainGuildId && config.main_break_role_id) {
+    try {
+      const mainGuild = interaction.client.guilds.cache.get(mainGuildId);
+      if (mainGuild) {
+        const mainMember = await mainGuild.members.fetch(interaction.user.id).catch(() => null);
+        if (mainMember) await mainMember.roles.remove(config.main_break_role_id).catch(() => null);
+      }
+    } catch {}
+  }
+
   const duration = Math.floor(Date.now() / 1000) - row.started_at;
   await interaction.reply({
     embeds: [

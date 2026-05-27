@@ -14,10 +14,14 @@ export function getGuild(guildId) {
       ban_request_channel_id: null, blacklist_request_channel_id: null,
       network_ban_request_channel_id: null, partnership_request_channel_id: null,
       is_hub: 0, hub_guild_id: null,
+      break_request_channel_id: null, break_role_id: null, main_break_role_id: null,
     };
     rows.push(row);
     writeCol('guilds', rows);
   }
+  if (!('break_request_channel_id' in row)) row.break_request_channel_id = null;
+  if (!('break_role_id' in row)) row.break_role_id = null;
+  if (!('main_break_role_id' in row)) row.main_break_role_id = null;
   return row;
 }
 
@@ -31,6 +35,7 @@ export function setGuildConfig(guildId, fields) {
     'jail_role_id', 'muted_role_id',
     'ban_request_channel_id', 'blacklist_request_channel_id',
     'network_ban_request_channel_id', 'partnership_request_channel_id',
+    'break_request_channel_id', 'break_role_id', 'main_break_role_id',
   ];
   for (const [key, val] of Object.entries(fields)) {
     if (allowed.includes(key)) rows[i][key] = val;
@@ -250,10 +255,10 @@ export function setBalance(guildId, userId, amount) {
 
 // ─── Breaks ───────────────────────────────────────────────────────────────────
 
-export function startBreak(guildId, userId, username, reason) {
+export function startBreak(guildId, userId, username, reason, savedRoles = []) {
   const rows = readCol('breaks');
   if (rows.find(r => r.guild_id === guildId && r.user_id === userId)) return false;
-  rows.push({ id: nextId('breaks'), guild_id: guildId, user_id: userId, username, reason: reason ?? null, started_at: ts() });
+  rows.push({ id: nextId('breaks'), guild_id: guildId, user_id: userId, username, reason: reason ?? null, started_at: ts(), saved_roles: savedRoles });
   writeCol('breaks', rows);
   return true;
 }

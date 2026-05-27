@@ -29,7 +29,10 @@ export const setupCommands = [
     .addChannelOption(o => o.setName('ad-warn-log').setDescription('Ad-warn log channel'))
     .addChannelOption(o => o.setName('staff-updates').setDescription('Channel for staff hire/fire/promotion announcements'))
     .addRoleOption(o => o.setName('jail-role').setDescription('Role applied to jailed users'))
-    .addRoleOption(o => o.setName('muted-role').setDescription('Role applied to muted users')),
+    .addRoleOption(o => o.setName('muted-role').setDescription('Role applied to muted users'))
+    .addChannelOption(o => o.setName('break-request-channel').setDescription('Channel where break requests are sent for approval'))
+    .addRoleOption(o => o.setName('break-role').setDescription('Role given to staff on break in this server'))
+    .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff on break in the main server')),
 
   // /setup-roles — set roles for a single command
   new SlashCommandBuilder()
@@ -83,6 +86,9 @@ export const setupCommands = [
           { name: 'staff-updates', value: 'staff_updates_channel_id' },
           { name: 'jail-role', value: 'jail_role_id' },
           { name: 'muted-role', value: 'muted_role_id' },
+          { name: 'break-request-channel', value: 'break_request_channel_id' },
+          { name: 'break-role', value: 'break_role_id' },
+          { name: 'main-break-role', value: 'main_break_role_id' },
         )
     )
     .addChannelOption(o => o.setName('channel').setDescription('New channel value'))
@@ -170,6 +176,9 @@ export async function handleSetup(interaction) {
   const staffUpdates = interaction.options.getChannel('staff-updates');
   const jailRole = interaction.options.getRole('jail-role');
   const mutedRole = interaction.options.getRole('muted-role');
+  const breakRequestChannel = interaction.options.getChannel('break-request-channel');
+  const breakRole = interaction.options.getRole('break-role');
+  const mainBreakRole = interaction.options.getRole('main-break-role');
 
   if (logChannel) fields.log_channel_id = logChannel.id;
   if (warnLog) fields.warn_log_channel_id = warnLog.id;
@@ -179,6 +188,9 @@ export async function handleSetup(interaction) {
   if (staffUpdates) fields.staff_updates_channel_id = staffUpdates.id;
   if (jailRole) fields.jail_role_id = jailRole.id;
   if (mutedRole) fields.muted_role_id = mutedRole.id;
+  if (breakRequestChannel) fields.break_request_channel_id = breakRequestChannel.id;
+  if (breakRole) fields.break_role_id = breakRole.id;
+  if (mainBreakRole) fields.main_break_role_id = mainBreakRole.id;
 
   if (Object.keys(fields).length === 0) {
     return interaction.reply({ content: '❌ You must provide at least one option to configure.', flags: 64 });
@@ -260,6 +272,9 @@ export async function handleSetupStatus(interaction) {
       { name: 'Staff Updates', value: ch(config.staff_updates_channel_id), inline: true },
       { name: 'Jail Role', value: rl(config.jail_role_id), inline: true },
       { name: 'Muted Role', value: rl(config.muted_role_id), inline: true },
+      { name: 'Break Request Channel', value: ch(config.break_request_channel_id), inline: true },
+      { name: 'Break Role (Staff Server)', value: rl(config.break_role_id), inline: true },
+      { name: 'Break Role (Main Server)', value: rl(config.main_break_role_id), inline: true },
     )
     .setTimestamp();
 

@@ -495,6 +495,120 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ content: `❌ Appeal #${appealId} denied. **${appeal.username}** stays banned.`, ephemeral: true });
       }
 
+      // ── Break Request: Approve ─────────────────────────────────────────────
+      if (id.startsWith('break_req_approve_')) {
+        const targetUserId = id.slice(18);
+        const { getGuild } = await import('./src/database.js');
+        const { startBreak, isOnBreak } = await import('./src/database.js');
+
+        if (isOnBreak(interaction.guildId, targetUserId)) {
+          return interaction.reply({ content: '⚠️ That staff member is already on break.', flags: 64 });
+        }
+
+        const config = getGuild(interaction.guildId);
+
+        // Fetch member in staff server
+        const staffGuild = interaction.guild;
+        let member = null;
+        try { member = await staffGuild.members.fetch(targetUserId); } catch {}
+
+        // Collect and remove all manageable roles (save them for restoration)
+        let savedRoles = [];
+        if (member) {
+          savedRoles = member.roles.cache
+            .filter(r => r.id !== staffGuild.id && !r.managed)
+            .map(r => r.id);
+
+          // Remove all staff roles
+          await member.roles.remove(savedRoles).catch(e => console.error('Break: role removal failed:', e.message));
+
+          // Apply break role in staff server
+          if (config.break_role_id) {
+            await member.roles.add(config.break_role_id).catch(e => console.error('Break: break role add failed:', e.message));
+          }
+        }
+
+        // Apply break role in main server
+        const mainGuildId = process.env.MAIN_GUILD_ID;
+        if (mainGuildId && config.main_break_role_id) {
+          try {
+            const mainGuild = client.guilds.cache.get(mainGuildId) || await client.guilds.fetch(mainGuildId).catch(() => null);
+            if (mainGuild) {
+              const mainMember = await mainGuild.members.fetch(targetUserId).catch(() => null);
+              if (mainMember) await mainMember.roles.add(config.main_break_role_id).catch(e => console.error('Break: main server role add failed:', e.message));
+            }
+          } catch (e) { console.error('Break: main guild fetch failed:', e.message); }
+        }
+
+        // Record the break
+        const { EmbedBuilder: EB2 } = discordPkg;
+        const username = member?.user?.tag || targetUserId;
+        startBreak(interaction.guildId, targetUserId, username, null, savedRoles);
+
+        // Update the request message
+        const approvedEmbed = EB2.from(interaction.message.embeds[0])
+          .setColor(0x22c55e)
+          .addFields({ name: '✅ Approved', value: `by ${interaction.user.tag}`, inline: false });
+
+        const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`break_req_approve_${targetUserId}`).setLabel('✅ Approved').setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId(`break_req_deny_${targetUserId}`).setLabel('❌ Deny Break').setStyle(ButtonStyle.Danger).setDisabled(true),
+        );
+
+        await interaction.update({ embeds: [approvedEmbed], components: [disabledRow] });
+
+        // DM the staff member
+        try {
+          const targetUser = member?.user || await client.users.fetch(targetUserId).catch(() => null);
+          if (targetUser) {
+            await targetUser.send({
+              embeds: [new EB2()
+                .setColor(0x22c55e)
+                .setTitle('☕ Break Approved')
+                .setDescription(`Your break request has been approved by **${interaction.user.tag}**.\n\nUse \`/break-end\` when you are ready to come back. Your roles will be restored automatically.`)
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        return;
+      }
+
+      // ── Break Request: Deny ────────────────────────────────────────────────
+      if (id.startsWith('break_req_deny_')) {
+        const targetUserId = id.slice(15);
+        const { EmbedBuilder: EB3 } = discordPkg;
+
+        const deniedEmbed = EB3.from(interaction.message.embeds[0])
+          .setColor(0xef4444)
+          .addFields({ name: '❌ Denied', value: `by ${interaction.user.tag}`, inline: false });
+
+        const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`break_req_approve_${targetUserId}`).setLabel('✅ Approve Break').setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId(`break_req_deny_${targetUserId}`).setLabel('❌ Denied').setStyle(ButtonStyle.Danger).setDisabled(true),
+        );
+
+        await interaction.update({ embeds: [deniedEmbed], components: [disabledRow] });
+
+        // DM the staff member
+        try {
+          const targetUser = await client.users.fetch(targetUserId).catch(() => null);
+          if (targetUser) {
+            await targetUser.send({
+              embeds: [new EB3()
+                .setColor(0xef4444)
+                .setTitle('❌ Break Denied')
+                .setDescription(`Your break request was denied by **${interaction.user.tag}**.`)
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        return;
+      }
+
       // ── Application review ─────────────────────────────────────────────────
 if (id.startsWith('app_')) {
   const parts = id.split('_');
