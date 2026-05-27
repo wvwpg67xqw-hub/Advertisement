@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx';
 import Success from './pages/Success.jsx';
 import Admin from './pages/Admin.jsx';
 import Appeal from './pages/Appeal.jsx';
+import Staff from './pages/Staff.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 const AuthContext = createContext(null);
@@ -32,6 +33,9 @@ function Navbar({ user, onLogout }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {user ? (
           <>
+            <Link to="/staff" style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 500 }}>
+              Staff Panel
+            </Link>
             {user.isAdmin && (
               <Link to="/admin" style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 500 }}>
                 Admin Panel
@@ -97,6 +101,9 @@ export default function App() {
           } />
           <Route path="/admin" element={
             <ProtectedRoute adminOnly><Admin /></ProtectedRoute>
+          } />
+          <Route path="/staff" element={
+            <ProtectedRoute><Staff /></ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />} />
         </Routes>

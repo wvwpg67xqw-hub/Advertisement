@@ -16,6 +16,7 @@ export function getGuild(guildId) {
       is_hub: 0, hub_guild_id: null,
       break_request_channel_id: null, break_role_id: null, main_break_role_id: null,
       resign_channel_id: null, verified_role_id: null, applications_channel_id: null,
+      referral_link: null, modmail_test_channel_id: null,
     };
     rows.push(row);
     writeCol('guilds', rows);
@@ -26,6 +27,8 @@ export function getGuild(guildId) {
   if (!('resign_channel_id' in row)) row.resign_channel_id = null;
   if (!('verified_role_id' in row)) row.verified_role_id = null;
   if (!('applications_channel_id' in row)) row.applications_channel_id = null;
+  if (!('referral_link' in row)) row.referral_link = null;
+  if (!('modmail_test_channel_id' in row)) row.modmail_test_channel_id = null;
   return row;
 }
 
@@ -41,6 +44,7 @@ export function setGuildConfig(guildId, fields) {
     'network_ban_request_channel_id', 'partnership_request_channel_id',
     'break_request_channel_id', 'break_role_id', 'main_break_role_id',
     'resign_channel_id', 'verified_role_id', 'applications_channel_id',
+    'referral_link', 'modmail_test_channel_id',
   ];
   for (const [key, val] of Object.entries(fields)) {
     if (allowed.includes(key)) rows[i][key] = val;

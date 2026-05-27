@@ -102,15 +102,26 @@ async function assignRolesOnAccept(app, reviewerUsername) {
     if (roles?.team) toAdd.push(roles.team);
     await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
-    await member.send({
-      embeds: [new EmbedBuilder()
-        .setTitle('🎉 Application Accepted!')
-        .setColor(0x22c55e)
-        .setDescription(`Congratulations! Your application for **${app.role}** has been accepted.\n\nPlease join the staff server using the link below and introduce yourself.`)
-        .addFields({ name: '📨 Staff Server', value: '[Click here to join](https://discord.gg/AZhhKXs7wA)', inline: false })
-        .setFooter({ text: 'Welcome to the team!' })
-        .setTimestamp()],
-    }).catch(() => null);
+    const taskLinks = {
+      Moderator:         'https://discord.com/channels/1495198147109060618/1502489464851796099',
+      'Human Resources': 'https://discord.com/channels/1495198147109060618/1502489463001972799',
+      Partnership:       'https://discord.com/channels/1495198147109060618/1502489591725166673',
+    };
+    const taskLink = taskLinks[app.role] || null;
+    const taskField = taskLink
+      ? { name: '📋 Your Tasks', value: `[Click here to read your tasks for ${app.role}](${taskLink})`, inline: false }
+      : null;
+
+    const dmEmbed = new EmbedBuilder()
+      .setTitle('🎉 Application Accepted!')
+      .setColor(0x22c55e)
+      .setDescription(`Congratulations! Your application for **${app.role}** has been accepted.\n\nPlease join the staff server using the link below and introduce yourself.`)
+      .addFields({ name: '📨 Staff Server', value: '[Click here to join](https://discord.gg/AZhhKXs7wA)', inline: false });
+    if (taskField) dmEmbed.addFields(taskField);
+    dmEmbed.addFields({ name: '📌 Important', value: 'Please read your role tasks before getting started!', inline: false });
+    dmEmbed.setFooter({ text: 'Welcome to the team!' }).setTimestamp();
+
+    await member.send({ embeds: [dmEmbed] }).catch(() => null);
 
     // Post to staff updates channel
     try {

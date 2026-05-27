@@ -235,6 +235,25 @@ export const commandDefs = [
   new SlashCommandBuilder()
     .setName('apply')
     .setDescription('Apply for a staff position — a form will open with application questions'),
+
+  new SlashCommandBuilder()
+    .setName('update')
+    .setDescription('Post a manual staff update announcement to the staff updates channel')
+    .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true))
+    .addStringOption(o =>
+      o.setName('type').setDescription('Type of update').setRequired(true)
+        .addChoices(
+          { name: 'hired — new staff member', value: 'hired' },
+          { name: 'promoted — role promotion', value: 'promoted' },
+          { name: 'demoted — role demotion', value: 'demoted' },
+          { name: 'fired — removed from team', value: 'fired' },
+          { name: 'transferred — moved to another team', value: 'transferred' },
+          { name: 'welcomed — welcome announcement', value: 'welcomed' },
+          { name: 'resigned — voluntary departure', value: 'resigned' },
+        )
+    )
+    .addStringOption(o => o.setName('role').setDescription('Role name (e.g. Moderator)').setRequired(true))
+    .addStringOption(o => o.setName('note').setDescription('Optional extra note to include')),
 ];
 
 // ─── Command Handlers ─────────────────────────────────────────────────────────
@@ -1113,6 +1132,42 @@ export async function handleBreakEnd(interaction) {
         .setDescription(`**${interaction.user.tag}** is back from break.\nDuration: **${formatDuration(duration)}**`)
         .setTimestamp()
     ]
+  });
+}
+
+// UPDATE — manual staff update announcement
+export async function handleUpdate(interaction) {
+  if (!hasCommandPermission(interaction.member, 'update')) return deny(interaction);
+  const target = interaction.options.getUser('user');
+  const type   = interaction.options.getString('type');
+  const role   = interaction.options.getString('role');
+  const note   = interaction.options.getString('note');
+
+  const config = getGuild(interaction.guildId);
+  if (!config.staff_updates_channel_id) {
+    return interaction.reply({ content: '❌ No staff updates channel configured. Use `/setup` to set one.', flags: 64 });
+  }
+
+  const { buildStaffUpdateEmbed: bsue, sendLog: sl } = await import('./utils.js');
+
+  const embed = bsue(type, {
+    userId: target.id,
+    moderatorId: interaction.user.id,
+    role,
+    reason: note || null,
+  });
+
+  await sl(interaction.guild, config, 'staff_updates', embed);
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Staff Update Posted')
+        .setDescription(`Posted a **${type}** update for <@${target.id}> (${role}) to <#${config.staff_updates_channel_id}>.`)
+        .setTimestamp()
+    ],
+    flags: 64,
   });
 }
 

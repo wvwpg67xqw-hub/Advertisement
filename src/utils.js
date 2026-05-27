@@ -203,6 +203,21 @@ export function buildStaffUpdateEmbed(type, fields) {
       title: '🔥 Staff Departure',
       desc: `<@${fields.userId}> has been removed from the staff team.`,
     },
+    transferred: {
+      color: 0x3B82F6,
+      title: '🔄 Staff Transfer',
+      desc: `<@${fields.userId}> has been transferred to **${fields.role}**.`,
+    },
+    welcomed: {
+      color: 0x57F287,
+      title: '👋 Staff Welcome',
+      desc: `Please welcome <@${fields.userId}> to **${fields.role}**!`,
+    },
+    resigned: {
+      color: 0x6B7280,
+      title: '📝 Staff Resignation',
+      desc: `<@${fields.userId}> has resigned from **${fields.role}**. Thank you for your service!`,
+    },
   };
   const cfg = configs[type] || configs.fired;
   const embed = new EmbedBuilder()

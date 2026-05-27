@@ -17,6 +17,8 @@ import { getClientIp, ipBlacklistMiddleware, rateLimit, checkVpn, isDiscordBot, 
 import applicationRoutes from './routes/applications.js';
 import adminRoutes from './routes/admin.js';
 import { setDiscordClient } from './routes/admin.js';
+import staffRoutes from './routes/staff.js';
+import { setStaffDiscordClient } from './routes/staff.js';
 
 import {
   commandDefs, handleWarn, handleWarns, handleWarnLeaderboard,
@@ -29,7 +31,7 @@ import {
   handleBreakRequest, handleBreakEnd, handleManageBreak,
   handleResetMessages, handleResetMessagesAll,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
-  handleResignRequest, handleApply,
+  handleResignRequest, handleApply, handleUpdate,
 } from './src/commands.js';
 
 import {
@@ -365,6 +367,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/staff', staffRoutes);
 
 // ── Serve React build ─────────────────────────────────────────────────────────
 
@@ -402,7 +405,7 @@ const botHandlers = {
   'case-info': handleCaseInfo, balance: handleBalance, snipe: handleSnipe,
   'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll,
-  'resign-request': handleResignRequest, apply: handleApply,
+  'resign-request': handleResignRequest, apply: handleApply, update: handleUpdate,
 };
 
 // ── Interaction Handler ───────────────────────────────────────────────────────
@@ -1205,6 +1208,7 @@ client.on('messageCreate', async (msg) => {
 client.once('clientReady', async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
   setDiscordClient(client);
+  setStaffDiscordClient(client);
   if (CLIENT_ID) {
     try {
       const rest = new REST({ version: '10' }).setToken(TOKEN);

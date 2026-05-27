@@ -172,14 +172,16 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('staff-break-role').setDescription('Role given to staff while on break in THIS server'))
     .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff while on break in the MAIN server')),
 
-  // /setup-resign — configure resign and applications
+  // /setup-resign — configure resign, applications, referral link and modmail test
   new SlashCommandBuilder()
     .setName('setup-resign')
-    .setDescription('Configure the resign system and staff applications')
+    .setDescription('Configure resign system, applications, referral link and modmail test channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(o => o.setName('resign-channel').setDescription('Channel where resignation requests are posted for approval'))
     .addRoleOption(o => o.setName('verified-role').setDescription('Role kept in the main server when a member resigns (all others removed)'))
-    .addChannelOption(o => o.setName('applications-channel').setDescription('Channel where staff applications are posted for review')),
+    .addChannelOption(o => o.setName('applications-channel').setDescription('Channel where staff applications are posted for review'))
+    .addStringOption(o => o.setName('referral-link').setDescription('Referral/invite link shown in the staff panel (paste full URL)'))
+    .addChannelOption(o => o.setName('modmail-test-channel').setDescription('Channel where modmail test applications are posted')),
 
   // /setup-roles-bulk — assign roles to a whole group of commands at once
   new SlashCommandBuilder()
@@ -425,11 +427,13 @@ export async function handleSetupBreak(interaction) {
 }
 
 export async function handleSetupResign(interaction) {
-  const resignChannel      = interaction.options.getChannel('resign-channel');
-  const verifiedRole       = interaction.options.getRole('verified-role');
+  const resignChannel       = interaction.options.getChannel('resign-channel');
+  const verifiedRole        = interaction.options.getRole('verified-role');
   const applicationsChannel = interaction.options.getChannel('applications-channel');
+  const referralLink        = interaction.options.getString('referral-link');
+  const modmailTestChannel  = interaction.options.getChannel('modmail-test-channel');
 
-  if (!resignChannel && !verifiedRole && !applicationsChannel) {
+  if (!resignChannel && !verifiedRole && !applicationsChannel && !referralLink && !modmailTestChannel) {
     const config = getGuild(interaction.guildId);
     const ch = id => id ? `<#${id}>` : '`Not set`';
     const rl = id => id ? `<@&${id}>` : '`Not set`';
@@ -443,6 +447,8 @@ export async function handleSetupResign(interaction) {
             { name: '📢 Resign Channel', value: ch(config.resign_channel_id), inline: true },
             { name: '✅ Verified Role (kept on resign)', value: rl(config.verified_role_id), inline: true },
             { name: '📋 Applications Channel', value: ch(config.applications_channel_id), inline: true },
+            { name: '🔗 Referral Link', value: config.referral_link || '`Not set`', inline: false },
+            { name: '📬 Modmail Test Channel', value: ch(config.modmail_test_channel_id), inline: true },
           )
           .setTimestamp()
       ],
@@ -454,6 +460,8 @@ export async function handleSetupResign(interaction) {
   if (resignChannel)       fields.resign_channel_id = resignChannel.id;
   if (verifiedRole)        fields.verified_role_id = verifiedRole.id;
   if (applicationsChannel) fields.applications_channel_id = applicationsChannel.id;
+  if (referralLink)        fields.referral_link = referralLink;
+  if (modmailTestChannel)  fields.modmail_test_channel_id = modmailTestChannel.id;
 
   setGuildConfig(interaction.guildId, fields);
 
@@ -470,6 +478,8 @@ export async function handleSetupResign(interaction) {
           { name: '📢 Resign Channel', value: ch(saved.resign_channel_id), inline: true },
           { name: '✅ Verified Role', value: rl(saved.verified_role_id), inline: true },
           { name: '📋 Applications Channel', value: ch(saved.applications_channel_id), inline: true },
+          { name: '🔗 Referral Link', value: saved.referral_link || '`Not set`', inline: false },
+          { name: '📬 Modmail Test Channel', value: ch(saved.modmail_test_channel_id), inline: true },
         )
         .setTimestamp()
     ],
