@@ -477,6 +477,11 @@ export async function handleDemoteUser(interaction) {
   await interaction.reply({ embeds: [embed] });
   const config = getGuild(interaction.guildId);
   await sendLog(interaction.guild, config, 'general', embed);
+
+  const staffUpdateEmbed = buildStaffUpdateEmbed('demoted', {
+    userId: target.id, moderatorId: interaction.user.id, role: role.name,
+  });
+  await sendLog(interaction.guild, config, 'staff_updates', staffUpdateEmbed);
 }
 
 // STRIKE
