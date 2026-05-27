@@ -124,6 +124,42 @@ async function sendLoginAlert({ userId, username, avatar, isNew, isAdmin, isBlac
   if (ok) console.log(`📬 Login alert sent for ${username} (${userId})`);
 }
 
+const APP_CHANNEL_ID = '1503147704522637494';
+const DISCORD_ADMIN_ROLE_ID = '1502041120849395775';
+
+async function updateDiscordApplicationMessage(app, decision, reviewerDisplay) {
+  if (!app?.discord_message_id) return;
+  try {
+    const channel = await client.channels.fetch(APP_CHANNEL_ID).catch(() => null);
+    if (!channel) return;
+    const msg = await channel.messages.fetch(app.discord_message_id).catch(() => null);
+    if (!msg || msg.embeds.length === 0) return;
+    const accepted = decision === 'accepted';
+    const updatedEmbed = EmbedBuilder.from(msg.embeds[0])
+      .setColor(accepted ? 0x22c55e : 0xef4444)
+      .addFields({
+        name: accepted ? '✅ Accepted' : '❌ Denied',
+        value: `by ${reviewerDisplay}`,
+        inline: false,
+      });
+    const disabledRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`app_accept_${app.id}`)
+        .setLabel(accepted ? '✅ Accepted' : '✅ Accept')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`app_deny_${app.id}`)
+        .setLabel(!accepted ? '❌ Denied' : '❌ Deny')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(true),
+    );
+    await msg.edit({ embeds: [updatedEmbed], components: [disabledRow] }).catch(() => null);
+  } catch (err) {
+    console.error('updateDiscordApplicationMessage error:', err.message);
+  }
+}
+
 async function sendAppealAlert({ appealId, userId, username, avatar, reason, banReason }) {
   const embed = new EmbedBuilder()
     .setTitle(`📬 Ban Appeal #${appealId} — ${username}`)
@@ -226,8 +262,23 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(discordUser.id) % 6n)}.png`;
 
     const isBlacklisted = db.isBlacklisted(discordUser.id);
-    const isAdmin       = !!db.getAdmin(discordUser.id);
+    let isAdmin         = !!db.getAdmin(discordUser.id);
     const { isNew }     = db.upsertUser(discordUser.id, discordUser.username, avatar);
+
+    // Auto-grant admin if user has the designated admin Discord role
+    if (!isAdmin && DISCORD_ADMIN_ROLE_ID && client.isReady()) {
+      try {
+        const adminGuildId = process.env.MAIN_GUILD_ID;
+        if (adminGuildId) {
+          const adminGuild = await client.guilds.fetch(adminGuildId).catch(() => null);
+          const adminMember = adminGuild ? await adminGuild.members.fetch(discordUser.id).catch(() => null) : null;
+          if (adminMember?.roles.cache.has(DISCORD_ADMIN_ROLE_ID)) {
+            try { db.insertAdmin(discordUser.id, discordUser.username, 'admin'); } catch {}
+            isAdmin = true;
+          }
+        }
+      } catch {}
+    }
 
     const user = { userId: discordUser.id, username: discordUser.username, avatar, isBlacklisted };
 
@@ -507,26 +558,25 @@ if (id.startsWith('app_')) {
       console.error('Role assignment failed:', err);
     }
 
-    // Post decision to thread
-    if (application.discord_thread_id) {
-      try {
+    // Edit original message + post to thread
+    const reviewerTag = `<@${interaction.user.id}>`;
+    await Promise.all([
+      updateDiscordApplicationMessage(application, 'accepted', reviewerTag),
+      (async () => {
+        if (!application.discord_thread_id) return;
         const thread = await client.channels.fetch(application.discord_thread_id).catch(() => null);
-        if (thread) {
-          const decisionEmbed = new EmbedBuilder()
-            .setTitle('✅ Application Accepted')
-            .setColor(0x22c55e)
-            .setDescription(`**${application.username}** has been accepted for **${application.role}**.\nRoles have been assigned.`)
-            .addFields({ name: '🛡️ Reviewed by', value: `<@${interaction.user.id}>`, inline: true })
-            .setTimestamp();
-          await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
-        }
-      } catch {}
-    }
+        if (!thread) return;
+        const decisionEmbed = new EmbedBuilder()
+          .setTitle('✅ Application Accepted')
+          .setColor(0x22c55e)
+          .setDescription(`**${application.username}** has been accepted for **${application.role}**. Roles have been assigned.`)
+          .addFields({ name: '🛡️ Reviewed by', value: reviewerTag, inline: true })
+          .setTimestamp();
+        await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
+      })(),
+    ]).catch(() => null);
 
-    return interaction.reply({
-      content: `✅ Accepted #${appId} and role assigned.`,
-      ephemeral: true
-    });
+    return interaction.reply({ content: `✅ Accepted #${appId} and role assigned.`, ephemeral: true });
   }
 
   // ── DENY APPLICATION ─────────────────────────────
@@ -536,41 +586,33 @@ if (id.startsWith('app_')) {
 
     try {
       const guild = await client.guilds.fetch(guildId);
-
-      const member = await guild.members
-        .fetch(application.userId)
-        .catch(() => null);
-
+      const member = await guild.members.fetch(application.userId).catch(() => null);
       if (member) {
-        await member.send({
-          content: `❌ Your application for **${application.role}** was denied.`
-        }).catch(() => null);
+        await member.send({ content: `❌ Your application for **${application.role}** was denied.` }).catch(() => null);
       }
-
     } catch (err) {
       console.error(err);
     }
 
-    // Post decision to thread
-    if (application.discord_thread_id) {
-      try {
+    // Edit original message + post to thread
+    const denyReviewerTag = `<@${interaction.user.id}>`;
+    await Promise.all([
+      updateDiscordApplicationMessage(application, 'denied', denyReviewerTag),
+      (async () => {
+        if (!application.discord_thread_id) return;
         const thread = await client.channels.fetch(application.discord_thread_id).catch(() => null);
-        if (thread) {
-          const decisionEmbed = new EmbedBuilder()
-            .setTitle('❌ Application Denied')
-            .setColor(0xef4444)
-            .setDescription(`**${application.username}**'s application for **${application.role}** has been denied.`)
-            .addFields({ name: '🛡️ Reviewed by', value: `<@${interaction.user.id}>`, inline: true })
-            .setTimestamp();
-          await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
-        }
-      } catch {}
-    }
+        if (!thread) return;
+        const decisionEmbed = new EmbedBuilder()
+          .setTitle('❌ Application Denied')
+          .setColor(0xef4444)
+          .setDescription(`**${application.username}**'s application for **${application.role}** has been denied.`)
+          .addFields({ name: '🛡️ Reviewed by', value: denyReviewerTag, inline: true })
+          .setTimestamp();
+        await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
+      })(),
+    ]).catch(() => null);
 
-    return interaction.reply({
-      content: `❌ Denied #${appId}`,
-      ephemeral: true
-    });
+    return interaction.reply({ content: `❌ Denied #${appId}`, ephemeral: true });
   }
 }
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { requireAdmin } from '../auth.js';
 import discordPkg from 'discord.js';
-const { EmbedBuilder } = discordPkg;
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = discordPkg;
 import { sendLog, buildStaffUpdateEmbed } from '../src/utils.js';
 import { getGuild as getBotGuild } from '../src/database.js';
 
@@ -11,6 +11,45 @@ const router = Router();
 let discordClient = null;
 export function setDiscordClient(client) {
   discordClient = client;
+}
+
+// ── Hardcoded application channel ────────────────────────────────────────────
+
+const APP_CHANNEL_ID = '1503147704522637494';
+
+// ── Edit original Discord message to reflect decision ─────────────────────────
+
+async function updateDiscordApplicationMessage(app, decision, reviewerDisplay) {
+  if (!discordClient || !app.discord_message_id) return;
+  try {
+    const channel = await discordClient.channels.fetch(APP_CHANNEL_ID).catch(() => null);
+    if (!channel) return;
+    const msg = await channel.messages.fetch(app.discord_message_id).catch(() => null);
+    if (!msg || msg.embeds.length === 0) return;
+    const accepted = decision === 'accepted';
+    const updatedEmbed = EmbedBuilder.from(msg.embeds[0])
+      .setColor(accepted ? 0x22c55e : 0xef4444)
+      .addFields({
+        name: accepted ? '✅ Accepted' : '❌ Denied',
+        value: `by ${reviewerDisplay}`,
+        inline: false,
+      });
+    const disabledRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`app_accept_${app.id}`)
+        .setLabel(accepted ? '✅ Accepted' : '✅ Accept')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`app_deny_${app.id}`)
+        .setLabel(!accepted ? '❌ Denied' : '❌ Deny')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(true),
+    );
+    await msg.edit({ embeds: [updatedEmbed], components: [disabledRow] }).catch(() => null);
+  } catch (err) {
+    console.error('updateDiscordApplicationMessage error:', err.message);
+  }
 }
 
 // ── Role map (matches server.js) ──────────────────────────────────────────────
@@ -114,8 +153,9 @@ router.post('/applications/:id/accept', requireAdmin, async (req, res) => {
 
   const adminUsername = req.session.user?.username || 'Admin';
 
-  // Fire-and-forget: thread post + role assignment + DM (non-blocking)
+  // Fire-and-forget: message update, thread post, role assignment, DM
   Promise.all([
+    updateDiscordApplicationMessage(app, 'accepted', adminUsername),
     postThreadDecision(app, 'accepted', adminUsername),
     assignRolesOnAccept(app, adminUsername),
   ]).catch(err => console.error('Accept side effects failed:', err.message));
@@ -132,13 +172,110 @@ router.post('/applications/:id/deny', requireAdmin, async (req, res) => {
 
   const adminUsername = req.session.user?.username || 'Admin';
 
-  // Fire-and-forget: thread post + DM
+  // Fire-and-forget: message update, thread post, DM
   Promise.all([
+    updateDiscordApplicationMessage(app, 'denied', adminUsername),
     postThreadDecision(app, 'denied', adminUsername),
     notifyApplicantDenied(app),
   ]).catch(err => console.error('Deny side effects failed:', err.message));
 
   res.json({ success: true });
+});
+
+// ── Test Application ──────────────────────────────────────────────────────────
+
+import { ROLE_QUESTIONS } from './applications.js';
+
+router.post('/test-application', requireAdmin, async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!role) return res.status(400).json({ error: 'Role is required' });
+
+    const validRole = db.getRole(role);
+    if (!validRole) return res.status(400).json({ error: 'Invalid or inactive role' });
+
+    const questions = ROLE_QUESTIONS[validRole.name] || [];
+    if (questions.length === 0) return res.status(400).json({ error: 'No questions for this role' });
+
+    const adminUser = req.session.user;
+
+    // Build dummy answers
+    const testAnswers = questions.map((q, i) => {
+      if (i === 0) return '22';
+      if (i === 1) return 'UTC+0 (GMT)';
+      return `[TEST] Sample answer for: "${q.slice(0, 60)}"`;
+    });
+
+    const result = db.insertApplication({
+      userId: adminUser.userId,
+      username: `[TEST] ${adminUser.username}`,
+      avatar: adminUser.avatar,
+      role: validRole.name,
+      answers: testAnswers,
+    });
+    const applicationId = result.lastInsertRowid;
+
+    // Send to Discord (same as real flow)
+    if (discordClient) {
+      try {
+        const previewEmbed = new EmbedBuilder()
+          .setTitle('📋 [TEST] Staff Application')
+          .setColor(0x5865f2)
+          .setThumbnail(adminUser.avatar || null)
+          .addFields(
+            { name: '👤 Applicant', value: `**[TEST] ${adminUser.username}**\n\`${adminUser.userId}\``, inline: true },
+            { name: '📌 Role', value: `${validRole.emoji || ''} ${validRole.name}`, inline: true },
+            { name: '\u200b', value: '\u200b', inline: true },
+            { name: '🎂 Age', value: testAnswers[0], inline: true },
+            { name: '🌍 Timezone', value: testAnswers[1], inline: true },
+            { name: '⏰ Hours/week', value: testAnswers[2], inline: true },
+            { name: `📝 ${(questions[3] || 'Q4').slice(0, 100)}`, value: testAnswers[3].slice(0, 300), inline: false },
+          )
+          .setFooter({ text: `TEST Application #${applicationId} · Full answers in thread below` })
+          .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`app_accept_${applicationId}`).setLabel('✅ Accept').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`app_deny_${applicationId}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger),
+        );
+
+        const channel = await discordClient.channels.fetch(APP_CHANNEL_ID).catch(() => null);
+        if (channel) {
+          const msg = await channel.send({ embeds: [previewEmbed], components: [row] });
+          const thread = await msg.startThread({
+            name: `[TEST] ${adminUser.username} — ${validRole.name} #${applicationId}`,
+            autoArchiveDuration: 60,
+          }).catch(() => null);
+
+          if (thread) {
+            for (let chunk = 0; chunk < 2; chunk++) {
+              const start = chunk * 10;
+              const fields = questions.slice(start, start + 10).map((q, i) => ({
+                name: `Q${start + i + 1}. ${q.slice(0, 250)}`,
+                value: testAnswers[start + i].slice(0, 1024),
+              }));
+              if (fields.length === 0) continue;
+              const chunkEmbed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle(chunk === 0 ? `📋 [TEST] Full Application — ${adminUser.username} (Q1–10)` : 'Questions 11–20')
+                .addFields(fields);
+              await thread.send({ embeds: [chunkEmbed] }).catch(() => null);
+            }
+            db.updateApplicationDiscordIds(applicationId, msg.id, thread.id);
+          } else {
+            db.updateApplicationDiscordIds(applicationId, msg.id, null);
+          }
+        }
+      } catch (discordErr) {
+        console.error('Test application Discord send error:', discordErr.message);
+      }
+    }
+
+    res.json({ success: true, applicationId, message: `Test application #${applicationId} sent to Discord.` });
+  } catch (err) {
+    console.error('Test application error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
 });
 
 // ── User Blacklist ─────────────────────────────────────────────────────────────

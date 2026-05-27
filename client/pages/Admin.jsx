@@ -45,8 +45,50 @@ function ApplicationsTab() {
 
   const fmt = ts => new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+  const [testRole, setTestRole] = useState('');
+  const [testRoles, setTestRoles] = useState([]);
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/roles').then(r => r.json()).then(d => setTestRoles(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+
+  async function sendTestApp(e) {
+    e.preventDefault();
+    if (!testRole) return setTestResult({ error: 'Select a role first.' });
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      const res = await api('/api/admin/test-application', { method: 'POST', body: JSON.stringify({ role: testRole }) });
+      const data = await res.json();
+      if (!res.ok) setTestResult({ error: data.error || 'Failed' });
+      else { setTestResult({ success: data.message }); load(); }
+    } catch { setTestResult({ error: 'Network error.' }); }
+    setTestLoading(false);
+  }
+
   return (
     <div>
+      {/* Test Application Panel */}
+      <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>🧪 Test Application</div>
+        <form onSubmit={sendTestApp} style={{ display: 'flex', gap: 10, flex: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select className="form-input" style={{ flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 13 }} value={testRole} onChange={e => { setTestRole(e.target.value); setTestResult(null); }}>
+            <option value="">Pick a role…</option>
+            {testRoles.map(r => <option key={r.id} value={r.name}>{r.emoji} {r.name}</option>)}
+          </select>
+          <button className="btn btn-primary btn-sm" type="submit" disabled={testLoading} style={{ flexShrink: 0 }}>
+            {testLoading ? <div className="spinner" style={{ width: 14, height: 14 }} /> : 'Send Test'}
+          </button>
+        </form>
+        {testResult && (
+          testResult.error
+            ? <div style={{ color: 'var(--danger)', fontSize: 13, width: '100%' }}>❌ {testResult.error}</div>
+            : <div style={{ color: 'var(--success)', fontSize: 13, width: '100%' }}>✅ {testResult.success}</div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div className="tabs">
           {['pending', 'accepted', 'denied'].map(s => (
