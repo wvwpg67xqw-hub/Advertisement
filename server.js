@@ -26,7 +26,8 @@ import {
   handleBanRequest, handleBlacklistRequest, handleNetworkBanRequest,
   handlePartnershipRequest, handleMessages, handleMessageLeaderboard,
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
-  handleBreak, handleBreakEnd, handleResetMessages, handleResetMessagesAll,
+  handleBreakRequest, handleBreakEnd, handleManageBreak,
+  handleResetMessages, handleResetMessagesAll,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
 } from './src/commands.js';
 
@@ -395,7 +396,7 @@ const botHandlers = {
   'network-ban-request': handleNetworkBanRequest, 'partnership-request': handlePartnershipRequest,
   messages: handleMessages, 'message-leaderboard': handleMessageLeaderboard,
   'case-info': handleCaseInfo, balance: handleBalance, snipe: handleSnipe,
-  'current-breaks': handleCurrentBreaks, break: handleBreak, 'break-end': handleBreakEnd,
+  'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll,
 };
 
@@ -499,67 +500,61 @@ client.on('interactionCreate', async (interaction) => {
 
       // ── Break Request: Approve ─────────────────────────────────────────────
       if (id.startsWith('break_req_approve_')) {
-        const targetUserId = id.slice(18);
-        const { getGuild } = await import('./src/database.js');
-        const { startBreak, isOnBreak } = await import('./src/database.js');
+        // ID format: break_req_approve_USERID_DAYS
+        const rest = id.slice(18);
+        const lastUnderscore = rest.lastIndexOf('_');
+        const targetUserId = lastUnderscore > 0 ? rest.slice(0, lastUnderscore) : rest;
+        const days = lastUnderscore > 0 ? parseInt(rest.slice(lastUnderscore + 1)) || 1 : 1;
 
-        if (isOnBreak(interaction.guildId, targetUserId)) {
+        const { getGuild: getBG, startBreak: sbk, isOnBreak: iob } = await import('./src/database.js');
+
+        if (iob(interaction.guildId, targetUserId)) {
           return interaction.reply({ content: '⚠️ That staff member is already on break.', flags: 64 });
         }
 
-        const config = getGuild(interaction.guildId);
-
-        // Fetch member in staff server
+        const config = getBG(interaction.guildId);
         const staffGuild = interaction.guild;
         let member = null;
         try { member = await staffGuild.members.fetch(targetUserId); } catch {}
 
-        // Collect and remove all manageable roles (save them for restoration)
         let savedRoles = [];
         if (member) {
           savedRoles = member.roles.cache
             .filter(r => r.id !== staffGuild.id && !r.managed)
             .map(r => r.id);
-
-          // Remove all staff roles
           await member.roles.remove(savedRoles).catch(e => console.error('Break: role removal failed:', e.message));
-
-          // Apply break role in staff server
           if (config.break_role_id) {
             await member.roles.add(config.break_role_id).catch(e => console.error('Break: break role add failed:', e.message));
           }
         }
 
-        // Apply break role in main server
         const mainGuildId = process.env.MAIN_GUILD_ID;
         if (mainGuildId && config.main_break_role_id) {
           try {
             const mainGuild = client.guilds.cache.get(mainGuildId) || await client.guilds.fetch(mainGuildId).catch(() => null);
             if (mainGuild) {
               const mainMember = await mainGuild.members.fetch(targetUserId).catch(() => null);
-              if (mainMember) await mainMember.roles.add(config.main_break_role_id).catch(e => console.error('Break: main server role add failed:', e.message));
+              if (mainMember) await mainMember.roles.add(config.main_break_role_id).catch(() => null);
             }
-          } catch (e) { console.error('Break: main guild fetch failed:', e.message); }
+          } catch {}
         }
 
-        // Record the break
-        const { EmbedBuilder: EB2 } = discordPkg;
+        const endAt = Math.floor(Date.now() / 1000) + days * 86400;
         const username = member?.user?.tag || targetUserId;
-        startBreak(interaction.guildId, targetUserId, username, null, savedRoles);
+        sbk(interaction.guildId, targetUserId, username, null, savedRoles, endAt);
 
-        // Update the request message
+        const { EmbedBuilder: EB2 } = discordPkg;
         const approvedEmbed = EB2.from(interaction.message.embeds[0])
           .setColor(0x22c55e)
-          .addFields({ name: '✅ Approved', value: `by ${interaction.user.tag}`, inline: false });
+          .addFields({ name: '✅ Approved', value: `by ${interaction.user.tag} — ends <t:${endAt}:F>`, inline: false });
 
         const disabledRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`break_req_approve_${targetUserId}`).setLabel('✅ Approved').setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId(`break_req_approve_${targetUserId}_${days}`).setLabel('✅ Approved').setStyle(ButtonStyle.Success).setDisabled(true),
           new ButtonBuilder().setCustomId(`break_req_deny_${targetUserId}`).setLabel('❌ Deny Break').setStyle(ButtonStyle.Danger).setDisabled(true),
         );
 
         await interaction.update({ embeds: [approvedEmbed], components: [disabledRow] });
 
-        // DM the staff member
         try {
           const targetUser = member?.user || await client.users.fetch(targetUserId).catch(() => null);
           if (targetUser) {
@@ -567,7 +562,7 @@ client.on('interactionCreate', async (interaction) => {
               embeds: [new EB2()
                 .setColor(0x22c55e)
                 .setTitle('☕ Break Approved')
-                .setDescription(`Your break request has been approved by **${interaction.user.tag}**.\n\nUse \`/break-end\` when you are ready to come back. Your roles will be restored automatically.`)
+                .setDescription(`Your break request has been approved by **${interaction.user.tag}**.\n\n**Duration:** ${days} day${days !== 1 ? 's' : ''}\n**Ends:** <t:${endAt}:F>\n\nYour roles have been saved. Use \`/break-end\` to return early, or they will be restored automatically when your break ends.`)
                 .setTimestamp()
               ]
             }).catch(() => null);
@@ -587,13 +582,12 @@ client.on('interactionCreate', async (interaction) => {
           .addFields({ name: '❌ Denied', value: `by ${interaction.user.tag}`, inline: false });
 
         const disabledRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`break_req_approve_${targetUserId}`).setLabel('✅ Approve Break').setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId(`break_req_approve_${targetUserId}_1`).setLabel('✅ Approve Break').setStyle(ButtonStyle.Success).setDisabled(true),
           new ButtonBuilder().setCustomId(`break_req_deny_${targetUserId}`).setLabel('❌ Denied').setStyle(ButtonStyle.Danger).setDisabled(true),
         );
 
         await interaction.update({ embeds: [deniedEmbed], components: [disabledRow] });
 
-        // DM the staff member
         try {
           const targetUser = await client.users.fetch(targetUserId).catch(() => null);
           if (targetUser) {
@@ -740,6 +734,77 @@ if (id.startsWith('app_')) {
 
     } // end isButton()
 
+    // ── Break Request Modal Submit ─────────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('break_request_modal_')) {
+      const guildId = interaction.customId.slice(20);
+      const daysRaw = interaction.fields.getTextInputValue('break_days').trim();
+      const reason  = interaction.fields.getTextInputValue('break_reason').trim() || null;
+      const days    = parseInt(daysRaw);
+
+      if (!days || days < 1 || days > 365 || isNaN(days)) {
+        return interaction.reply({ content: '❌ Please enter a valid number of days (1–365).', flags: 64 });
+      }
+
+      const { getGuild: getBGM, isOnBreak: iobM } = await import('./src/database.js');
+
+      if (iobM(guildId, interaction.user.id)) {
+        return interaction.reply({ content: '❌ You are already on break. Use `/break-end` to end it first.', flags: 64 });
+      }
+
+      const config = getBGM(guildId);
+      if (!config.break_request_channel_id) {
+        return interaction.reply({ content: '❌ No break request channel is configured. Ask an admin to run `/setup-break`.', flags: 64 });
+      }
+
+      const channel = interaction.guild?.channels?.cache.get(config.break_request_channel_id)
+        || await interaction.client.channels.fetch(config.break_request_channel_id).catch(() => null);
+
+      if (!channel) {
+        return interaction.reply({ content: '❌ The configured break request channel could not be found.', flags: 64 });
+      }
+
+      const endPreview = Math.floor(Date.now() / 1000) + days * 86400;
+
+      const reqEmbed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle('☕ Break Request')
+        .setDescription(`**${interaction.user.tag}** is requesting a break.`)
+        .addFields(
+          { name: '👤 Staff Member', value: `<@${interaction.user.id}> (\`${interaction.user.id}\`)`, inline: true },
+          { name: '📅 Duration', value: `${days} day${days !== 1 ? 's' : ''}`, inline: true },
+          { name: '🔚 Would End', value: `<t:${endPreview}:F>`, inline: true },
+          { name: '📝 Reason', value: reason || 'No reason provided', inline: false },
+          { name: '🕒 Requested', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+        )
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .setTimestamp()
+        .setFooter({ text: 'Approve or deny this break request below' });
+
+      const reqRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`break_req_approve_${interaction.user.id}_${days}`)
+          .setLabel('✅ Approve Break')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`break_req_deny_${interaction.user.id}`)
+          .setLabel('❌ Deny Break')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await channel.send({ embeds: [reqEmbed], components: [reqRow] });
+
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xFFA500)
+            .setTitle('☕ Break Request Sent')
+            .setDescription(`Your request for **${days} day${days !== 1 ? 's' : ''}** has been sent to <#${config.break_request_channel_id}> for approval.${reason ? `\n**Reason:** ${reason}` : ''}`)
+            .setTimestamp()
+        ],
+        flags: 64,
+      });
+    }
+
     if (interaction.isCommand()) {
       const name = interaction.commandName;
       const handler = botHandlers[name];
@@ -785,6 +850,63 @@ client.once('clientReady', async () => {
     }
   }
 });
+
+// ── Break Auto-Expiry ─────────────────────────────────────────────────────────
+
+async function processExpiredBreaks() {
+  try {
+    const { getExpiredBreaks, endBreak: ebAuto, getGuild: gbAuto } = await import('./src/database.js');
+    const expired = getExpiredBreaks();
+    for (const b of expired) {
+      try {
+        const entry = ebAuto(b.guild_id, b.user_id);
+        if (!entry) continue;
+
+        const config = gbAuto(b.guild_id);
+        const guild  = client.guilds.cache.get(b.guild_id);
+
+        if (guild) {
+          const member = await guild.members.fetch(b.user_id).catch(() => null);
+          if (member) {
+            if (config.break_role_id) await member.roles.remove(config.break_role_id).catch(() => null);
+            for (const roleId of (entry.saved_roles || [])) {
+              await member.roles.add(roleId).catch(() => null);
+            }
+          }
+        }
+
+        const mainGuildId = process.env.MAIN_GUILD_ID;
+        if (mainGuildId && config.main_break_role_id) {
+          const mainGuild = client.guilds.cache.get(mainGuildId);
+          if (mainGuild) {
+            const mainMember = await mainGuild.members.fetch(b.user_id).catch(() => null);
+            if (mainMember) await mainMember.roles.remove(config.main_break_role_id).catch(() => null);
+          }
+        }
+
+        try {
+          const user = await client.users.fetch(b.user_id).catch(() => null);
+          if (user) {
+            await user.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle('✅ Break Ended')
+                .setDescription('Your break has ended and your roles have been automatically restored. Welcome back!')
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        console.log(`☕ Auto-ended break for ${b.username} (${b.user_id})`);
+      } catch (err) {
+        console.error('Break auto-expiry error:', err.message);
+      }
+    }
+  } catch {}
+}
+
+setInterval(processExpiredBreaks, 60 * 1000);
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 

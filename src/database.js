@@ -255,12 +255,27 @@ export function setBalance(guildId, userId, amount) {
 
 // ─── Breaks ───────────────────────────────────────────────────────────────────
 
-export function startBreak(guildId, userId, username, reason, savedRoles = []) {
+export function startBreak(guildId, userId, username, reason, savedRoles = [], endAt = null) {
   const rows = readCol('breaks');
   if (rows.find(r => r.guild_id === guildId && r.user_id === userId)) return false;
-  rows.push({ id: nextId('breaks'), guild_id: guildId, user_id: userId, username, reason: reason ?? null, started_at: ts(), saved_roles: savedRoles });
+  rows.push({ id: nextId('breaks'), guild_id: guildId, user_id: userId, username, reason: reason ?? null, started_at: ts(), end_at: endAt, saved_roles: savedRoles });
   writeCol('breaks', rows);
   return true;
+}
+
+export function extendBreak(guildId, userId, extraSeconds) {
+  const rows = readCol('breaks');
+  const i = rows.findIndex(r => r.guild_id === guildId && r.user_id === userId);
+  if (i < 0) return null;
+  const current = rows[i].end_at ?? Math.floor(Date.now() / 1000);
+  rows[i].end_at = current + extraSeconds;
+  writeCol('breaks', rows);
+  return rows[i];
+}
+
+export function getExpiredBreaks() {
+  const now = Math.floor(Date.now() / 1000);
+  return readCol('breaks').filter(r => r.end_at && r.end_at <= now);
 }
 
 export function endBreak(guildId, userId) {

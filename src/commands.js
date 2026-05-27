@@ -1,5 +1,5 @@
 import pkg from 'discord.js';
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = pkg;
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = pkg;
 import {
   addWarn, getWarns, getWarnCount, getWarnLeaderboard,
   addAdWarn, getAdWarns, removeAdWarn, getAdWarnCountByModerator,
@@ -7,7 +7,7 @@ import {
   jailUser, unjailUser, isJailed,
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
   getSnipeCache, getBalance, setBalance,
-  startBreak, endBreak, getCurrentBreaks, isOnBreak,
+  startBreak, endBreak, extendBreak, getCurrentBreaks, isOnBreak,
   getCaseInfo, getGuild, getNetworkMembers,
   addBlacklist,
 } from './database.js';
@@ -195,13 +195,28 @@ export const commandDefs = [
     .setDescription('List all staff currently on break'),
 
   new SlashCommandBuilder()
-    .setName('break')
-    .setDescription('Mark yourself as on break')
-    .addStringOption(o => o.setName('reason').setDescription('Reason for break')),
+    .setName('break-request')
+    .setDescription('Submit a break request — a form will open asking for duration and reason'),
 
   new SlashCommandBuilder()
     .setName('break-end')
     .setDescription('End your current break'),
+
+  new SlashCommandBuilder()
+    .setName('manage-break')
+    .setDescription('End or extend a staff member\'s break')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .addStringOption(o =>
+      o.setName('action').setDescription('What to do').setRequired(true)
+        .addChoices(
+          { name: 'end — end their break immediately', value: 'end' },
+          { name: 'extend — add more days to their break', value: 'extend' },
+        )
+    )
+    .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true))
+    .addIntegerOption(o =>
+      o.setName('days').setDescription('Days to add (required for extend)').setMinValue(1).setMaxValue(365)
+    ),
 
   new SlashCommandBuilder()
     .setName('reset-messages')
@@ -918,69 +933,129 @@ export async function handleCurrentBreaks(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0xFFA500)
     .setTitle('☕ Staff On Break')
-    .setDescription(breaks.map(b =>
-      `**${b.username}** — ${b.reason || 'No reason'}\n*Started <t:${b.started_at}:R>*`
-    ).join('\n\n'))
+    .setDescription(breaks.map(b => {
+      const endLine = b.end_at ? `\nEnds <t:${b.end_at}:R>` : '';
+      return `**${b.username}** — ${b.reason || 'No reason'}\n*Started <t:${b.started_at}:R>*${endLine}`;
+    }).join('\n\n'))
     .setTimestamp();
   await interaction.reply({ embeds: [embed] });
 }
 
-// BREAK
-export async function handleBreak(interaction) {
-  const reason = interaction.options.getString('reason');
-
+// BREAK REQUEST — opens a modal form
+export async function handleBreakRequest(interaction) {
   if (isOnBreak(interaction.guildId, interaction.user.id)) {
     return interaction.reply({ content: '❌ You are already on break. Use `/break-end` to end it first.', flags: 64 });
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId(`break_request_modal_${interaction.guildId}`)
+    .setTitle('☕ Break Request');
+
+  const daysInput = new TextInputBuilder()
+    .setCustomId('break_days')
+    .setLabel('How many days do you need off?')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('e.g. 3')
+    .setRequired(true)
+    .setMinLength(1)
+    .setMaxLength(3);
+
+  const reasonInput = new TextInputBuilder()
+    .setCustomId('break_reason')
+    .setLabel('Reason (optional)')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(500);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(daysInput),
+    new ActionRowBuilder().addComponents(reasonInput),
+  );
+
+  await interaction.showModal(modal);
+}
+
+// MANAGE BREAK
+export async function handleManageBreak(interaction) {
+  const action = interaction.options.getString('action');
+  const target = interaction.options.getUser('user');
+  const days   = interaction.options.getInteger('days');
+
+  if (!isOnBreak(interaction.guildId, target.id)) {
+    return interaction.reply({ content: `❌ **${target.tag}** is not currently on break.`, flags: 64 });
   }
 
   const { getGuild } = await import('./database.js');
   const config = getGuild(interaction.guildId);
 
-  if (!config.break_request_channel_id) {
-    return interaction.reply({ content: '❌ No break request channel has been configured. Ask an admin to run `/setup` with `break-request-channel`.', flags: 64 });
-  }
+  if (action === 'end') {
+    const entry = endBreak(interaction.guildId, target.id);
+    if (!entry) return interaction.reply({ content: '❌ Could not find that break record.', flags: 64 });
 
-  const channel = await safeFetchChannel(interaction.guild, config.break_request_channel_id);
-  if (!channel) {
-    return interaction.reply({ content: '❌ The configured break request channel could not be found.', flags: 64 });
-  }
+    const member = await safeFetchMember(interaction.guild, target.id);
+    if (member) {
+      if (config.break_role_id) await member.roles.remove(config.break_role_id).catch(() => null);
+      for (const roleId of (entry.saved_roles || [])) {
+        await member.roles.add(roleId).catch(() => null);
+      }
+    }
 
-  const embed = new EmbedBuilder()
-    .setColor(0xFFA500)
-    .setTitle('☕ Break Request')
-    .setDescription(`**${interaction.user.tag}** is requesting a break.`)
-    .addFields(
-      { name: '👤 Staff Member', value: `<@${interaction.user.id}> (\`${interaction.user.id}\`)`, inline: true },
-      { name: '📝 Reason', value: reason || 'No reason provided', inline: false },
-      { name: '🕒 Requested', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
-    )
-    .setThumbnail(interaction.user.displayAvatarURL())
-    .setTimestamp()
-    .setFooter({ text: 'Approve or deny this break request below' });
+    const mainGuildId = process.env.MAIN_GUILD_ID;
+    if (mainGuildId && config.main_break_role_id) {
+      const mainGuild = interaction.client.guilds.cache.get(mainGuildId);
+      if (mainGuild) {
+        const mainMember = await mainGuild.members.fetch(target.id).catch(() => null);
+        if (mainMember) await mainMember.roles.remove(config.main_break_role_id).catch(() => null);
+      }
+    }
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`break_req_approve_${interaction.user.id}`)
-      .setLabel('✅ Approve Break')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`break_req_deny_${interaction.user.id}`)
-      .setLabel('❌ Deny Break')
-      .setStyle(ButtonStyle.Danger),
-  );
+    try {
+      await target.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0xef4444)
+          .setTitle('☕ Break Ended Early')
+          .setDescription(`Your break was ended early by **${interaction.user.tag}**. Your roles have been restored.`)
+          .setTimestamp()
+        ]
+      }).catch(() => null);
+    } catch {}
 
-  await channel.send({ embeds: [embed], components: [row] });
-
-  await interaction.reply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(0xFFA500)
-        .setTitle('☕ Break Request Sent')
-        .setDescription(`Your break request has been sent to <#${config.break_request_channel_id}> for approval.${reason ? `\n**Reason:** ${reason}` : ''}`)
+    const duration = Math.floor(Date.now() / 1000) - entry.started_at;
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Break Ended')
+        .setDescription(`**${target.tag}**'s break has been ended.\nDuration: **${formatDuration(duration)}**`)
         .setTimestamp()
-    ],
-    flags: 64,
-  });
+      ]
+    });
+  }
+
+  if (action === 'extend') {
+    if (!days) return interaction.reply({ content: '❌ You must provide the number of days to extend.', flags: 64 });
+    const updated = extendBreak(interaction.guildId, target.id, days * 86400);
+    if (!updated) return interaction.reply({ content: '❌ Could not find that break record.', flags: 64 });
+
+    try {
+      await target.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0xFFA500)
+          .setTitle('☕ Break Extended')
+          .setDescription(`Your break has been extended by **${days} day${days !== 1 ? 's' : ''}** by **${interaction.user.tag}**.\nNew end: <t:${updated.end_at}:F>`)
+          .setTimestamp()
+        ]
+      }).catch(() => null);
+    } catch {}
+
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Break Extended')
+        .setDescription(`**${target.tag}**'s break extended by **${days} day${days !== 1 ? 's' : ''}**.\nNew end: <t:${updated.end_at}:F>`)
+        .setTimestamp()
+      ]
+    });
+  }
 }
 
 // BREAK END
