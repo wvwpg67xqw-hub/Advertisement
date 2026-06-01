@@ -429,8 +429,13 @@ app.use('/api/staff', staffRoutes);
 
 const clientDist = join(__dirname, 'client', 'dist');
 if (existsSync(clientDist)) {
-  app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
+  app.use(express.static(clientDist, { maxAge: '1y', etag: false, index: false }));
+  app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(join(clientDist, 'index.html'));
+  });
 } else {
   app.get('/', (_req, res) => res.send(`<html><body style="background:#0b0b10;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column"><h1>⚙️ Discord Staff Portal</h1><p>Build client: <code>npm run build</code></p></body></html>`));
 }
