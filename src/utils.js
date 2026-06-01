@@ -1,6 +1,76 @@
 import { EmbedBuilder } from 'discord.js';
 import { getCommandRoles } from './database.js';
 
+// ─── Staff Hierarchy ──────────────────────────────────────────────────────────
+
+const RANK_LABELS = { 3: 'Administration', 2: 'Team Lead', 1: 'Mod', 0: 'Non-Staff' };
+
+const COMMAND_MIN_RANK = {
+  // MOD (1) ─────────────────────────────────────────────
+  warn: 1, warns: 1, 'warn-leaderboard': 1,
+  mute: 1, unmute: 1, 'ad-warn': 1,
+  messages: 1, 'message-leaderboard': 1, 'case-info': 1, balance: 1,
+  apply: 1, update: 1,
+  'break-request': 1, 'break-end': 1, 'current-breaks': 1,
+  'ban-request': 1, 'blacklist-request': 1, 'network-ban-request': 1,
+  'partnership-request': 1, 'resign-request': 1,
+
+  // TEAM LEAD (2) ───────────────────────────────────────
+  jail: 2, unjail: 2,
+  strike: 2, 'strike-remove': 2,
+  promote: 2, 'demote-user': 2,
+  'manage-break': 2,
+  'remove-ad-warn': 2,
+  'reset-messages': 2, 'reset-messages-all': 2,
+  snipe: 2,
+
+  // ADMINISTRATION (3) ──────────────────────────────────
+  ban: 3, fire: 3,
+  'network-ban': 3, 'network-unban': 3, 'network-status': 3,
+  setup: 3, 'setup-roles': 3, 'setup-roles-extra': 3, 'setup-roles-wizard': 3,
+  'setup-roles-bulk': 3, 'setup-edit': 3, 'setup-status': 3,
+  'setup-ad-channels': 3, 'setup-requests': 3, 'setup-network-hub': 3,
+  'setup-network-join': 3, 'setup-network-reset': 3, 'setup-break': 3,
+  'setup-resign': 3, 'setup-branding': 3,
+};
+
+/**
+ * Returns the staff rank (0–3) of a guild member based on role ID env vars.
+ * 3 = ADMINISTRATION, 2 = TEAM LEAD, 1 = MOD, 0 = non-staff.
+ *
+ * Falls back to Discord Administrator = rank 3 when no hierarchy env vars are set,
+ * so the system keeps working out-of-the-box before roles are configured.
+ */
+export function getStaffRank(member) {
+  if (!member) return 0;
+  const { MOD_ROLE_ID, TEAM_LEAD_ROLE_ID, ADMIN_ROLE_ID } = process.env;
+  const hierarchyEnabled = !!(MOD_ROLE_ID || TEAM_LEAD_ROLE_ID || ADMIN_ROLE_ID);
+
+  if (hierarchyEnabled) {
+    if (ADMIN_ROLE_ID      && member.roles.cache.has(ADMIN_ROLE_ID))      return 3;
+    if (TEAM_LEAD_ROLE_ID  && member.roles.cache.has(TEAM_LEAD_ROLE_ID))  return 2;
+    if (MOD_ROLE_ID        && member.roles.cache.has(MOD_ROLE_ID))        return 1;
+    return 0;
+  }
+
+  if (member.permissions.has('Administrator')) return 3;
+  return 0;
+}
+
+export function getStaffRankLabel(member) {
+  return RANK_LABELS[getStaffRank(member)] ?? 'Non-Staff';
+}
+
+/**
+ * Returns true when executor's rank is strictly greater than target's rank.
+ * Non-staff targets (rank 0) can always be moderated by any staff member.
+ * If target is null (not in server), treat as rank 0 → allowed.
+ */
+export function canModerate(executorMember, targetMember) {
+  if (!targetMember) return true;
+  return getStaffRank(executorMember) > getStaffRank(targetMember);
+}
+
 // ─── Safe Fetchers ────────────────────────────────────────────────────────────
 
 export async function safeFetchMember(guild, userId) {
@@ -53,6 +123,17 @@ export function formatDuration(seconds) {
 
 export function hasCommandPermission(member, commandName) {
   if (!member) return false;
+
+  const { MOD_ROLE_ID, TEAM_LEAD_ROLE_ID, ADMIN_ROLE_ID } = process.env;
+  const hierarchyEnabled = !!(MOD_ROLE_ID || TEAM_LEAD_ROLE_ID || ADMIN_ROLE_ID);
+
+  if (hierarchyEnabled) {
+    const userRank = getStaffRank(member);
+    const minRank  = COMMAND_MIN_RANK[commandName] ?? 3;
+    return userRank >= minRank;
+  }
+
+  // Legacy fallback — use DB-configured role allowlists or Discord perms
   if (member.permissions.has('Administrator')) return true;
   const allowedRoles = getCommandRoles(member.guild.id, commandName);
   if (!allowedRoles || allowedRoles.length === 0) {

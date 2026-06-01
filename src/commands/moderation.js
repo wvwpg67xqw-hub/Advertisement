@@ -6,9 +6,11 @@ import {
 } from '../database.js';
 import {
   safeFetchMember, parseDuration, formatDuration,
-  hasCommandPermission, sendLog,
-  buildWarnEmbed, buildAdWarnEmbed, buildModEmbed,
+  hasCommandPermission, canModerate, sendLog,
+  buildWarnEmbed, buildAdWarnEmbed, buildModEmbed, buildStaffUpdateEmbed,
 } from '../utils.js';
+
+const RANK_ERR = '❌ You cannot use this command on a user of equal or higher rank.';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -80,6 +82,12 @@ export async function handleWarn(interaction) {
   if (!hasCommandPermission(interaction.member, 'warn')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
+
+  const targetMember = await safeFetchMember(interaction.guild, target.id);
+  if (!canModerate(interaction.member, targetMember)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
+
   const caseId = addWarn(interaction.guildId, target.id, interaction.user.id, reason);
   const totalWarns = getWarnCount(interaction.guildId, target.id);
   const embed = buildWarnEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
@@ -118,6 +126,11 @@ export async function handleAdWarn(interaction) {
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const messageId = interaction.options.getString('message-id');
+
+  const targetMember = await safeFetchMember(interaction.guild, target.id);
+  if (!canModerate(interaction.member, targetMember)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
 
   let deletedContent = null;
   if (messageId) {
@@ -162,6 +175,9 @@ export async function handleMute(interaction) {
   if (!config.muted_role_id) return noConfig(interaction, 'muted-role');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+  if (!canModerate(interaction.member, member)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
   await member.roles.add(config.muted_role_id, reason).catch(() => {});
   setTimeout(async () => {
     const m = await safeFetchMember(interaction.guild, target.id);
@@ -180,6 +196,9 @@ export async function handleUnmute(interaction) {
   if (!config.muted_role_id) return noConfig(interaction, 'muted-role');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+  if (!canModerate(interaction.member, member)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
   await member.roles.remove(config.muted_role_id, reason).catch(() => {});
   const embed = buildModEmbed('unmute', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
@@ -191,6 +210,12 @@ export async function handleBan(interaction) {
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const deleteDays = interaction.options.getInteger('delete-days') || 0;
+
+  const targetMember = await safeFetchMember(interaction.guild, target.id);
+  if (!canModerate(interaction.member, targetMember)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
+
   await interaction.guild.members.ban(target.id, { reason, deleteMessageDays: deleteDays }).catch(e => {
     return interaction.reply({ content: `❌ Failed to ban: ${e.message}`, flags: 64 });
   });
@@ -205,17 +230,19 @@ export async function handleFire(interaction) {
   const reason = interaction.options.getString('reason');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+  if (!canModerate(interaction.member, member)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
 
   const staffRole = member.roles.cache.get(STAFF_ROLE_ID);
   if (staffRole?.editable) await member.roles.remove(STAFF_ROLE_ID, reason).catch(() => {});
   await interaction.guild.members.ban(target.id, { reason }).catch(() => {});
 
   const config = getGuild(interaction.guildId);
-  const { buildStaffUpdateEmbed, sendLog: sl } = await import('../utils.js');
   const embed = buildModEmbed('fire', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
-  await sl(interaction.guild, config, 'staff_updates', buildStaffUpdateEmbed('fired', { userId: target.id, moderatorId: interaction.user.id, reason }));
+  await sendLog(interaction.guild, config, 'staff_updates', buildStaffUpdateEmbed('fired', { userId: target.id, moderatorId: interaction.user.id, reason }));
 }
 
 export async function handleJail(interaction) {
@@ -226,6 +253,9 @@ export async function handleJail(interaction) {
   if (!config.jail_role_id) return noConfig(interaction, 'jail-role');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+  if (!canModerate(interaction.member, member)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
   if (isJailed(interaction.guildId, target.id)) return interaction.reply({ content: `❌ **${target.tag}** is already jailed.`, flags: 64 });
   const originalRoles = member.roles.cache.filter(r => r.id !== interaction.guild.id && r.editable).map(r => r.id);
   await member.roles.remove(originalRoles, reason).catch(() => {});
@@ -243,6 +273,9 @@ export async function handleUnjail(interaction) {
   const originalRoles = unjailUser(interaction.guildId, target.id);
   if (!originalRoles) return interaction.reply({ content: `❌ **${target.tag}** is not jailed.`, flags: 64 });
   const member = await safeFetchMember(interaction.guild, target.id);
+  if (!canModerate(interaction.member, member)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
   if (member) {
     if (config.jail_role_id) await member.roles.remove(config.jail_role_id).catch(() => {});
     const rolesToRestore = originalRoles.filter(id => interaction.guild.roles.cache.has(id));

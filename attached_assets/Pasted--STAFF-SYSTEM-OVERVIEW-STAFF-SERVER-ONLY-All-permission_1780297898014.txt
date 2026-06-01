@@ -1,0 +1,216 @@
+🧱 STAFF SYSTEM OVERVIEW (STAFF SERVER ONLY)
+
+All permissions are controlled by role IDs in the staff server, not by Discord permissions.
+
+Each staff rank is assigned a role ID:
+
+* MOD → MOD_ROLE_ID
+* TEAM LEAD → TEAM_LEAD_ROLE_ID
+* ADMINISTRATION → ADMIN_ROLE_ID
+
+⸻
+
+⚙️ CORE RULE (GLOBAL HIERARCHY SYSTEM)
+
+A staff member can ONLY use a command if their rank is HIGHER than the target user.
+
+Rules:
+
+* Higher rank → can moderate lower rank
+* Same rank → ❌ blocked
+* Lower rank → ❌ blocked
+* Non-staff → can always be moderated
+
+⸻
+
+🧱 STAFF HIERARCHY ORDER
+
+Highest → Lowest:
+
+1. 🏢 ADMINISTRATION
+2. ⭐ TEAM LEAD
+3. 🛡️ MOD
+
+⸻
+
+🛡️ MOD ROLE (Basic Staff)
+
+Permissions:
+
+MOD handles basic moderation and user requests.
+
+Commands:
+
+* /warn
+* /warns
+* /warn-leaderboard
+* /mute
+* /unmute
+* /ad-warn
+* /messages
+* /message-leaderboard
+* /case-info
+* /balance
+* /apply
+* /update
+* /break-request
+* /break-end
+* /current-breaks
+* /ban-request
+* /blacklist-request
+* /network-ban-request
+* /partnership-request
+* /resign-request
+
+Restrictions:
+
+* Cannot use /jail or /unjail
+* Cannot remove ad warns
+* Cannot use /snipe
+* Cannot manage staff
+* Cannot use any /setup commands
+* Cannot act on TEAM LEAD or ADMINISTRATION
+
+⸻
+
+⭐ TEAM LEAD ROLE (Advanced Staff)
+
+Permissions:
+
+TEAM LEAD supervises MODs and handles stronger moderation.
+
+Commands:
+
+* All MOD commands (inherit access)
+* /jail
+* /unjail
+* /strike
+* /strike-remove
+* /promote
+* /demote-user
+* /manage-break
+* /remove-ad-warn
+* /reset-messages
+* /reset-messages-all
+* /snipe
+
+Restrictions:
+
+* Cannot ban users
+* Cannot fire staff
+* Cannot access /setup system
+* Cannot use network admin commands
+* Cannot moderate ADMINISTRATION
+* Cannot moderate same-rank TEAM LEADs
+
+⸻
+
+🏢 ADMINISTRATION ROLE (Full Control)
+
+Permissions:
+
+ADMINISTRATION has full control over server systems.
+
+Commands:
+
+* /ban
+* /fire
+
+Setup System:
+
+* /setup
+* /setup-roles
+* /setup-roles-extra
+* /setup-roles-wizard
+* /setup-roles-bulk
+* /setup-edit
+* /setup-status
+* /setup-ad-channels
+* /setup-requests
+* /setup-network-hub
+* /setup-network-join
+* /setup-network-reset
+* /setup-break
+* /setup-resign
+* /setup-branding
+
+Network System:
+
+* /network-ban
+* /network-unban
+* /network-status
+
+⸻
+
+🔇 MUTE / UNMUTE RULE (IMPORTANT DETAIL)
+
+Rule:
+
+A staff member can only mute or unmute users who are:
+
+LOWER in the staff hierarchy
+
+⸻
+
+MOD:
+
+* Can mute/unmute non-staff users
+* Cannot mute TEAM LEAD or ADMINISTRATION
+* Recommended: cannot mute other MODs
+
+⸻
+
+TEAM LEAD:
+
+* Can mute/unmute MODs and below
+* Cannot mute TEAM LEAD
+* Cannot mute ADMINISTRATION
+
+⸻
+
+ADMINISTRATION:
+
+* Can mute/unmute TEAM LEAD and MOD
+* Cannot override owner (optional safety rule)
+
+⸻
+
+🧠 STRIKE / JAIL / STAFF ACTION RULES
+
+* MOD → cannot jail or strike
+* TEAM LEAD → can jail/strike MOD only
+* ADMINISTRATION → can jail/strike TEAM LEAD and MOD
+* Same-rank actions are always blocked
+
+⸻
+
+🧩 IMPORTANT SYSTEM RULES
+
+1. Staff detection
+
+* Only based on staff server role IDs
+* Main server roles do NOT matter
+
+2. Rank system
+
+* ADMINISTRATION = 3
+* TEAM LEAD = 2
+* MOD = 1
+* Non-staff = 0
+
+3. Universal permission rule
+
+executor rank must be greater than target rank
+
+⸻
+
+🔐 FINAL SUMMARY
+
+You now have:
+
+* ✔ Role-ID based staff system (staff server only)
+* ✔ Strict hierarchy enforcement
+* ✔ No same-rank abuse possible
+* ✔ MOD / TEAM LEAD / ADMINISTRATION structure
+* ✔ Clear separation of moderation, staff control, and system control
+* ✔ Scalable foundation for future ranks

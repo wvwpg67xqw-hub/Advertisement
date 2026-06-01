@@ -1,6 +1,8 @@
 import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
 import { addStrike, getStrikeCount, removeStrike, getGuild } from '../database.js';
-import { safeFetchMember, hasCommandPermission, sendLog, buildModEmbed, buildStrikeEmbed, buildStaffUpdateEmbed } from '../utils.js';
+import { safeFetchMember, hasCommandPermission, canModerate, sendLog, buildModEmbed, buildStrikeEmbed, buildStaffUpdateEmbed } from '../utils.js';
+
+const RANK_ERR = '❌ You cannot use this command on a user of equal or higher rank.';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -36,6 +38,9 @@ export async function handlePromote(interaction) {
   const reason = interaction.options.getString('reason') || 'No reason provided';
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+  if (!canModerate(interaction.member, member)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
   await member.roles.add(role.id, reason).catch(e => {
     return interaction.reply({ content: `❌ Failed to add role: ${e.message}`, flags: 64 });
   });
@@ -54,6 +59,9 @@ export async function handleDemoteUser(interaction) {
   const reason = interaction.options.getString('reason') || 'No reason provided';
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+  if (!canModerate(interaction.member, member)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
   await member.roles.remove(role.id, reason).catch(e => {
     return interaction.reply({ content: `❌ Failed to remove role: ${e.message}`, flags: 64 });
   });
@@ -69,6 +77,12 @@ export async function handleStrike(interaction) {
   if (!hasCommandPermission(interaction.member, 'strike')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
+
+  const targetMember = await safeFetchMember(interaction.guild, target.id);
+  if (!canModerate(interaction.member, targetMember)) {
+    return interaction.reply({ content: RANK_ERR, flags: 64 });
+  }
+
   const caseId = addStrike(interaction.guildId, target.id, interaction.user.id, reason);
   const total = getStrikeCount(interaction.guildId, target.id);
   const config = getGuild(interaction.guildId);
@@ -79,7 +93,7 @@ export async function handleStrike(interaction) {
   await sendLog(interaction.guild, config, 'strike', embed);
 
   if (total >= 3) {
-    const member = await safeFetchMember(interaction.guild, target.id);
+    const member = targetMember || await safeFetchMember(interaction.guild, target.id);
     if (member) {
       const rolesToRemove = member.roles.cache.filter(r => r.name !== 'Verified' && r.name !== '@everyone');
       await member.roles.remove(rolesToRemove, '3 strikes — auto-fire').catch(() => {});

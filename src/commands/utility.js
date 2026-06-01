@@ -40,6 +40,7 @@ export const defs = [
 ];
 
 export async function handleMessages(interaction) {
+  if (!hasCommandPermission(interaction.member, 'messages')) return deny(interaction);
   const target = interaction.options.getUser('user') || interaction.user;
   const count = getMessageCount(interaction.guildId, target.id);
   await interaction.reply({
@@ -51,6 +52,7 @@ export async function handleMessages(interaction) {
 }
 
 export async function handleMessageLeaderboard(interaction) {
+  if (!hasCommandPermission(interaction.member, 'message-leaderboard')) return deny(interaction);
   const top = getMessageLeaderboard(interaction.guildId, 10);
   if (top.length === 0) return interaction.reply({ content: '📭 No messages have been counted yet.', flags: 64 });
   const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('💬 Message Leaderboard')
@@ -60,6 +62,7 @@ export async function handleMessageLeaderboard(interaction) {
 }
 
 export async function handleCaseInfo(interaction) {
+  if (!hasCommandPermission(interaction.member, 'case-info')) return deny(interaction);
   const caseId = interaction.options.getString('case-id').toUpperCase();
   const info = getCaseInfo(interaction.guildId, caseId);
   if (!info) return interaction.reply({ content: `❌ No case found with ID **${caseId}**.`, flags: 64 });
@@ -76,6 +79,7 @@ export async function handleCaseInfo(interaction) {
 }
 
 export async function handleBalance(interaction) {
+  if (!hasCommandPermission(interaction.member, 'balance')) return deny(interaction);
   const target = interaction.options.getUser('user') || interaction.user;
   const bal = getBalance(interaction.guildId, target.id);
   await interaction.reply({
@@ -87,6 +91,7 @@ export async function handleBalance(interaction) {
 }
 
 export async function handleSnipe(interaction) {
+  if (!hasCommandPermission(interaction.member, 'snipe')) return deny(interaction);
   const cached = getSnipeCache(interaction.guildId, interaction.channelId);
   if (!cached) return interaction.reply({ content: '📭 No recently deleted messages in this channel.', flags: 64 });
   const embed = new EmbedBuilder().setColor(0xFF6B6B).setTitle('🔍 Sniped Message')

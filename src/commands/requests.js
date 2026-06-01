@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, deny } from './shared.js';
 import { addBlacklist, getNetworkMembers, getGuild } from '../database.js';
-import { hasCommandPermission, sendLog, buildRequestEmbed } from '../utils.js';
+import { hasCommandPermission, getStaffRank, sendLog, buildRequestEmbed } from '../utils.js';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -61,9 +61,12 @@ export const handlePartnershipRequest = i => handleRequest(i, 'partnership');
 
 export async function handleRequestButton(interaction) {
   const [, action, type, targetId, originGuildId] = interaction.customId.split(':');
-  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: '❌ Only Administrators can accept or deny requests.', flags: 64 });
+
+  // Require Administration rank (3) to accept/deny requests
+  if (getStaffRank(interaction.member) < 3 && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    return interaction.reply({ content: '❌ Only Administration can accept or deny requests.', flags: 64 });
   }
+
   await interaction.deferUpdate();
   const originalEmbed = interaction.message.embeds[0];
   const reason = originalEmbed?.fields?.find(f => f.name === 'Reason')?.value ?? 'No reason provided';
