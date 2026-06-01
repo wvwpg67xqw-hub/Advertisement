@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 
 import discordPkg from 'discord.js';
-const { REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = discordPkg;
+const { REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = discordPkg;
 
 import client from './botClient.js';
 import db from './db.js';
@@ -39,10 +39,10 @@ import {
   handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
   handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin,
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
-  handleSetupBreak, handleSetupRolesBulk, handleSetupResign,
+  handleSetupBreak, handleSetupRolesBulk, handleSetupResign, handleSetupBranding,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache } from './src/database.js';
 import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -322,6 +322,24 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/roles', (req, res) => res.json(db.getActiveRoles()));
 
+// ── Public: server branding ───────────────────────────────────────────────────
+
+app.get('/api/branding', (req, res) => {
+  const guildId = process.env.MAIN_GUILD_ID;
+  if (!guildId) return res.json({ pfp_url: null, banner_url: null, guild_name: null });
+  try {
+    const config = getBotGuild(guildId);
+    const guild  = client.guilds?.cache?.get(guildId);
+    res.json({
+      pfp_url:    config.pfp_url    || null,
+      banner_url: config.banner_url || null,
+      guild_name: guild?.name       || null,
+    });
+  } catch {
+    res.json({ pfp_url: null, banner_url: null, guild_name: null });
+  }
+});
+
 // ── Ban Appeals ───────────────────────────────────────────────────────────────
 
 function requireBlacklisted(req, res, next) {
@@ -392,6 +410,7 @@ const botHandlers = {
   'setup-network-hub': handleSetupNetworkHub, 'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset, 'network-status': handleNetworkStatus,
   'setup-break': handleSetupBreak, 'setup-roles-bulk': handleSetupRolesBulk, 'setup-resign': handleSetupResign,
+  'setup-branding': handleSetupBranding,
   'network-ban': handleNetworkBan, 'network-unban': handleNetworkUnban,
   warn: handleWarn, warns: handleWarns, 'warn-leaderboard': handleWarnLeaderboard,
   'ad-warn': handleAdWarn, 'remove-ad-warn': handleRemoveAdWarn,
@@ -1192,6 +1211,137 @@ if (id.startsWith('app_')) {
         await interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
       }
     } catch {}
+  }
+});
+
+// ── Message Delete → HTML Transcript ─────────────────────────────────────────
+
+function buildDeleteTranscriptHtml(msg) {
+  const author      = msg.author;
+  const avatarUrl   = author?.displayAvatarURL?.({ size: 64, extension: 'png' }) ?? '';
+  const username    = author?.username ?? 'Unknown User';
+  const userId      = author?.id ?? 'unknown';
+  const content     = msg.content || '';
+  const channelName = msg.channel?.name ?? 'unknown-channel';
+  const guildName   = msg.guild?.name   ?? 'Unknown Server';
+  const sentAt      = msg.createdAt ? msg.createdAt.toISOString() : new Date().toISOString();
+  const deletedAt   = new Date().toISOString();
+
+  const attachmentRows = [...(msg.attachments?.values() ?? [])].map(a => `
+    <div class="attachment">
+      ${a.contentType?.startsWith('image/') ? `<img src="${a.url}" alt="${a.name}" loading="lazy" />` : ''}
+      <a href="${a.url}" target="_blank" rel="noreferrer">📎 ${a.name}</a>
+    </div>`).join('');
+
+  const escapedContent = content
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deleted Message — ${channelName}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1a1a2e; color: #dcddde; font-family: 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; }
+    .container { width: 100%; max-width: 760px; }
+    .header { background: #16213e; border: 1px solid #2d2f45; border-radius: 12px 12px 0 0; padding: 20px 28px; display: flex; align-items: center; gap: 14px; }
+    .header-icon { font-size: 28px; }
+    .header-info h1 { font-size: 17px; font-weight: 700; color: #fff; }
+    .header-info p { font-size: 13px; color: #8e9297; margin-top: 3px; }
+    .badge { display: inline-block; background: #ed4245; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em; }
+    .meta-strip { background: #0f3460; border-left: 1px solid #2d2f45; border-right: 1px solid #2d2f45; padding: 10px 28px; display: flex; gap: 24px; flex-wrap: wrap; }
+    .meta-strip span { font-size: 12px; color: #8e9297; }
+    .meta-strip strong { color: #b9bbbe; }
+    .message-card { background: #1e1f2e; border: 1px solid #2d2f45; border-radius: 0 0 12px 12px; padding: 20px 28px; }
+    .message-author { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #36393f; flex-shrink: 0; }
+    .avatar-placeholder { width: 40px; height: 40px; border-radius: 50%; background: #5865f2; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .author-name { font-weight: 700; font-size: 15px; color: #fff; }
+    .author-id { font-size: 11px; color: #8e9297; margin-top: 2px; font-family: monospace; }
+    .message-body { padding-left: 52px; }
+    .message-content { font-size: 15px; line-height: 1.6; color: #dcddde; word-break: break-word; white-space: pre-wrap; }
+    .message-content em { color: #8e9297; font-style: italic; }
+    .attachments { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .attachment img { max-width: 400px; max-height: 300px; border-radius: 8px; display: block; margin-bottom: 4px; }
+    .attachment a { color: #00b0f4; font-size: 13px; text-decoration: none; }
+    .attachment a:hover { text-decoration: underline; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #4f545c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-icon">🗑️</div>
+      <div class="header-info">
+        <h1>${guildName} — Deleted Message Log <span class="badge">deleted</span></h1>
+        <p>Channel: <strong>#${channelName}</strong></p>
+      </div>
+    </div>
+    <div class="meta-strip">
+      <span>Sent: <strong>${sentAt}</strong></span>
+      <span>Deleted: <strong>${deletedAt}</strong></span>
+      <span>Channel: <strong>#${channelName}</strong></span>
+    </div>
+    <div class="message-card">
+      <div class="message-author">
+        ${avatarUrl
+          ? `<img class="avatar" src="${avatarUrl}" alt="${username}" />`
+          : `<div class="avatar-placeholder">${username.charAt(0).toUpperCase()}</div>`}
+        <div>
+          <div class="author-name">${username}</div>
+          <div class="author-id">${userId}</div>
+        </div>
+      </div>
+      <div class="message-body">
+        <div class="message-content">${escapedContent || '<em>[no text content]</em>'}</div>
+        ${attachmentRows ? `<div class="attachments">${attachmentRows}</div>` : ''}
+      </div>
+    </div>
+    <div class="footer">Generated by Eclipse Staff Portal • ${deletedAt}</div>
+  </div>
+</body>
+</html>`;
+}
+
+client.on('messageDelete', async (msg) => {
+  if (!msg.guild || msg.author?.bot) return;
+
+  // Always update snipe cache (used by /snipe command)
+  if (msg.author) {
+    const avatarUrl = msg.author.displayAvatarURL?.({ size: 64, extension: 'png' }) ?? '';
+    setSnipeCache(msg.guild.id, msg.channel.id, msg.content || '', msg.author.id, msg.author.username, avatarUrl);
+  }
+
+  const config = getBotGuild(msg.guild.id);
+  if (!config.log_channel_id) return;
+
+  try {
+    const { safeFetchChannel } = await import('./src/utils.js');
+    const logChannel = await safeFetchChannel(msg.guild, config.log_channel_id);
+    if (!logChannel?.isTextBased()) return;
+
+    const html   = buildDeleteTranscriptHtml(msg);
+    const buf    = Buffer.from(html, 'utf-8');
+    const ts     = new Date().toISOString().replace(/[:.]/g, '-');
+    const file   = new AttachmentBuilder(buf, { name: `deleted-msg-${ts}.html` });
+
+    const notifEmbed = new EmbedBuilder()
+      .setColor(0xED4245)
+      .setTitle('🗑️ Message Deleted')
+      .addFields(
+        { name: 'Author',  value: msg.author ? `<@${msg.author.id}> (\`${msg.author.id}\`)` : 'Unknown', inline: true },
+        { name: 'Channel', value: `<#${msg.channel.id}>`, inline: true },
+        { name: 'Preview', value: (msg.content?.slice(0, 200) || '*[no text]*') + (msg.content?.length > 200 ? '…' : ''), inline: false },
+      )
+      .setFooter({ text: 'Full transcript attached below' })
+      .setTimestamp();
+
+    await logChannel.send({ embeds: [notifEmbed], files: [file] }).catch(() => null);
+  } catch (err) {
+    console.error('messageDelete transcript error:', err.message);
   }
 });
 

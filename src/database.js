@@ -17,6 +17,7 @@ export function getGuild(guildId) {
       break_request_channel_id: null, break_role_id: null, main_break_role_id: null,
       resign_channel_id: null, verified_role_id: null, applications_channel_id: null,
       referral_link: null, modmail_test_channel_id: null,
+      pfp_url: null, banner_url: null,
     };
     rows.push(row);
     writeCol('guilds', rows);
@@ -45,6 +46,7 @@ export function setGuildConfig(guildId, fields) {
     'break_request_channel_id', 'break_role_id', 'main_break_role_id',
     'resign_channel_id', 'verified_role_id', 'applications_channel_id',
     'referral_link', 'modmail_test_channel_id',
+    'pfp_url', 'banner_url',
   ];
   for (const [key, val] of Object.entries(fields)) {
     if (allowed.includes(key)) rows[i][key] = val;

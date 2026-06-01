@@ -12,7 +12,11 @@ import NotFound from './pages/NotFound.jsx';
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
+const BrandingContext = createContext({ pfp_url: null, banner_url: null, guild_name: null });
+export const useBranding = () => useContext(BrandingContext);
+
 function Navbar({ user, onLogout }) {
+  const { pfp_url, guild_name } = useBranding();
   return (
     <nav style={{
       background: 'var(--surface)',
@@ -27,8 +31,10 @@ function Navbar({ user, onLogout }) {
       zIndex: 100,
     }}>
       <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, fontSize: 18 }}>
-        <span style={{ fontSize: 22 }}>🛡️</span>
-        <span>Staff Portal</span>
+        {pfp_url
+          ? <img src={pfp_url} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover' }} />
+          : <span style={{ fontSize: 22 }}>🛡️</span>}
+        <span>{guild_name ? `${guild_name} Staff Portal` : 'Staff Portal'}</span>
       </Link>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {user ? (
@@ -74,12 +80,18 @@ function ProtectedRoute({ children, adminOnly = false }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [branding, setBranding] = useState({ pfp_url: null, banner_url: null, guild_name: null });
 
   useEffect(() => {
     fetch('/api/auth/me', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(data => { setUser(data); setLoading(false); })
       .catch(() => setLoading(false));
+
+    fetch('/api/branding', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setBranding(data); })
+      .catch(() => {});
   }, []);
 
   async function handleLogout() {
@@ -88,6 +100,7 @@ export default function App() {
   }
 
   return (
+    <BrandingContext.Provider value={branding}>
     <AuthContext.Provider value={{ user, setUser, loading }}>
       <BrowserRouter>
         <Navbar user={user} onLogout={handleLogout} />
@@ -109,5 +122,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>
+    </BrandingContext.Provider>
   );
 }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../App.jsx';
+import { useAuth, useBranding } from '../App.jsx';
 
 export default function Home() {
   const { user } = useAuth();
+  const { pfp_url, banner_url, guild_name } = useBranding();
   const navigate = useNavigate();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,12 +43,35 @@ export default function Home() {
   return (
     <div className="page-container">
 
+      {/* BANNER */}
+      {banner_url && (
+        <div style={{
+          width: '100%', height: 180, borderRadius: 16, overflow: 'hidden',
+          marginBottom: 0, marginTop: 24, position: 'relative',
+        }}>
+          <img src={banner_url} alt="Server banner" style={{
+            width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to bottom, transparent 40%, var(--bg) 100%)',
+          }} />
+        </div>
+      )}
+
       {/* HERO */}
-      <div style={{ textAlign: 'center', padding: '60px 0 48px' }}>
-        <div style={{ fontSize: 56, marginBottom: 20 }}>🛡️</div>
+      <div style={{ textAlign: 'center', padding: banner_url ? '20px 0 48px' : '60px 0 48px' }}>
+        {pfp_url ? (
+          <img src={pfp_url} alt="Server icon" style={{
+            width: 80, height: 80, borderRadius: 20, objectFit: 'cover',
+            marginBottom: 20, border: '3px solid var(--border)', display: 'inline-block',
+          }} />
+        ) : (
+          <div style={{ fontSize: 56, marginBottom: 20 }}>🛡️</div>
+        )}
 
         <h1 style={{ fontSize: 40, fontWeight: 800, marginBottom: 16 }}>
-          Join Our Staff Team
+          {guild_name ? `Join ${guild_name}'s Staff Team` : 'Join Our Staff Team'}
         </h1>
 
         <p style={{ color: 'var(--text-muted)', fontSize: 17, maxWidth: 520, margin: '0 auto 32px' }}>

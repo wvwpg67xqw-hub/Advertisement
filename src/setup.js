@@ -183,6 +183,22 @@ export const setupCommands = [
     .addStringOption(o => o.setName('referral-link').setDescription('Referral/invite link shown in the staff panel (paste full URL)'))
     .addChannelOption(o => o.setName('modmail-test-channel').setDescription('Channel where modmail test applications are posted')),
 
+  // /setup-branding — configure server PFP and banner URL
+  new SlashCommandBuilder()
+    .setName('setup-branding')
+    .setDescription('Set a custom server profile picture and banner URL for the staff portal')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o => o.setName('pfp-url').setDescription('Full URL to the server profile picture (PNG/JPG/GIF)'))
+    .addStringOption(o => o.setName('banner-url').setDescription('Full URL to the server banner image (PNG/JPG/GIF)'))
+    .addStringOption(o =>
+      o.setName('clear').setDescription('Clear a branding field')
+        .addChoices(
+          { name: 'pfp', value: 'pfp' },
+          { name: 'banner', value: 'banner' },
+          { name: 'both', value: 'both' },
+        )
+    ),
+
   // /setup-roles-bulk — assign roles to a whole group of commands at once
   new SlashCommandBuilder()
     .setName('setup-roles-bulk')
@@ -752,4 +768,50 @@ export async function handleSetupRequests(interaction) {
     console.error('setup-requests error:', err);
     await interaction.editReply({ content: `❌ Failed to create channels: ${err.message}` });
   }
+}
+
+export async function handleSetupBranding(interaction) {
+  const pfpUrl    = interaction.options.getString('pfp-url');
+  const bannerUrl = interaction.options.getString('banner-url');
+  const clear     = interaction.options.getString('clear');
+
+  const fields = {};
+
+  if (clear === 'pfp' || clear === 'both') fields.pfp_url = null;
+  if (clear === 'banner' || clear === 'both') fields.banner_url = null;
+  if (pfpUrl) fields.pfp_url = pfpUrl;
+  if (bannerUrl) fields.banner_url = bannerUrl;
+
+  if (Object.keys(fields).length === 0) {
+    const current = getGuild(interaction.guildId);
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🎨 Current Branding')
+      .addFields(
+        { name: 'Profile Picture', value: current.pfp_url ? `[View URL](${current.pfp_url})` : 'Not set', inline: true },
+        { name: 'Banner', value: current.banner_url ? `[View URL](${current.banner_url})` : 'Not set', inline: true },
+      )
+      .setDescription('Use `/setup-branding pfp-url:` or `banner-url:` to update branding shown in the staff portal.')
+      .setTimestamp();
+    if (current.pfp_url) embed.setThumbnail(current.pfp_url);
+    if (current.banner_url) embed.setImage(current.banner_url);
+    return interaction.reply({ embeds: [embed], flags: 64 });
+  }
+
+  setGuildConfig(interaction.guildId, fields);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x57F287)
+    .setTitle('✅ Branding Updated')
+    .setTimestamp();
+
+  const after = getGuild(interaction.guildId);
+  embed.addFields(
+    { name: 'Profile Picture', value: after.pfp_url ? `[View URL](${after.pfp_url})` : 'Cleared', inline: true },
+    { name: 'Banner', value: after.banner_url ? `[View URL](${after.banner_url})` : 'Cleared', inline: true },
+  );
+  if (after.pfp_url) embed.setThumbnail(after.pfp_url);
+  if (after.banner_url) embed.setImage(after.banner_url);
+
+  await interaction.reply({ embeds: [embed], flags: 64 });
 }

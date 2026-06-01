@@ -84,7 +84,7 @@ export async function handleWarn(interaction) {
   const totalWarns = getWarnCount(interaction.guildId, target.id);
   const embed = buildWarnEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
   embed.setFooter({ text: `Total warnings: ${totalWarns}` });
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ embeds: [embed], flags: 64 });
   await sendLog(interaction.guild, getGuild(interaction.guildId), 'warn', embed);
 }
 
