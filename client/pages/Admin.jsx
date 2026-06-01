@@ -25,6 +25,10 @@ function ApplicationsTab() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [actioning, setActioning] = useState(null);
+  const [acceptModal, setAcceptModal] = useState(null);
+  const [guildRoles, setGuildRoles] = useState([]);
+  const [guildRolesLoading, setGuildRolesLoading] = useState(false);
+  const [selectedRoleIds, setSelectedRoleIds] = useState(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,11 +39,36 @@ function ApplicationsTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function action(id, type) {
+  async function openAcceptModal(app) {
+    setSelected(null);
+    setSelectedRoleIds(new Set());
+    setAcceptModal(app);
+    setGuildRolesLoading(true);
+    const guildId = app.guildId || '';
+    const url = guildId ? `/api/admin/guild-roles?guildId=${guildId}` : '/api/admin/guild-roles';
+    const res = await api(url);
+    setGuildRoles(await res.json().catch(() => []));
+    setGuildRolesLoading(false);
+  }
+
+  function toggleRole(id) {
+    setSelectedRoleIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function action(id, type, roleIds = []) {
     setActioning(id);
-    await api(`/api/admin/applications/${id}/${type}`, { method: 'POST' });
+    await api(`/api/admin/applications/${id}/${type}`, {
+      method: 'POST',
+      body: type === 'accept' ? JSON.stringify({ roleIds }) : undefined,
+    });
     setActioning(null);
     setSelected(null);
+    setAcceptModal(null);
     load();
   }
 
@@ -130,7 +159,7 @@ function ApplicationsTab() {
                       <button className="btn btn-ghost btn-sm" onClick={() => setSelected(app)}>View</button>
                       {app.status === 'pending' && (
                         <>
-                          <button className="btn btn-success btn-sm" disabled={actioning === app.id} onClick={() => action(app.id, 'accept')}>{actioning === app.id ? '...' : '✓'}</button>
+                          <button className="btn btn-success btn-sm" disabled={actioning === app.id} onClick={() => openAcceptModal(app)}>{actioning === app.id ? '...' : '✓'}</button>
                           <button className="btn btn-danger btn-sm" disabled={actioning === app.id} onClick={() => action(app.id, 'deny')}>{actioning === app.id ? '...' : '✕'}</button>
                         </>
                       )}
@@ -203,9 +232,60 @@ function ApplicationsTab() {
           {selected.status === 'pending' && (
             <div className="modal-actions">
               <button className="btn btn-danger" onClick={() => action(selected.id, 'deny')}>Deny</button>
-              <button className="btn btn-success" onClick={() => action(selected.id, 'accept')}>Accept</button>
+              <button className="btn btn-success" onClick={() => openAcceptModal(selected)}>Accept</button>
             </div>
           )}
+        </Modal>
+      )}
+
+      {acceptModal && (
+        <Modal title={`Accept — ${acceptModal.username}`} onClose={() => setAcceptModal(null)}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
+            Choose the Discord roles to assign to <strong style={{ color: '#fff' }}>{acceptModal.username}</strong> upon acceptance. The Staff role is always added automatically.
+          </p>
+          {guildRolesLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
+          ) : guildRoles.length === 0 ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
+              No roles found (bot may be offline). You can still accept without assigning roles.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 340, overflowY: 'auto', margin: '12px 0' }}>
+              {guildRoles.map(r => (
+                <label key={r.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 12px', borderRadius: 8,
+                  background: selectedRoleIds.has(r.id) ? 'rgba(37,99,235,0.15)' : 'var(--surface2)',
+                  border: `1px solid ${selectedRoleIds.has(r.id) ? 'rgba(96,165,250,0.5)' : 'var(--border)'}`,
+                  cursor: 'pointer', transition: 'background 0.12s, border-color 0.12s',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedRoleIds.has(r.id)}
+                    onChange={() => toggleRole(r.id)}
+                    style={{ accentColor: '#3b82f6', width: 15, height: 15, flexShrink: 0 }}
+                  />
+                  {r.color && <span style={{ width: 10, height: 10, borderRadius: '50%', background: r.color, flexShrink: 0 }} />}
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+            {selectedRoleIds.size} role{selectedRoleIds.size !== 1 ? 's' : ''} selected
+          </div>
+          <div className="modal-actions">
+            <button className="btn btn-ghost" onClick={() => setAcceptModal(null)}>Cancel</button>
+            <button
+              className="btn btn-success"
+              disabled={actioning === acceptModal.id}
+              onClick={() => action(acceptModal.id, 'accept', [...selectedRoleIds])}
+            >
+              {actioning === acceptModal.id
+                ? <div className="spinner" style={{ width: 14, height: 14 }} />
+                : `Accept & Assign ${selectedRoleIds.size > 0 ? `${selectedRoleIds.size} Role${selectedRoleIds.size !== 1 ? 's' : ''}` : 'No Extra Roles'}`}
+            </button>
+          </div>
         </Modal>
       )}
     </div>

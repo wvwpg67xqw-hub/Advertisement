@@ -87,7 +87,7 @@ async function postThreadDecision(app, decision, adminUsername) {
 
 // ── Assign Discord roles when accepting ───────────────────────────────────────
 
-async function assignRolesOnAccept(app, reviewerUsername) {
+async function assignRolesOnAccept(app, reviewerUsername, extraRoleIds = []) {
   if (!discordClient) return;
   const guildId = app.guildId || process.env.MAIN_GUILD_ID;
   if (!guildId) return;
@@ -96,10 +96,7 @@ async function assignRolesOnAccept(app, reviewerUsername) {
     const member = await guild.members.fetch(app.userId).catch(() => null);
     if (!member) return;
 
-    const roles = roleMap[app.role];
-    const toAdd = [STAFF_ROLE_ID];
-    if (roles?.role) toAdd.push(roles.role);
-    if (roles?.team) toAdd.push(roles.team);
+    const toAdd = [STAFF_ROLE_ID, ...extraRoleIds].filter(Boolean);
     await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
     const taskLinks = {
@@ -158,6 +155,24 @@ router.get('/applications', requireAdmin, (req, res) => {
   res.json(db.getApplications(req.query.status));
 });
 
+router.get('/guild-roles', requireAdmin, async (req, res) => {
+  if (!discordClient) return res.json([]);
+  const guildId = req.query.guildId || process.env.MAIN_GUILD_ID;
+  if (!guildId) return res.json([]);
+  try {
+    const guild = await discordClient.guilds.fetch(guildId);
+    await guild.roles.fetch();
+    const roles = [...guild.roles.cache.values()]
+      .filter(r => r.id !== guild.id && !r.managed)
+      .sort((a, b) => b.position - a.position)
+      .map(r => ({ id: r.id, name: r.name, color: r.hexColor !== '#000000' ? r.hexColor : null }));
+    res.json(roles);
+  } catch (err) {
+    console.error('guild-roles error:', err.message);
+    res.json([]);
+  }
+});
+
 router.post('/applications/:id/accept', requireAdmin, async (req, res) => {
   const app = db.getApplication(req.params.id);
   if (!app) return res.status(404).json({ error: 'Application not found' });
@@ -166,12 +181,13 @@ router.post('/applications/:id/accept', requireAdmin, async (req, res) => {
   db.updateApplicationStatus(req.params.id, 'accepted');
 
   const adminUsername = req.session.user?.username || 'Admin';
+  const roleIds = Array.isArray(req.body?.roleIds) ? req.body.roleIds : [];
 
   // Fire-and-forget: message update, thread post, role assignment, DM
   Promise.all([
     updateDiscordApplicationMessage(app, 'accepted', adminUsername),
     postThreadDecision(app, 'accepted', adminUsername),
-    assignRolesOnAccept(app, adminUsername),
+    assignRolesOnAccept(app, adminUsername, roleIds),
   ]).catch(err => console.error('Accept side effects failed:', err.message));
 
   res.json({ success: true });

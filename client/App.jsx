@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
-import Home from './pages/Home.jsx';
 import Apply from './pages/Apply.jsx';
 import Login from './pages/Login.jsx';
 import Success from './pages/Success.jsx';
@@ -105,7 +104,13 @@ export default function App() {
       <BrowserRouter>
         <Navbar user={user} onLogout={handleLogout} />
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={
+            loading
+              ? <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>
+              : user
+                ? <Navigate to="/apply" replace />
+                : <Navigate to="/login" replace />
+          } />
           <Route path="/login" element={<Login />} />
           <Route path="/appeal" element={<Appeal />} />
           <Route path="/success" element={<Success />} />

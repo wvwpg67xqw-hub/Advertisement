@@ -41,7 +41,6 @@ export default function Login() {
             <Link to="/appeal" style={{ ...styles.discordBtn, justifyContent: 'center' }}>
               Submit an Appeal
             </Link>
-            <Link to="/" style={styles.backLink}>← Back to home</Link>
           </div>
         </div>
       </>
@@ -98,7 +97,6 @@ export default function Login() {
             No messages, servers, or other data are read.
           </p>
 
-          <Link to="/" style={styles.backLink}>← Back to home</Link>
         </div>
 
         <p style={styles.credit}>made by mycattiger2010</p>
