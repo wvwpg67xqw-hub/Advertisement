@@ -121,7 +121,7 @@ export function formatDuration(seconds) {
 
 // ─── Permission Checking ──────────────────────────────────────────────────────
 
-export function hasCommandPermission(member, commandName) {
+export async function hasCommandPermission(member, commandName) {
   if (!member) return false;
 
   const { MOD_ROLE_ID, TEAM_LEAD_ROLE_ID, ADMIN_ROLE_ID } = process.env;
@@ -135,7 +135,7 @@ export function hasCommandPermission(member, commandName) {
 
   // Legacy fallback — use DB-configured role allowlists or Discord perms
   if (member.permissions.has('Administrator')) return true;
-  const allowedRoles = getCommandRoles(member.guild.id, commandName);
+  const allowedRoles = await getCommandRoles(member.guild.id, commandName);
   if (!allowedRoles || allowedRoles.length === 0) {
     return member.permissions.has('ManageGuild');
   }

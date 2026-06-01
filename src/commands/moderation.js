@@ -79,22 +79,22 @@ export const defs = [
 ];
 
 export async function handleWarn(interaction) {
-  if (!hasCommandPermission(interaction.member, 'warn')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'warn')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
 
-  const caseId = addWarn(interaction.guildId, target.id, interaction.user.id, reason);
-  const totalWarns = getWarnCount(interaction.guildId, target.id);
+  const caseId = await addWarn(interaction.guildId, target.id, interaction.user.id, reason);
+  const totalWarns = await getWarnCount(interaction.guildId, target.id);
   const embed = buildWarnEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
   embed.setFooter({ text: `Total warnings: ${totalWarns}` });
   await interaction.reply({ embeds: [embed], flags: 64 });
-  await sendLog(interaction.guild, getGuild(interaction.guildId), 'warn', embed);
+  await sendLog(interaction.guild, await getGuild(interaction.guildId), 'warn', embed);
 }
 
 export async function handleWarns(interaction) {
-  if (!hasCommandPermission(interaction.member, 'warns')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'warns')) return deny(interaction);
   const target = interaction.options.getUser('user');
-  const warns = getWarns(interaction.guildId, target.id);
+  const warns = await getWarns(interaction.guildId, target.id);
   if (warns.length === 0) return interaction.reply({ content: `✅ **${target.tag}** has no warnings.`, flags: 64 });
   const embed = new EmbedBuilder()
     .setColor(0xFFAA00).setTitle(`⚠️ Warnings for ${target.tag}`)
@@ -107,7 +107,7 @@ export async function handleWarns(interaction) {
 }
 
 export async function handleWarnLeaderboard(interaction) {
-  const top = getWarnLeaderboard(interaction.guildId, 10);
+  const top = await getWarnLeaderboard(interaction.guildId, 10);
   if (top.length === 0) return interaction.reply({ content: '✅ No warnings have been issued yet.', flags: 64 });
   const embed = new EmbedBuilder()
     .setColor(0xFFAA00).setTitle('⚠️ Warn Leaderboard')
@@ -117,7 +117,7 @@ export async function handleWarnLeaderboard(interaction) {
 }
 
 export async function handleAdWarn(interaction) {
-  if (!hasCommandPermission(interaction.member, 'ad-warn')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'ad-warn')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const messageId = interaction.options.getString('message-id');
@@ -128,9 +128,10 @@ export async function handleAdWarn(interaction) {
     if (msg) { deletedContent = msg.content; await msg.delete().catch(() => {}); }
   }
 
-  const caseId = addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, messageId, deletedContent);
-  const totalWarns = getAdWarns(interaction.guildId, target.id).length;
-  const moderatorAdWarnCount = getAdWarnCountByModerator(interaction.guildId, interaction.user.id);
+  const caseId = await addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, messageId, deletedContent);
+  const adWarns = await getAdWarns(interaction.guildId, target.id);
+  const totalWarns = adWarns.length;
+  const moderatorAdWarnCount = await getAdWarnCountByModerator(interaction.guildId, interaction.user.id);
 
   const embed = buildAdWarnEmbed({
     userId: target.id, moderatorId: interaction.user.id,
@@ -140,13 +141,13 @@ export async function handleAdWarn(interaction) {
     channelId: interaction.channelId, messageId, totalWarns,
   });
   await interaction.reply({ embeds: [embed] });
-  await sendLog(interaction.guild, getGuild(interaction.guildId), 'ad_warn', embed);
+  await sendLog(interaction.guild, await getGuild(interaction.guildId), 'ad_warn', embed);
 }
 
 export async function handleRemoveAdWarn(interaction) {
-  if (!hasCommandPermission(interaction.member, 'remove-ad-warn')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'remove-ad-warn')) return deny(interaction);
   const caseId = interaction.options.getString('case-id').toUpperCase();
-  const removed = removeAdWarn(interaction.guildId, caseId);
+  const removed = await removeAdWarn(interaction.guildId, caseId);
   if (!removed) return interaction.reply({ content: `❌ No ad-warn found with case ID **${caseId}**.`, flags: 64 });
   await interaction.reply({
     embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('✅ Ad-Warn Removed')
@@ -155,13 +156,13 @@ export async function handleRemoveAdWarn(interaction) {
 }
 
 export async function handleMute(interaction) {
-  if (!hasCommandPermission(interaction.member, 'mute')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'mute')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const durationStr = interaction.options.getString('duration');
   const reason = interaction.options.getString('reason') || 'No reason provided';
   const seconds = parseDuration(durationStr);
   if (!seconds) return interaction.reply({ content: '❌ Invalid duration. Use formats like `10m`, `1h`, `1d`.', flags: 64 });
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   if (!config.muted_role_id) return noConfig(interaction, 'muted-role');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
@@ -179,10 +180,10 @@ export async function handleMute(interaction) {
 }
 
 export async function handleUnmute(interaction) {
-  if (!hasCommandPermission(interaction.member, 'unmute')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'unmute')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason') || 'No reason provided';
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   if (!config.muted_role_id) return noConfig(interaction, 'muted-role');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
@@ -196,7 +197,7 @@ export async function handleUnmute(interaction) {
 }
 
 export async function handleBan(interaction) {
-  if (!hasCommandPermission(interaction.member, 'ban')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'ban')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const deleteDays = interaction.options.getInteger('delete-days') || 0;
@@ -211,11 +212,11 @@ export async function handleBan(interaction) {
   });
   const embed = buildModEmbed('ban', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
-  await sendLog(interaction.guild, getGuild(interaction.guildId), 'general', embed);
+  await sendLog(interaction.guild, await getGuild(interaction.guildId), 'general', embed);
 }
 
 export async function handleFire(interaction) {
-  if (!hasCommandPermission(interaction.member, 'fire')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'fire')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const member = await safeFetchMember(interaction.guild, target.id);
@@ -228,7 +229,7 @@ export async function handleFire(interaction) {
   if (staffRole?.editable) await member.roles.remove(STAFF_ROLE_ID, reason).catch(() => {});
   await interaction.guild.members.ban(target.id, { reason }).catch(() => {});
 
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   const embed = buildModEmbed('fire', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
@@ -236,31 +237,31 @@ export async function handleFire(interaction) {
 }
 
 export async function handleJail(interaction) {
-  if (!hasCommandPermission(interaction.member, 'jail')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'jail')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason') || 'No reason provided';
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   if (!config.jail_role_id) return noConfig(interaction, 'jail-role');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
   if (!canModerate(interaction.member, member)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
-  if (isJailed(interaction.guildId, target.id)) return interaction.reply({ content: `❌ **${target.tag}** is already jailed.`, flags: 64 });
+  if (await isJailed(interaction.guildId, target.id)) return interaction.reply({ content: `❌ **${target.tag}** is already jailed.`, flags: 64 });
   const originalRoles = member.roles.cache.filter(r => r.id !== interaction.guild.id && r.editable).map(r => r.id);
   await member.roles.remove(originalRoles, reason).catch(() => {});
   await member.roles.add(config.jail_role_id, reason).catch(() => {});
-  jailUser(interaction.guildId, target.id, originalRoles);
+  await jailUser(interaction.guildId, target.id, originalRoles);
   const embed = buildModEmbed('jail', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
 }
 
 export async function handleUnjail(interaction) {
-  if (!hasCommandPermission(interaction.member, 'unjail')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'unjail')) return deny(interaction);
   const target = interaction.options.getUser('user');
-  const config = getGuild(interaction.guildId);
-  const originalRoles = unjailUser(interaction.guildId, target.id);
+  const config = await getGuild(interaction.guildId);
+  const originalRoles = await unjailUser(interaction.guildId, target.id);
   if (!originalRoles) return interaction.reply({ content: `❌ **${target.tag}** is not jailed.`, flags: 64 });
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!canModerate(interaction.member, member)) {

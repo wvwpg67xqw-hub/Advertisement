@@ -40,9 +40,9 @@ export const defs = [
 ];
 
 export async function handleMessages(interaction) {
-  if (!hasCommandPermission(interaction.member, 'messages')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'messages')) return deny(interaction);
   const target = interaction.options.getUser('user') || interaction.user;
-  const count = getMessageCount(interaction.guildId, target.id);
+  const count = await getMessageCount(interaction.guildId, target.id);
   await interaction.reply({
     embeds: [new EmbedBuilder().setColor(0x5865F2).setTitle('💬 Message Count')
       .setDescription(`**${target.tag}** has sent **${count.toLocaleString()}** messages in this server.`)
@@ -52,8 +52,8 @@ export async function handleMessages(interaction) {
 }
 
 export async function handleMessageLeaderboard(interaction) {
-  if (!hasCommandPermission(interaction.member, 'message-leaderboard')) return deny(interaction);
-  const top = getMessageLeaderboard(interaction.guildId, 10);
+  if (!await hasCommandPermission(interaction.member, 'message-leaderboard')) return deny(interaction);
+  const top = await getMessageLeaderboard(interaction.guildId, 10);
   if (top.length === 0) return interaction.reply({ content: '📭 No messages have been counted yet.', flags: 64 });
   const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('💬 Message Leaderboard')
     .setDescription(top.map((r, i) => `**${i + 1}.** <@${r.user_id}> — ${r.count.toLocaleString()} msgs`).join('\n'))
@@ -62,9 +62,9 @@ export async function handleMessageLeaderboard(interaction) {
 }
 
 export async function handleCaseInfo(interaction) {
-  if (!hasCommandPermission(interaction.member, 'case-info')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'case-info')) return deny(interaction);
   const caseId = interaction.options.getString('case-id').toUpperCase();
-  const info = getCaseInfo(interaction.guildId, caseId);
+  const info = await getCaseInfo(interaction.guildId, caseId);
   if (!info) return interaction.reply({ content: `❌ No case found with ID **${caseId}**.`, flags: 64 });
   const typeLabel = { warn: '⚠️ Warning', ad_warn: '📢 Ad Warning', strike: '🚫 Strike' }[info.type] || 'Case';
   const embed = new EmbedBuilder().setColor(0x5865F2).setTitle(`${typeLabel} — ${info.case_id}`)
@@ -79,9 +79,9 @@ export async function handleCaseInfo(interaction) {
 }
 
 export async function handleBalance(interaction) {
-  if (!hasCommandPermission(interaction.member, 'balance')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'balance')) return deny(interaction);
   const target = interaction.options.getUser('user') || interaction.user;
-  const bal = getBalance(interaction.guildId, target.id);
+  const bal = await getBalance(interaction.guildId, target.id);
   await interaction.reply({
     embeds: [new EmbedBuilder().setColor(0xFFD700).setTitle('💰 Balance')
       .setDescription(`**${target.tag}** has **${bal.toLocaleString()} coins**.`)
@@ -91,8 +91,8 @@ export async function handleBalance(interaction) {
 }
 
 export async function handleSnipe(interaction) {
-  if (!hasCommandPermission(interaction.member, 'snipe')) return deny(interaction);
-  const cached = getSnipeCache(interaction.guildId, interaction.channelId);
+  if (!await hasCommandPermission(interaction.member, 'snipe')) return deny(interaction);
+  const cached = await getSnipeCache(interaction.guildId, interaction.channelId);
   if (!cached) return interaction.reply({ content: '📭 No recently deleted messages in this channel.', flags: 64 });
   const embed = new EmbedBuilder().setColor(0xFF6B6B).setTitle('🔍 Sniped Message')
     .setDescription(cached.content || '*[no text content]*')
@@ -102,14 +102,14 @@ export async function handleSnipe(interaction) {
 }
 
 export async function handleResetMessages(interaction) {
-  if (!hasCommandPermission(interaction.member, 'reset-messages')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'reset-messages')) return deny(interaction);
   const target = interaction.options.getUser('user');
-  resetMessages(interaction.guildId, target.id);
+  await resetMessages(interaction.guildId, target.id);
   await interaction.reply({ content: `✅ Message count reset for **${target.tag}**.`, flags: 64 });
 }
 
 export async function handleResetMessagesAll(interaction) {
-  if (!hasCommandPermission(interaction.member, 'reset-messages-all')) return deny(interaction);
-  resetMessagesAll(interaction.guildId);
+  if (!await hasCommandPermission(interaction.member, 'reset-messages-all')) return deny(interaction);
+  await resetMessagesAll(interaction.guildId);
   await interaction.reply({ content: '✅ All message counts have been reset.', flags: 64 });
 }

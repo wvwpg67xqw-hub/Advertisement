@@ -17,13 +17,13 @@ export const defs = [
 ];
 
 export async function handleNetworkBan(interaction) {
-  if (!hasCommandPermission(interaction.member, 'network-ban')) return deny(interaction);
-  const config = getGuild(interaction.guildId);
+  if (!await hasCommandPermission(interaction.member, 'network-ban')) return deny(interaction);
+  const config = await getGuild(interaction.guildId);
   if (!config.is_hub) return interaction.reply({ content: '❌ `/network-ban` can only be used in the network hub.', flags: 64 });
   await interaction.deferReply();
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
-  const members = getNetworkMembers(interaction.guildId);
+  const members = await getNetworkMembers(interaction.guildId);
   const results = [];
   for (const { guild_id } of members) {
     const guild = interaction.client.guilds.cache.get(guild_id);
@@ -45,13 +45,13 @@ export async function handleNetworkBan(interaction) {
 }
 
 export async function handleNetworkUnban(interaction) {
-  if (!hasCommandPermission(interaction.member, 'network-unban')) return deny(interaction);
-  const config = getGuild(interaction.guildId);
+  if (!await hasCommandPermission(interaction.member, 'network-unban')) return deny(interaction);
+  const config = await getGuild(interaction.guildId);
   if (!config.is_hub) return interaction.reply({ content: '❌ `/network-unban` can only be used in the network hub.', flags: 64 });
   await interaction.deferReply();
   const userId = interaction.options.getString('user-id').trim();
   const reason = interaction.options.getString('reason');
-  const members = getNetworkMembers(interaction.guildId);
+  const members = await getNetworkMembers(interaction.guildId);
   const results = [];
   for (const { guild_id } of members) {
     const guild = interaction.client.guilds.cache.get(guild_id);

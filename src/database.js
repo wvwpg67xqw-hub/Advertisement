@@ -1,45 +1,39 @@
-import { readCol, writeCol, nextId, ts } from '../jsondb.js';
+import pool from '../mysqldb.js';
 
-// ─── Guild Config ──────────────────────────────────────────────────────────────
+function ts() { return Math.floor(Date.now() / 1000); }
 
-export function getGuild(guildId) {
-  const rows = readCol('guilds');
-  let row = rows.find(g => g.guild_id === guildId);
+async function q(sql, params = []) {
+  const [rows] = await pool.execute(sql, params);
+  return rows;
+}
+
+async function q1(sql, params = []) {
+  const rows = await q(sql, params);
+  return rows[0] ?? null;
+}
+
+function parseJson(val, fallback) {
+  if (val == null) return fallback;
+  if (typeof val !== 'string') return val;
+  try { return JSON.parse(val); } catch { return fallback; }
+}
+
+// ── Guild Config ──────────────────────────────────────────────────────────────
+
+export async function getGuild(guildId) {
+  let row = await q1('SELECT * FROM guilds WHERE guild_id = ?', [guildId]);
   if (!row) {
-    row = {
-      guild_id: guildId, log_channel_id: null, warn_log_channel_id: null,
-      strike_log_channel_id: null, request_log_channel_id: null, ad_warn_log_channel_id: null,
-      staff_updates_channel_id: null,
-      jail_role_id: null, muted_role_id: null, command_roles: {},
-      ban_request_channel_id: null, blacklist_request_channel_id: null,
-      network_ban_request_channel_id: null, partnership_request_channel_id: null,
-      is_hub: 0, hub_guild_id: null,
-      break_request_channel_id: null, break_role_id: null, main_break_role_id: null,
-      resign_channel_id: null, verified_role_id: null, applications_channel_id: null,
-      referral_link: null, modmail_test_channel_id: null,
-      pfp_url: null, banner_url: null,
-      network_apply_log_channel_id: null, network_apply_roles: [],
-    };
-    rows.push(row);
-    writeCol('guilds', rows);
+    await q('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [guildId]);
+    row = await q1('SELECT * FROM guilds WHERE guild_id = ?', [guildId]);
   }
-  if (!('break_request_channel_id' in row)) row.break_request_channel_id = null;
-  if (!('break_role_id' in row)) row.break_role_id = null;
-  if (!('main_break_role_id' in row)) row.main_break_role_id = null;
-  if (!('resign_channel_id' in row)) row.resign_channel_id = null;
-  if (!('verified_role_id' in row)) row.verified_role_id = null;
-  if (!('applications_channel_id' in row)) row.applications_channel_id = null;
-  if (!('referral_link' in row)) row.referral_link = null;
-  if (!('modmail_test_channel_id' in row)) row.modmail_test_channel_id = null;
-  if (!('network_apply_log_channel_id' in row)) row.network_apply_log_channel_id = null;
-  if (!('network_apply_roles' in row)) row.network_apply_roles = [];
+  row.command_roles       = parseJson(row.command_roles, {});
+  row.network_apply_roles = parseJson(row.network_apply_roles, []);
+  row.is_hub = !!row.is_hub;
   return row;
 }
 
-export function setGuildConfig(guildId, fields) {
-  getGuild(guildId);
-  const rows = readCol('guilds');
-  const i = rows.findIndex(g => g.guild_id === guildId);
+export async function setGuildConfig(guildId, fields) {
+  await getGuild(guildId);
   const allowed = [
     'log_channel_id', 'warn_log_channel_id', 'strike_log_channel_id',
     'request_log_channel_id', 'ad_warn_log_channel_id', 'staff_updates_channel_id',
@@ -52,385 +46,378 @@ export function setGuildConfig(guildId, fields) {
     'pfp_url', 'banner_url',
     'network_apply_log_channel_id', 'network_apply_roles',
   ];
+  const sets = [];
+  const params = [];
   for (const [key, val] of Object.entries(fields)) {
-    if (allowed.includes(key)) rows[i][key] = val;
+    if (!allowed.includes(key)) continue;
+    sets.push(`\`${key}\` = ?`);
+    params.push(key === 'network_apply_roles' ? JSON.stringify(val) : val);
   }
-  writeCol('guilds', rows);
+  if (sets.length === 0) return;
+  params.push(guildId);
+  await q(`UPDATE guilds SET ${sets.join(', ')} WHERE guild_id = ?`, params);
 }
 
-export function setNetworkHub(guildId, isHub) {
-  getGuild(guildId);
-  const rows = readCol('guilds');
-  const i = rows.findIndex(g => g.guild_id === guildId);
-  rows[i].is_hub = isHub ? 1 : 0;
-  writeCol('guilds', rows);
+export async function setCommandRoles(guildId, command, roleIds) {
+  const guild = await getGuild(guildId);
+  const cr = guild.command_roles || {};
+  cr[command] = roleIds;
+  await q('UPDATE guilds SET command_roles = ? WHERE guild_id = ?', [JSON.stringify(cr), guildId]);
 }
 
-export function setHubGuildId(guildId, hubGuildId) {
-  getGuild(guildId);
-  const rows = readCol('guilds');
-  const i = rows.findIndex(g => g.guild_id === guildId);
-  rows[i].hub_guild_id = hubGuildId;
-  writeCol('guilds', rows);
-}
-
-export function clearNetworkHub(guildId) {
-  setNetworkHub(guildId, false);
-}
-
-export function clearHubGuildId(guildId) {
-  getGuild(guildId);
-  const rows = readCol('guilds');
-  const i = rows.findIndex(g => g.guild_id === guildId);
-  rows[i].hub_guild_id = null;
-  writeCol('guilds', rows);
-}
-
-export function getNetworkMembers(hubGuildId) {
-  return readCol('guilds').filter(g => g.hub_guild_id === hubGuildId).map(g => ({ guild_id: g.guild_id }));
-}
-
-export function setCommandRoles(guildId, command, roleIds) {
-  getGuild(guildId);
-  const rows = readCol('guilds');
-  const i = rows.findIndex(g => g.guild_id === guildId);
-  if (!rows[i].command_roles) rows[i].command_roles = {};
-  rows[i].command_roles[command] = roleIds;
-  writeCol('guilds', rows);
-}
-
-export function getCommandRoles(guildId, command) {
-  const guild = getGuild(guildId);
+export async function getCommandRoles(guildId, command) {
+  const guild = await getGuild(guildId);
   return (guild.command_roles || {})[command] || [];
 }
 
-// ─── Case ID ──────────────────────────────────────────────────────────────────
-
-function generateCaseId(guildId) {
-  const w = readCol('warns').filter(r => r.guild_id === guildId).length;
-  const a = readCol('ad_warns').filter(r => r.guild_id === guildId).length;
-  const s = readCol('strikes').filter(r => r.guild_id === guildId).length;
-  return `CASE-${String(w + a + s + 1).padStart(4, '0')}`;
+export async function setNetworkHub(guildId, isHub) {
+  await getGuild(guildId);
+  await q('UPDATE guilds SET is_hub = ? WHERE guild_id = ?', [isHub ? 1 : 0, guildId]);
 }
 
-// ─── Warns ────────────────────────────────────────────────────────────────────
-
-export function addWarn(guildId, userId, moderatorId, reason) {
-  const rows = readCol('warns');
-  const caseId = generateCaseId(guildId);
-  rows.push({ id: nextId('warns'), case_id: caseId, guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, created_at: ts() });
-  writeCol('warns', rows);
-  return caseId;
+export async function setHubGuildId(guildId, hubGuildId) {
+  await getGuild(guildId);
+  await q('UPDATE guilds SET hub_guild_id = ? WHERE guild_id = ?', [hubGuildId, guildId]);
 }
 
-export function getWarns(guildId, userId) {
-  return readCol('warns').filter(r => r.guild_id === guildId && r.user_id === userId).sort((a, b) => b.created_at - a.created_at);
+export async function clearNetworkHub(guildId) {
+  await getGuild(guildId);
+  await q('UPDATE guilds SET is_hub = 0 WHERE guild_id = ?', [guildId]);
 }
 
-export function getWarnCount(guildId, userId) {
-  return readCol('warns').filter(r => r.guild_id === guildId && r.user_id === userId).length;
+export async function clearHubGuildId(guildId) {
+  await getGuild(guildId);
+  await q('UPDATE guilds SET hub_guild_id = NULL WHERE guild_id = ?', [guildId]);
 }
 
-export function getWarnLeaderboard(guildId, limit = 10) {
-  const counts = {};
-  readCol('warns').filter(r => r.guild_id === guildId).forEach(r => { counts[r.user_id] = (counts[r.user_id] || 0) + 1; });
-  return Object.entries(counts).map(([user_id, count]) => ({ user_id, count })).sort((a, b) => b.count - a.count).slice(0, limit);
+export async function getNetworkMembers(hubGuildId) {
+  const rows = await q('SELECT guild_id FROM guilds WHERE hub_guild_id = ?', [hubGuildId]);
+  return rows.map(r => ({ guild_id: r.guild_id }));
 }
 
-export function getCaseInfo(guildId, caseId) {
-  return (
-    readCol('warns').find(r => r.guild_id === guildId && r.case_id === caseId && (r.type = 'warn')) ||
-    readCol('ad_warns').find(r => r.guild_id === guildId && r.case_id === caseId && (r.type = 'ad_warn')) ||
-    readCol('strikes').find(r => r.guild_id === guildId && r.case_id === caseId && (r.type = 'strike')) ||
-    null
-  );
+export async function setNetworkApplyConfig(guildId, logChannelId, roles) {
+  await getGuild(guildId);
+  await q('UPDATE guilds SET network_apply_log_channel_id = ?, network_apply_roles = ? WHERE guild_id = ?',
+    [logChannelId, JSON.stringify(roles || []), guildId]);
 }
 
-// ─── Ad Warns ─────────────────────────────────────────────────────────────────
-
-export function addAdWarn(guildId, userId, moderatorId, reason, messageId, messageContent) {
-  const rows = readCol('ad_warns');
-  const caseId = generateCaseId(guildId);
-  rows.push({ id: nextId('ad_warns'), case_id: caseId, guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, message_id: messageId ?? null, message_content: messageContent ?? null, created_at: ts() });
-  writeCol('ad_warns', rows);
-  return caseId;
-}
-
-export function getAdWarns(guildId, userId) {
-  return readCol('ad_warns').filter(r => r.guild_id === guildId && r.user_id === userId).sort((a, b) => b.created_at - a.created_at);
-}
-
-export function removeAdWarn(guildId, caseId) {
-  const rows = readCol('ad_warns');
-  const next = rows.filter(r => !(r.guild_id === guildId && r.case_id === caseId));
-  writeCol('ad_warns', next);
-  return rows.length !== next.length;
-}
-
-export function getAdWarnCountByModerator(guildId, moderatorId) {
-  return readCol('ad_warns').filter(r => r.guild_id === guildId && r.moderator_id === moderatorId).length;
-}
-
-// ─── Strikes ──────────────────────────────────────────────────────────────────
-
-export function addStrike(guildId, userId, moderatorId, reason) {
-  const rows = readCol('strikes');
-  const caseId = generateCaseId(guildId);
-  rows.push({ id: nextId('strikes'), case_id: caseId, guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, created_at: ts() });
-  writeCol('strikes', rows);
-  return caseId;
-}
-
-export function getStrikes(guildId, userId) {
-  return readCol('strikes').filter(r => r.guild_id === guildId && r.user_id === userId).sort((a, b) => b.created_at - a.created_at);
-}
-
-export function getStrikeCount(guildId, userId) {
-  return readCol('strikes').filter(r => r.guild_id === guildId && r.user_id === userId).length;
-}
-
-export function removeStrike(guildId, caseId) {
-  const rows = readCol('strikes');
-  const next = rows.filter(r => !(r.guild_id === guildId && r.case_id === caseId));
-  writeCol('strikes', next);
-  return rows.length !== next.length;
-}
-
-// ─── Jail ─────────────────────────────────────────────────────────────────────
-
-export function jailUser(guildId, userId, originalRoles) {
-  const rows = readCol('jailed_users').filter(r => !(r.guild_id === guildId && r.user_id === userId));
-  rows.push({ guild_id: guildId, user_id: userId, original_roles: originalRoles, jailed_at: ts() });
-  writeCol('jailed_users', rows);
-}
-
-export function unjailUser(guildId, userId) {
-  const rows = readCol('jailed_users');
-  const entry = rows.find(r => r.guild_id === guildId && r.user_id === userId);
-  if (!entry) return null;
-  writeCol('jailed_users', rows.filter(r => !(r.guild_id === guildId && r.user_id === userId)));
-  return entry.original_roles;
-}
-
-export function isJailed(guildId, userId) {
-  return !!readCol('jailed_users').find(r => r.guild_id === guildId && r.user_id === userId);
-}
-
-// ─── Message Counts ───────────────────────────────────────────────────────────
-
-export function incrementMessageCount(guildId, userId) {
-  const rows = readCol('message_counts');
-  const i = rows.findIndex(r => r.guild_id === guildId && r.user_id === userId);
-  if (i >= 0) rows[i].count++;
-  else rows.push({ guild_id: guildId, user_id: userId, count: 1 });
-  writeCol('message_counts', rows);
-}
-
-export function getMessageCount(guildId, userId) {
-  return readCol('message_counts').find(r => r.guild_id === guildId && r.user_id === userId)?.count || 0;
-}
-
-export function getMessageLeaderboard(guildId, limit = 10) {
-  return readCol('message_counts').filter(r => r.guild_id === guildId).sort((a, b) => b.count - a.count).slice(0, limit);
-}
-
-export function resetMessages(guildId, userId) {
-  writeCol('message_counts', readCol('message_counts').filter(r => !(r.guild_id === guildId && r.user_id === userId)));
-}
-
-export function resetMessagesAll(guildId) {
-  writeCol('message_counts', readCol('message_counts').filter(r => r.guild_id !== guildId));
-}
-
-// ─── Snipe Cache ──────────────────────────────────────────────────────────────
-
-export function setSnipeCache(guildId, channelId, content, authorId, authorName, authorAvatar) {
-  const rows = readCol('snipe_cache').filter(r => !(r.guild_id === guildId && r.channel_id === channelId));
-  rows.push({ guild_id: guildId, channel_id: channelId, content, author_id: authorId, author_name: authorName, author_avatar: authorAvatar, deleted_at: ts() });
-  writeCol('snipe_cache', rows);
-}
-
-export function getSnipeCache(guildId, channelId) {
-  return readCol('snipe_cache').find(r => r.guild_id === guildId && r.channel_id === channelId) ?? null;
-}
-
-// ─── Balances ─────────────────────────────────────────────────────────────────
-
-export function getBalance(guildId, userId) {
-  return readCol('balances').find(r => r.guild_id === guildId && r.user_id === userId)?.balance || 0;
-}
-
-export function setBalance(guildId, userId, amount) {
-  const rows = readCol('balances');
-  const i = rows.findIndex(r => r.guild_id === guildId && r.user_id === userId);
-  if (i >= 0) rows[i].balance = amount;
-  else rows.push({ guild_id: guildId, user_id: userId, balance: amount });
-  writeCol('balances', rows);
-}
-
-// ─── Breaks ───────────────────────────────────────────────────────────────────
-
-export function startBreak(guildId, userId, username, reason, savedRoles = [], endAt = null) {
-  const rows = readCol('breaks');
-  if (rows.find(r => r.guild_id === guildId && r.user_id === userId)) return false;
-  rows.push({ id: nextId('breaks'), guild_id: guildId, user_id: userId, username, reason: reason ?? null, started_at: ts(), end_at: endAt, saved_roles: savedRoles });
-  writeCol('breaks', rows);
-  return true;
-}
-
-export function extendBreak(guildId, userId, extraSeconds) {
-  const rows = readCol('breaks');
-  const i = rows.findIndex(r => r.guild_id === guildId && r.user_id === userId);
-  if (i < 0) return null;
-  const current = rows[i].end_at ?? Math.floor(Date.now() / 1000);
-  rows[i].end_at = current + extraSeconds;
-  writeCol('breaks', rows);
-  return rows[i];
-}
-
-export function getExpiredBreaks() {
-  const now = Math.floor(Date.now() / 1000);
-  return readCol('breaks').filter(r => r.end_at && r.end_at <= now);
-}
-
-export function endBreak(guildId, userId) {
-  const rows = readCol('breaks');
-  const entry = rows.find(r => r.guild_id === guildId && r.user_id === userId);
-  if (!entry) return null;
-  writeCol('breaks', rows.filter(r => !(r.guild_id === guildId && r.user_id === userId)));
-  return entry;
-}
-
-export function getCurrentBreaks(guildId) {
-  return readCol('breaks').filter(r => r.guild_id === guildId).sort((a, b) => a.started_at - b.started_at);
-}
-
-export function isOnBreak(guildId, userId) {
-  return !!readCol('breaks').find(r => r.guild_id === guildId && r.user_id === userId);
-}
-
-// ─── Applications ─────────────────────────────────────────────────────────────
-
-export function saveApplication(guildId, userId, username, data) {
-  const rows = readCol('applications').filter(r => !(r.guild_id === guildId && r.user_id === userId));
-  rows.push({ id: nextId('applications'), guild_id: guildId, user_id: userId, username, ...data, submitted_at: ts() });
-  writeCol('applications', rows);
-}
-
-export function getApplication(guildId, userId) {
-  return readCol('applications').find(r => r.guild_id === guildId && r.user_id === userId) ?? null;
-}
-
-export function removeApplication(guildId, userId) {
-  const rows = readCol('applications');
-  const entry = rows.find(r => r.guild_id === guildId && r.user_id === userId);
-  writeCol('applications', rows.filter(r => !(r.guild_id === guildId && r.user_id === userId)));
-  return entry ?? null;
-}
-
-// ─── Blacklist (bot) ──────────────────────────────────────────────────────────
-
-export function addBlacklist(guildId, userId, moderatorId, reason) {
-  const rows = readCol('bot_blacklist').filter(r => !(r.guild_id === guildId && r.user_id === userId));
-  rows.push({ id: nextId('bot_blacklist'), guild_id: guildId, user_id: userId, moderator_id: moderatorId, reason, created_at: ts() });
-  writeCol('bot_blacklist', rows);
-}
-
-export function isBlacklisted(guildId, userId) {
-  return !!readCol('bot_blacklist').find(r => r.guild_id === guildId && r.user_id === userId);
-}
-
-export function getBlacklistEntry(guildId, userId) {
-  return readCol('bot_blacklist').find(r => r.guild_id === guildId && r.user_id === userId) ?? null;
-}
-
-// ─── Network Apply Config ─────────────────────────────────────────────────────
-
-export function setNetworkApplyConfig(guildId, logChannelId, roles) {
-  getGuild(guildId);
-  const rows = readCol('guilds');
-  const i = rows.findIndex(g => g.guild_id === guildId);
-  rows[i].network_apply_log_channel_id = logChannelId;
-  rows[i].network_apply_roles = roles || [];
-  writeCol('guilds', rows);
-}
-
-export function getNetworkApplyConfig(guildId) {
-  const g = getGuild(guildId);
+export async function getNetworkApplyConfig(guildId) {
+  const g = await getGuild(guildId);
   return {
     logChannelId: g.network_apply_log_channel_id || null,
     roles: g.network_apply_roles || [],
   };
 }
 
-export function saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age) {
-  const rows = readCol('network_applications');
-  const id = nextId('network_applications');
-  rows.push({
-    id, target_guild_id: targetGuildId, applicant_id: applicantId,
-    applicant_username: applicantUsername, applicant_avatar: applicantAvatar,
-    why, experience, timezone, age, status: 'pending', created_at: ts(),
-  });
-  writeCol('network_applications', rows);
-  return id;
+// ── Ad Channels ───────────────────────────────────────────────────────────────
+
+export async function addAdChannel(guildId, channelId) {
+  await q('INSERT IGNORE INTO ad_channels (guild_id, channel_id) VALUES (?, ?)', [guildId, channelId]);
 }
 
-export function getNetworkApplication(id) {
-  return readCol('network_applications').find(r => r.id === Number(id)) ?? null;
+export async function removeAdChannel(guildId, channelId) {
+  const result = await q('DELETE FROM ad_channels WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+  return result.affectedRows > 0;
 }
 
-export function resolveNetworkApplication(id, status) {
-  const rows = readCol('network_applications');
-  const i = rows.findIndex(r => r.id === Number(id));
-  if (i < 0) return null;
-  rows[i].status = status;
-  writeCol('network_applications', rows);
-  return rows[i];
+export async function getAdChannels(guildId) {
+  const rows = await q('SELECT channel_id FROM ad_channels WHERE guild_id = ?', [guildId]);
+  return rows.map(r => r.channel_id);
 }
 
-// ─── Ad Channels ──────────────────────────────────────────────────────────────
-
-export function addAdChannel(guildId, channelId) {
-  const rows = readCol('ad_channels');
-  if (!rows.find(r => r.guild_id === guildId && r.channel_id === channelId)) {
-    rows.push({ guild_id: guildId, channel_id: channelId });
-    writeCol('ad_channels', rows);
-  }
+export async function isAdChannel(guildId, channelId) {
+  const row = await q1('SELECT guild_id FROM ad_channels WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+  return !!row;
 }
 
-export function removeAdChannel(guildId, channelId) {
-  const rows = readCol('ad_channels');
-  const next = rows.filter(r => !(r.guild_id === guildId && r.channel_id === channelId));
-  writeCol('ad_channels', next);
-  return rows.length !== next.length;
+// ── Ad Posts ──────────────────────────────────────────────────────────────────
+
+export async function trackAdPost(guildId, channelId, messageId, userId) {
+  await q('INSERT IGNORE INTO ad_posts (guild_id, channel_id, message_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)',
+    [guildId, channelId, messageId, userId, ts()]);
 }
 
-export function getAdChannels(guildId) {
-  return readCol('ad_channels').filter(r => r.guild_id === guildId).map(r => r.channel_id);
+export async function getAdPostsByUser(guildId, userId) {
+  return q('SELECT channel_id, message_id FROM ad_posts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
 }
 
-export function isAdChannel(guildId, channelId) {
-  return !!readCol('ad_channels').find(r => r.guild_id === guildId && r.channel_id === channelId);
+export async function clearAdPostsByUser(guildId, userId) {
+  await q('DELETE FROM ad_posts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
 }
 
-// ─── Ad Posts ─────────────────────────────────────────────────────────────────
-
-export function trackAdPost(guildId, channelId, messageId, userId) {
-  const rows = readCol('ad_posts');
-  if (!rows.find(r => r.guild_id === guildId && r.message_id === messageId)) {
-    rows.push({ id: nextId('ad_posts'), guild_id: guildId, channel_id: channelId, message_id: messageId, user_id: userId, created_at: ts() });
-    writeCol('ad_posts', rows);
-  }
+export async function removeAdPostRecord(guildId, messageId) {
+  await q('DELETE FROM ad_posts WHERE guild_id = ? AND message_id = ?', [guildId, messageId]);
 }
 
-export function getAdPostsByUser(guildId, userId) {
-  return readCol('ad_posts').filter(r => r.guild_id === guildId && r.user_id === userId).map(r => ({ channel_id: r.channel_id, message_id: r.message_id }));
+// ── Case ID Generator ─────────────────────────────────────────────────────────
+
+async function generateCaseId(guildId) {
+  const [w] = await q('SELECT COUNT(*) AS c FROM warns WHERE guild_id = ?', [guildId]);
+  const [a] = await q('SELECT COUNT(*) AS c FROM ad_warns WHERE guild_id = ?', [guildId]);
+  const [s] = await q('SELECT COUNT(*) AS c FROM strikes WHERE guild_id = ?', [guildId]);
+  const total = (Number(w?.c) || 0) + (Number(a?.c) || 0) + (Number(s?.c) || 0) + 1;
+  return `CASE-${String(total).padStart(4, '0')}`;
 }
 
-export function clearAdPostsByUser(guildId, userId) {
-  writeCol('ad_posts', readCol('ad_posts').filter(r => !(r.guild_id === guildId && r.user_id === userId)));
+// ── Warns ─────────────────────────────────────────────────────────────────────
+
+export async function addWarn(guildId, userId, moderatorId, reason) {
+  const caseId = await generateCaseId(guildId);
+  await q('INSERT INTO warns (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [caseId, guildId, userId, moderatorId, reason, ts()]);
+  return caseId;
 }
 
-export function removeAdPostRecord(guildId, messageId) {
-  writeCol('ad_posts', readCol('ad_posts').filter(r => !(r.guild_id === guildId && r.message_id === messageId)));
+export async function getWarns(guildId, userId) {
+  return q('SELECT * FROM warns WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC', [guildId, userId]);
+}
+
+export async function getWarnCount(guildId, userId) {
+  const [row] = await q('SELECT COUNT(*) AS c FROM warns WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return Number(row?.c) || 0;
+}
+
+export async function getWarnLeaderboard(guildId, limit = 10) {
+  return q('SELECT user_id, COUNT(*) AS count FROM warns WHERE guild_id = ? GROUP BY user_id ORDER BY count DESC LIMIT ?',
+    [guildId, limit]);
+}
+
+// ── Ad Warns ──────────────────────────────────────────────────────────────────
+
+export async function addAdWarn(guildId, userId, moderatorId, reason, messageId, messageContent) {
+  const caseId = await generateCaseId(guildId);
+  await q('INSERT INTO ad_warns (case_id, guild_id, user_id, moderator_id, reason, message_id, message_content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [caseId, guildId, userId, moderatorId, reason, messageId ?? null, messageContent ?? null, ts()]);
+  return caseId;
+}
+
+export async function getAdWarns(guildId, userId) {
+  return q('SELECT * FROM ad_warns WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC', [guildId, userId]);
+}
+
+export async function removeAdWarn(guildId, caseId) {
+  const result = await q('DELETE FROM ad_warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  return result.affectedRows > 0;
+}
+
+export async function getAdWarnCountByModerator(guildId, moderatorId) {
+  const [row] = await q('SELECT COUNT(*) AS c FROM ad_warns WHERE guild_id = ? AND moderator_id = ?', [guildId, moderatorId]);
+  return Number(row?.c) || 0;
+}
+
+// ── Strikes ───────────────────────────────────────────────────────────────────
+
+export async function addStrike(guildId, userId, moderatorId, reason) {
+  const caseId = await generateCaseId(guildId);
+  await q('INSERT INTO strikes (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [caseId, guildId, userId, moderatorId, reason, ts()]);
+  return caseId;
+}
+
+export async function getStrikeCount(guildId, userId) {
+  const [row] = await q('SELECT COUNT(*) AS c FROM strikes WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return Number(row?.c) || 0;
+}
+
+export async function removeStrike(guildId, caseId) {
+  const result = await q('DELETE FROM strikes WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  return result.affectedRows > 0;
+}
+
+// ── Case Info (cross-table) ───────────────────────────────────────────────────
+
+export async function getCaseInfo(guildId, caseId) {
+  let row = await q1('SELECT *, "warn" AS type FROM warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  if (!row) row = await q1('SELECT *, "ad_warn" AS type FROM ad_warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  if (!row) row = await q1('SELECT *, "strike" AS type FROM strikes WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  return row ?? null;
+}
+
+// ── Jailed Users ──────────────────────────────────────────────────────────────
+
+export async function jailUser(guildId, userId, originalRoles) {
+  await q(
+    'INSERT INTO jailed_users (guild_id, user_id, original_roles, jailed_at) VALUES (?, ?, ?, ?) ' +
+    'ON DUPLICATE KEY UPDATE original_roles = VALUES(original_roles), jailed_at = VALUES(jailed_at)',
+    [guildId, userId, JSON.stringify(originalRoles), ts()]
+  );
+}
+
+export async function unjailUser(guildId, userId) {
+  const entry = await q1('SELECT * FROM jailed_users WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  if (!entry) return null;
+  await q('DELETE FROM jailed_users WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return parseJson(entry.original_roles, []);
+}
+
+export async function isJailed(guildId, userId) {
+  const row = await q1('SELECT guild_id FROM jailed_users WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return !!row;
+}
+
+// ── Message Counts ────────────────────────────────────────────────────────────
+
+export async function incrementMessageCount(guildId, userId) {
+  await q(
+    'INSERT INTO message_counts (guild_id, user_id, count) VALUES (?, ?, 1) ' +
+    'ON DUPLICATE KEY UPDATE count = count + 1',
+    [guildId, userId]
+  );
+}
+
+export async function getMessageCount(guildId, userId) {
+  const row = await q1('SELECT count FROM message_counts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return row?.count || 0;
+}
+
+export async function getMessageLeaderboard(guildId, limit = 10) {
+  return q('SELECT user_id, count FROM message_counts WHERE guild_id = ? ORDER BY count DESC LIMIT ?', [guildId, limit]);
+}
+
+export async function resetMessages(guildId, userId) {
+  await q('DELETE FROM message_counts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+}
+
+export async function resetMessagesAll(guildId) {
+  await q('DELETE FROM message_counts WHERE guild_id = ?', [guildId]);
+}
+
+// ── Snipe Cache ───────────────────────────────────────────────────────────────
+
+export async function setSnipeCache(guildId, channelId, content, authorId, authorName, authorAvatar) {
+  await q(
+    'INSERT INTO snipe_cache (guild_id, channel_id, content, author_id, author_name, author_avatar, deleted_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?) ' +
+    'ON DUPLICATE KEY UPDATE content = VALUES(content), author_id = VALUES(author_id), ' +
+    'author_name = VALUES(author_name), author_avatar = VALUES(author_avatar), deleted_at = VALUES(deleted_at)',
+    [guildId, channelId, content, authorId, authorName, authorAvatar, ts()]
+  );
+}
+
+export async function getSnipeCache(guildId, channelId) {
+  return q1('SELECT * FROM snipe_cache WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+}
+
+// ── Balances ──────────────────────────────────────────────────────────────────
+
+export async function getBalance(guildId, userId) {
+  const row = await q1('SELECT balance FROM balances WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return row?.balance || 0;
+}
+
+export async function setBalance(guildId, userId, amount) {
+  await q(
+    'INSERT INTO balances (guild_id, user_id, balance) VALUES (?, ?, ?) ' +
+    'ON DUPLICATE KEY UPDATE balance = VALUES(balance)',
+    [guildId, userId, amount]
+  );
+}
+
+// ── Breaks ────────────────────────────────────────────────────────────────────
+
+export async function startBreak(guildId, userId, username, reason, savedRoles = [], endAt = null) {
+  const existing = await q1('SELECT id FROM breaks WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  if (existing) return false;
+  await q(
+    'INSERT INTO breaks (guild_id, user_id, username, reason, started_at, end_at, saved_roles) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [guildId, userId, username, reason ?? null, ts(), endAt, JSON.stringify(savedRoles)]
+  );
+  return true;
+}
+
+export async function endBreak(guildId, userId) {
+  const entry = await q1('SELECT * FROM breaks WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  if (!entry) return null;
+  await q('DELETE FROM breaks WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  entry.saved_roles = parseJson(entry.saved_roles, []);
+  return entry;
+}
+
+export async function extendBreak(guildId, userId, extraSeconds) {
+  const row = await q1('SELECT * FROM breaks WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  if (!row) return null;
+  const base = row.end_at ?? ts();
+  const newEnd = base + extraSeconds;
+  await q('UPDATE breaks SET end_at = ? WHERE guild_id = ? AND user_id = ?', [newEnd, guildId, userId]);
+  row.end_at = newEnd;
+  row.saved_roles = parseJson(row.saved_roles, []);
+  return row;
+}
+
+export async function getCurrentBreaks(guildId) {
+  const rows = await q('SELECT * FROM breaks WHERE guild_id = ? ORDER BY started_at ASC', [guildId]);
+  return rows.map(r => ({ ...r, saved_roles: parseJson(r.saved_roles, []) }));
+}
+
+export async function getExpiredBreaks() {
+  const now = ts();
+  const rows = await q('SELECT * FROM breaks WHERE end_at IS NOT NULL AND end_at <= ?', [now]);
+  return rows.map(r => ({ ...r, saved_roles: parseJson(r.saved_roles, []) }));
+}
+
+export async function isOnBreak(guildId, userId) {
+  const row = await q1('SELECT id FROM breaks WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return !!row;
+}
+
+// ── Applications ──────────────────────────────────────────────────────────────
+
+export async function saveApplication(guildId, userId, username, data) {
+  await q('DELETE FROM applications WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  await q(
+    'INSERT INTO applications (guild_id, user_id, username, data, submitted_at) VALUES (?, ?, ?, ?, ?)',
+    [guildId, userId, username, JSON.stringify(data), ts()]
+  );
+}
+
+export async function getApplication(guildId, userId) {
+  const row = await q1('SELECT * FROM applications WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  if (!row) return null;
+  const data = parseJson(row.data, {});
+  return { ...row, ...data };
+}
+
+export async function removeApplication(guildId, userId) {
+  const entry = await getApplication(guildId, userId);
+  if (entry) await q('DELETE FROM applications WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return entry ?? null;
+}
+
+// ── Bot Blacklist ─────────────────────────────────────────────────────────────
+
+export async function addBlacklist(guildId, userId, moderatorId, reason) {
+  await q('DELETE FROM bot_blacklist WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  await q(
+    'INSERT INTO bot_blacklist (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?)',
+    [guildId, userId, moderatorId, reason, ts()]
+  );
+}
+
+export async function isBlacklisted(guildId, userId) {
+  const row = await q1('SELECT id FROM bot_blacklist WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return !!row;
+}
+
+export async function getBlacklistEntry(guildId, userId) {
+  return q1('SELECT * FROM bot_blacklist WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+}
+
+// ── Network Applications ──────────────────────────────────────────────────────
+
+export async function saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age) {
+  const result = await q(
+    'INSERT INTO network_applications (target_guild_id, applicant_id, applicant_username, applicant_avatar, why, experience, timezone, age, status, created_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age, 'pending', ts()]
+  );
+  return result.insertId;
+}
+
+export async function getNetworkApplication(id) {
+  return q1('SELECT * FROM network_applications WHERE id = ?', [Number(id)]);
+}
+
+export async function resolveNetworkApplication(id, status) {
+  await q('UPDATE network_applications SET status = ? WHERE id = ?', [status, Number(id)]);
+  return q1('SELECT * FROM network_applications WHERE id = ?', [Number(id)]);
 }

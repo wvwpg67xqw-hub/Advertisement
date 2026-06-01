@@ -44,12 +44,12 @@ function buildRequestButtons(type, targetId, originGuildId, disabled = false) {
 }
 
 async function handleRequest(interaction, type) {
-  if (!hasCommandPermission(interaction.member, `${type}-request`)) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, `${type}-request`)) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const proof = interaction.options.getString('proof');
   const embed = buildRequestEmbed({ type, requesterId: interaction.user.id, targetId: target.id, reason, proof });
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   await sendLog(interaction.guild, config, `${type}-request`, embed, [buildRequestButtons(type, target.id, interaction.guildId)]);
   await interaction.reply({ content: '✅ Request submitted.', flags: 64 });
 }
@@ -62,7 +62,6 @@ export const handlePartnershipRequest = i => handleRequest(i, 'partnership');
 export async function handleRequestButton(interaction) {
   const [, action, type, targetId, originGuildId] = interaction.customId.split(':');
 
-  // Require Administration rank (3) to accept/deny requests
   if (getStaffRank(interaction.member) < 3 && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ Only Administration can accept or deny requests.', flags: 64 });
   }
@@ -82,10 +81,10 @@ export async function handleRequestButton(interaction) {
           resultText = `Banned from **${targetGuild.name}**`;
         } else { resultText = '⚠️ Origin server unreachable — ban was NOT applied'; resultColor = 0xFEE75C; }
       } else if (type === 'blacklist') {
-        addBlacklist(originGuildId, targetId, interaction.user.id, reason);
+        await addBlacklist(originGuildId, targetId, interaction.user.id, reason);
         resultText = 'Added to blacklist';
       } else if (type === 'network-ban') {
-        const members = getNetworkMembers(interaction.guildId);
+        const members = await getNetworkMembers(interaction.guildId);
         const results = [];
         for (const { guild_id } of members) {
           const g = interaction.client.guilds.cache.get(guild_id);

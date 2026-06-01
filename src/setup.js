@@ -2,9 +2,6 @@ import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = pkg;
 import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels } from './database.js';
 
-// Max 25 choices per Discord string option — only include commands that need role restrictions.
-// Utility commands open to all (warns, messages, balance, snipe, break, break-end, current-breaks)
-// are intentionally omitted here.
 const ALL_COMMANDS = [
   'warn', 'warn-leaderboard',
   'ad-warn', 'remove-ad-warn',
@@ -17,7 +14,6 @@ const ALL_COMMANDS = [
 ];
 
 export const setupCommands = [
-  // /setup
   new SlashCommandBuilder()
     .setName('setup')
     .setDescription('Configure the bot for this server')
@@ -34,7 +30,6 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('break-role').setDescription('Role given to staff on break in this server'))
     .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff on break in the main server')),
 
-  // /setup-roles — set roles for a single command
   new SlashCommandBuilder()
     .setName('setup-roles')
     .setDescription('Set which roles can use a specific command')
@@ -49,7 +44,6 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('role4').setDescription('Role 4'))
     .addRoleOption(o => o.setName('role5').setDescription('Role 5')),
 
-  // /setup-roles-extra — add more roles to an existing command
   new SlashCommandBuilder()
     .setName('setup-roles-extra')
     .setDescription('Add extra roles to a command (appends, does not replace)')
@@ -64,13 +58,11 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('role4').setDescription('Role 4'))
     .addRoleOption(o => o.setName('role5').setDescription('Role 5')),
 
-  // /setup-status — show current bot config
   new SlashCommandBuilder()
     .setName('setup-status')
     .setDescription('Show the current bot configuration')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // /setup-edit — edit a single config field
   new SlashCommandBuilder()
     .setName('setup-edit')
     .setDescription('Edit a single bot configuration field')
@@ -94,7 +86,6 @@ export const setupCommands = [
     .addChannelOption(o => o.setName('channel').setDescription('New channel value'))
     .addRoleOption(o => o.setName('role').setDescription('New role value')),
 
-  // /setup-roles-wizard — interactive wizard to set roles for all commands
   new SlashCommandBuilder()
     .setName('setup-roles-wizard')
     .setDescription('Interactive wizard: set allowed roles for every command')
@@ -109,7 +100,6 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('role4').setDescription('Allowed role 4'))
     .addRoleOption(o => o.setName('role5').setDescription('Allowed role 5')),
 
-  // /setup-ad-channels — manage which channels are ad channels
   new SlashCommandBuilder()
     .setName('setup-ad-channels')
     .setDescription('Add, remove, or list ad channels (bot replies with promo links + tracks posts for cleanup on leave)')
@@ -124,7 +114,6 @@ export const setupCommands = [
     )
     .addChannelOption(o => o.setName('channel').setDescription('The ad channel (required for add/remove)')),
 
-  // /setup-requests — auto-create request channels category
   new SlashCommandBuilder()
     .setName('setup-requests')
     .setDescription('Auto-create a Requests category with ban, blacklist, network-ban, partnership, and ad-warn channels')
@@ -134,13 +123,11 @@ export const setupCommands = [
         .setDescription('Name for the category (default: 📋 Requests)')
     ),
 
-  // /setup-network-hub — mark this server as the network hub
   new SlashCommandBuilder()
     .setName('setup-network-hub')
     .setDescription('Mark this server as the network hub (staff server). All request logs will route here.')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // /setup-network-join — link a main server to the hub
   new SlashCommandBuilder()
     .setName('setup-network-join')
     .setDescription('Link this server to the network hub so requests forward to the staff server')
@@ -151,19 +138,16 @@ export const setupCommands = [
         .setRequired(true)
     ),
 
-  // /setup-network-reset — clear hub or member link from this server
   new SlashCommandBuilder()
     .setName('setup-network-reset')
     .setDescription('Remove this server\'s network role (hub or linked member)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // /network-status — show all linked servers and their reachability
   new SlashCommandBuilder()
     .setName('network-status')
     .setDescription('Show the network hub and all linked servers with their bot reachability')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // /setup-break — dedicated break configuration
   new SlashCommandBuilder()
     .setName('setup-break')
     .setDescription('Configure the break system (request channel + break roles)')
@@ -172,7 +156,6 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('staff-break-role').setDescription('Role given to staff while on break in THIS server'))
     .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff while on break in the MAIN server')),
 
-  // /setup-resign — configure resign, applications, referral link and modmail test
   new SlashCommandBuilder()
     .setName('setup-resign')
     .setDescription('Configure resign system, applications, referral link and modmail test channel')
@@ -183,7 +166,6 @@ export const setupCommands = [
     .addStringOption(o => o.setName('referral-link').setDescription('Referral/invite link shown in the staff panel (paste full URL)'))
     .addChannelOption(o => o.setName('modmail-test-channel').setDescription('Channel where modmail test applications are posted')),
 
-  // /setup-branding — configure server PFP and banner URL
   new SlashCommandBuilder()
     .setName('setup-branding')
     .setDescription('Set a custom server profile picture and banner URL for the staff portal')
@@ -199,7 +181,6 @@ export const setupCommands = [
         )
     ),
 
-  // /setup-roles-bulk — assign roles to a whole group of commands at once
   new SlashCommandBuilder()
     .setName('setup-roles-bulk')
     .setDescription('Set allowed roles for a whole group of commands at once')
@@ -253,7 +234,7 @@ export async function handleSetup(interaction) {
     return interaction.reply({ content: '❌ You must provide at least one option to configure.', flags: 64 });
   }
 
-  setGuildConfig(interaction.guildId, fields);
+  await setGuildConfig(interaction.guildId, fields);
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
@@ -278,7 +259,7 @@ export async function handleSetupRoles(interaction) {
     const r = interaction.options.getRole(`role${i}`);
     if (r) roles.push(r.id);
   }
-  setCommandRoles(interaction.guildId, command, roles);
+  await setCommandRoles(interaction.guildId, command, roles);
   await interaction.reply({
     embeds: [
       new EmbedBuilder()
@@ -293,14 +274,14 @@ export async function handleSetupRoles(interaction) {
 export async function handleSetupRolesExtra(interaction) {
   const command = interaction.options.getString('command');
   const { getCommandRoles } = await import('./database.js');
-  const existing = getCommandRoles(interaction.guildId, command);
+  const existing = await getCommandRoles(interaction.guildId, command);
   const newRoles = [];
   for (let i = 1; i <= 5; i++) {
     const r = interaction.options.getRole(`role${i}`);
     if (r && !existing.includes(r.id)) newRoles.push(r.id);
   }
   const merged = [...existing, ...newRoles];
-  setCommandRoles(interaction.guildId, command, merged);
+  await setCommandRoles(interaction.guildId, command, merged);
   await interaction.reply({
     embeds: [
       new EmbedBuilder()
@@ -313,7 +294,7 @@ export async function handleSetupRolesExtra(interaction) {
 }
 
 export async function handleSetupStatus(interaction) {
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   const ch = id => id ? `<#${id}>` : 'Not set';
   const rl = id => id ? `<@&${id}>` : 'Not set';
 
@@ -363,7 +344,7 @@ export async function handleSetupEdit(interaction) {
     return interaction.reply({ content: '❌ Provide a channel or role value.', flags: 64 });
   }
 
-  setGuildConfig(interaction.guildId, { [field]: value });
+  await setGuildConfig(interaction.guildId, { [field]: value });
   await interaction.reply({
     embeds: [
       new EmbedBuilder()
@@ -395,7 +376,7 @@ export async function handleSetupBreak(interaction) {
   const mainBreakRole  = interaction.options.getRole('main-break-role');
 
   if (!requestChannel && !staffBreakRole && !mainBreakRole) {
-    const config = getGuild(interaction.guildId);
+    const config = await getGuild(interaction.guildId);
     const ch = id => id ? `<#${id}>` : '`Not set`';
     const rl = id => id ? `<@&${id}>` : '`Not set`';
     return interaction.reply({
@@ -420,9 +401,9 @@ export async function handleSetupBreak(interaction) {
   if (staffBreakRole) fields.break_role_id = staffBreakRole.id;
   if (mainBreakRole)  fields.main_break_role_id = mainBreakRole.id;
 
-  setGuildConfig(interaction.guildId, fields);
+  await setGuildConfig(interaction.guildId, fields);
 
-  const saved = getGuild(interaction.guildId);
+  const saved = await getGuild(interaction.guildId);
   const ch = id => id ? `<#${id}>` : '`Not set`';
   const rl = id => id ? `<@&${id}>` : '`Not set`';
 
@@ -450,7 +431,7 @@ export async function handleSetupResign(interaction) {
   const modmailTestChannel  = interaction.options.getChannel('modmail-test-channel');
 
   if (!resignChannel && !verifiedRole && !applicationsChannel && !referralLink && !modmailTestChannel) {
-    const config = getGuild(interaction.guildId);
+    const config = await getGuild(interaction.guildId);
     const ch = id => id ? `<#${id}>` : '`Not set`';
     const rl = id => id ? `<@&${id}>` : '`Not set`';
     return interaction.reply({
@@ -479,9 +460,9 @@ export async function handleSetupResign(interaction) {
   if (referralLink)        fields.referral_link = referralLink;
   if (modmailTestChannel)  fields.modmail_test_channel_id = modmailTestChannel.id;
 
-  setGuildConfig(interaction.guildId, fields);
+  await setGuildConfig(interaction.guildId, fields);
 
-  const saved = getGuild(interaction.guildId);
+  const saved = await getGuild(interaction.guildId);
   const ch = id => id ? `<#${id}>` : '`Not set`';
   const rl = id => id ? `<@&${id}>` : '`Not set`';
 
@@ -499,7 +480,6 @@ export async function handleSetupResign(interaction) {
         )
         .setTimestamp()
     ],
-    flags: 64,
   });
 }
 
@@ -513,7 +493,7 @@ export async function handleSetupRolesBulk(interaction) {
 
   const commands = COMMAND_GROUPS[group] || [];
   for (const cmd of commands) {
-    setCommandRoles(interaction.guildId, cmd, roles);
+    await setCommandRoles(interaction.guildId, cmd, roles);
   }
 
   const roleList = roles.map(id => `<@&${id}>`).join(', ');
@@ -535,9 +515,8 @@ export async function handleSetupRolesBulk(interaction) {
 }
 
 export async function handleNetworkStatus(interaction) {
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
 
-  // Determine the hub guild ID to inspect
   let hubGuildId = null;
   let viewingAsHub = false;
 
@@ -557,7 +536,7 @@ export async function handleNetworkStatus(interaction) {
   const hubName = hubGuild ? hubGuild.name : `Unknown (${hubGuildId})`;
   const hubReachable = !!hubGuild;
 
-  const members = getNetworkMembers(hubGuildId);
+  const members = await getNetworkMembers(hubGuildId);
 
   const memberLines = members.map(({ guild_id }) => {
     const g = interaction.client.guilds.cache.get(guild_id);
@@ -584,7 +563,7 @@ export async function handleNetworkStatus(interaction) {
 }
 
 export async function handleSetupNetworkReset(interaction) {
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   const wasHub = config.is_hub;
   const wasLinked = !!config.hub_guild_id;
 
@@ -595,8 +574,8 @@ export async function handleSetupNetworkReset(interaction) {
     });
   }
 
-  if (wasHub) clearNetworkHub(interaction.guildId);
-  if (wasLinked) clearHubGuildId(interaction.guildId);
+  if (wasHub) await clearNetworkHub(interaction.guildId);
+  if (wasLinked) await clearHubGuildId(interaction.guildId);
 
   const lines = [];
   if (wasHub) lines.push('• Removed **hub** status from this server');
@@ -612,7 +591,7 @@ export async function handleSetupNetworkReset(interaction) {
 }
 
 export async function handleSetupNetworkHub(interaction) {
-  setNetworkHub(interaction.guildId, true);
+  await setNetworkHub(interaction.guildId, true);
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
@@ -631,7 +610,6 @@ export async function handleSetupNetworkHub(interaction) {
 export async function handleSetupNetworkJoin(interaction) {
   const hubGuildId = interaction.options.getString('hub-server-id');
 
-  // Verify the bot is actually in the hub server
   const hubGuild = interaction.client.guilds.cache.get(hubGuildId);
   if (!hubGuild) {
     return interaction.reply({
@@ -640,8 +618,7 @@ export async function handleSetupNetworkJoin(interaction) {
     });
   }
 
-  // Verify the hub is actually configured as a hub
-  const hubConfig = getGuild(hubGuildId);
+  const hubConfig = await getGuild(hubGuildId);
   if (!hubConfig.is_hub) {
     return interaction.reply({
       content: `❌ Server \`${hubGuildId}\` (**${hubGuild.name}**) has not been set up as a network hub. Run \`/setup-network-hub\` in that server first.`,
@@ -649,7 +626,7 @@ export async function handleSetupNetworkJoin(interaction) {
     });
   }
 
-  setHubGuildId(interaction.guildId, hubGuildId);
+  await setHubGuildId(interaction.guildId, hubGuildId);
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
@@ -669,7 +646,7 @@ export async function handleSetupAdChannels(interaction) {
   const guildId = interaction.guildId;
 
   if (action === 'list') {
-    const ids = getAdChannels(guildId);
+    const ids = await getAdChannels(guildId);
     const embed = new EmbedBuilder()
       .setColor(0x5865F2)
       .setTitle('📢 Ad Channels')
@@ -687,7 +664,7 @@ export async function handleSetupAdChannels(interaction) {
   }
 
   if (action === 'add') {
-    addAdChannel(guildId, channel.id);
+    await addAdChannel(guildId, channel.id);
     return interaction.reply({
       embeds: [
         new EmbedBuilder()
@@ -700,11 +677,11 @@ export async function handleSetupAdChannels(interaction) {
   }
 
   if (action === 'remove') {
-    const removed = removeAdChannel(guildId, channel.id);
+    const removed = await removeAdChannel(guildId, channel.id);
     return interaction.reply({
       embeds: [
         new EmbedBuilder()
-          .setColor(removed ? 0xFEE75C : 0xED4245)
+          .setColor(removed ? 0x57F287 : 0xED4245)
           .setTitle(removed ? '✅ Ad Channel Removed' : '❌ Not Found')
           .setDescription(removed ? `<#${channel.id}> is no longer an ad channel.` : `<#${channel.id}> was not an ad channel.`)
           .setTimestamp()
@@ -727,7 +704,6 @@ export async function handleSetupRequests(interaction) {
   ];
 
   try {
-    // Create the category
     const category = await guild.channels.create({
       name: categoryName,
       type: ChannelType.GuildCategory,
@@ -746,8 +722,7 @@ export async function handleSetupRequests(interaction) {
       created.push({ label: ch.label, channel });
     }
 
-    // Save all channel IDs to the DB
-    setGuildConfig(interaction.guildId, dbFields);
+    await setGuildConfig(interaction.guildId, dbFields);
 
     const embed = new EmbedBuilder()
       .setColor(0x57F287)
@@ -783,7 +758,7 @@ export async function handleSetupBranding(interaction) {
   if (bannerUrl) fields.banner_url = bannerUrl;
 
   if (Object.keys(fields).length === 0) {
-    const current = getGuild(interaction.guildId);
+    const current = await getGuild(interaction.guildId);
     const embed = new EmbedBuilder()
       .setColor(0x5865F2)
       .setTitle('🎨 Current Branding')
@@ -798,20 +773,18 @@ export async function handleSetupBranding(interaction) {
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
 
-  setGuildConfig(interaction.guildId, fields);
+  await setGuildConfig(interaction.guildId, fields);
+  const updated = await getGuild(interaction.guildId);
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
     .setTitle('✅ Branding Updated')
+    .addFields(
+      { name: 'Profile Picture', value: updated.pfp_url ? `[View URL](${updated.pfp_url})` : 'Cleared', inline: true },
+      { name: 'Banner', value: updated.banner_url ? `[View URL](${updated.banner_url})` : 'Cleared', inline: true },
+    )
     .setTimestamp();
-
-  const after = getGuild(interaction.guildId);
-  embed.addFields(
-    { name: 'Profile Picture', value: after.pfp_url ? `[View URL](${after.pfp_url})` : 'Cleared', inline: true },
-    { name: 'Banner', value: after.banner_url ? `[View URL](${after.banner_url})` : 'Cleared', inline: true },
-  );
-  if (after.pfp_url) embed.setThumbnail(after.pfp_url);
-  if (after.banner_url) embed.setImage(after.banner_url);
-
-  await interaction.reply({ embeds: [embed], flags: 64 });
+  if (updated.pfp_url) embed.setThumbnail(updated.pfp_url);
+  if (updated.banner_url) embed.setImage(updated.banner_url);
+  return interaction.reply({ embeds: [embed], flags: 64 });
 }

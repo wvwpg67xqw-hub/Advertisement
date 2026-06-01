@@ -32,7 +32,7 @@ export const defs = [
 ];
 
 export async function handlePromote(interaction) {
-  if (!hasCommandPermission(interaction.member, 'promote')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'promote')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const role = interaction.options.getRole('role');
   const reason = interaction.options.getString('reason') || 'No reason provided';
@@ -44,7 +44,7 @@ export async function handlePromote(interaction) {
   await member.roles.add(role.id, reason).catch(e => {
     return interaction.reply({ content: `❌ Failed to add role: ${e.message}`, flags: 64 });
   });
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   const embed = buildModEmbed('promote', { userId: target.id, moderatorId: interaction.user.id, reason, role: role.name });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
@@ -53,7 +53,7 @@ export async function handlePromote(interaction) {
 }
 
 export async function handleDemoteUser(interaction) {
-  if (!hasCommandPermission(interaction.member, 'demote-user')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'demote-user')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const role = interaction.options.getRole('role');
   const reason = interaction.options.getString('reason') || 'No reason provided';
@@ -65,7 +65,7 @@ export async function handleDemoteUser(interaction) {
   await member.roles.remove(role.id, reason).catch(e => {
     return interaction.reply({ content: `❌ Failed to remove role: ${e.message}`, flags: 64 });
   });
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   const embed = buildModEmbed('demote', { userId: target.id, moderatorId: interaction.user.id, reason, role: role.name });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
@@ -74,7 +74,7 @@ export async function handleDemoteUser(interaction) {
 }
 
 export async function handleStrike(interaction) {
-  if (!hasCommandPermission(interaction.member, 'strike')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'strike')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
 
@@ -83,9 +83,9 @@ export async function handleStrike(interaction) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
 
-  const caseId = addStrike(interaction.guildId, target.id, interaction.user.id, reason);
-  const total = getStrikeCount(interaction.guildId, target.id);
-  const config = getGuild(interaction.guildId);
+  const caseId = await addStrike(interaction.guildId, target.id, interaction.user.id, reason);
+  const total = await getStrikeCount(interaction.guildId, target.id);
+  const config = await getGuild(interaction.guildId);
 
   const embed = buildStrikeEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
   embed.setFooter({ text: `Total strikes: ${total}${total >= 3 ? ' — AUTO-FIRE TRIGGERED' : ''}` });
@@ -113,9 +113,9 @@ export async function handleStrike(interaction) {
 }
 
 export async function handleStrikeRemove(interaction) {
-  if (!hasCommandPermission(interaction.member, 'strike-remove')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'strike-remove')) return deny(interaction);
   const caseId = interaction.options.getString('case-id').toUpperCase();
-  const removed = removeStrike(interaction.guildId, caseId);
+  const removed = await removeStrike(interaction.guildId, caseId);
   if (!removed) return interaction.reply({ content: `❌ No strike found with case ID **${caseId}**.`, flags: 64 });
   await interaction.reply({
     embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('✅ Strike Removed')

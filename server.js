@@ -44,6 +44,7 @@ import {
 } from './src/setup.js';
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache } from './src/database.js';
+import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -325,11 +326,11 @@ app.get('/api/roles', (req, res) => res.json(db.getActiveRoles()));
 
 // ── Public: server branding ───────────────────────────────────────────────────
 
-app.get('/api/branding', (req, res) => {
+app.get('/api/branding', async (req, res) => {
   const guildId = process.env.MAIN_GUILD_ID;
   if (!guildId) return res.json({ pfp_url: null, banner_url: null, guild_name: null });
   try {
-    const config = getBotGuild(guildId);
+    const config = await getBotGuild(guildId);
     const guild  = client.guilds?.cache?.get(guildId);
     res.json({
       pfp_url:    config.pfp_url    || null,
@@ -538,11 +539,11 @@ client.on('interactionCreate', async (interaction) => {
 
         const { getGuild: getBG, startBreak: sbk, isOnBreak: iob } = await import('./src/database.js');
 
-        if (iob(interaction.guildId, targetUserId)) {
+        if (await iob(interaction.guildId, targetUserId)) {
           return interaction.reply({ content: '⚠️ That staff member is already on break.', flags: 64 });
         }
 
-        const config = getBG(interaction.guildId);
+        const config = await getBG(interaction.guildId);
         const staffGuild = interaction.guild;
         let member = null;
         try { member = await staffGuild.members.fetch(targetUserId); } catch {}
@@ -571,7 +572,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const endAt = Math.floor(Date.now() / 1000) + days * 86400;
         const username = member?.user?.tag || targetUserId;
-        sbk(interaction.guildId, targetUserId, username, null, savedRoles, endAt);
+        await sbk(interaction.guildId, targetUserId, username, null, savedRoles, endAt);
 
         const { EmbedBuilder: EB2 } = discordPkg;
         const approvedEmbed = EB2.from(interaction.message.embeds[0])
@@ -666,10 +667,10 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const { getNetworkApplyConfig, resolveNetworkApplication } = await import('./src/database.js');
-        const app = resolveNetworkApplication(appId, 'accepted');
+        const app = await resolveNetworkApplication(appId, 'accepted');
         if (!app) return interaction.reply({ content: '❌ Application not found.', flags: 64 });
 
-        const config = getNetworkApplyConfig(targetGuildId);
+        const config = await getNetworkApplyConfig(targetGuildId);
         const targetGuild = interaction.client.guilds.cache.get(targetGuildId)
           || await interaction.client.guilds.fetch(targetGuildId).catch(() => null);
 
@@ -726,7 +727,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const { resolveNetworkApplication: resolveNA } = await import('./src/database.js');
-        resolveNA(appId, 'denied');
+        await resolveNA(appId, 'denied');
 
         const targetGuild = interaction.client.guilds.cache.get(targetGuildId);
         const deniedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
@@ -813,7 +814,7 @@ if (id.startsWith('app_')) {
             .setTimestamp()],
         }).catch(() => null);
 
-        const botConfig = getBotGuild(guildId);
+        const botConfig = await getBotGuild(guildId);
         const staffUpdateEmbed = buildStaffUpdateEmbed('hired', {
           userId: application.userId,
           moderatorId: interaction.user.id,
@@ -888,7 +889,7 @@ if (id.startsWith('app_')) {
       if (id.startsWith('resign_approve_')) {
         const targetUserId = id.slice(15);
         const { getGuild: getResG } = await import('./src/database.js');
-        const config = getResG(interaction.guildId);
+        const config = await getResG(interaction.guildId);
 
         // Kick from staff server
         const staffMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
@@ -1024,7 +1025,7 @@ if (id.startsWith('app_')) {
       if (id.startsWith('app_deny_')) {
         const applicantId = id.slice(9);
         const { removeApplication: removeApp } = await import('./src/database.js');
-        removeApp(interaction.guildId, applicantId);
+        await removeApp(interaction.guildId, applicantId);
 
         try {
           const targetUser = await client.users.fetch(applicantId).catch(() => null);
@@ -1067,7 +1068,7 @@ if (id.startsWith('app_')) {
         }
 
         const { removeApplication: removeAppC } = await import('./src/database.js');
-        removeAppC(interaction.guildId, applicantId);
+        await removeAppC(interaction.guildId, applicantId);
         pendingApprovals.delete(key);
 
         // Apply roles in this guild
@@ -1143,11 +1144,11 @@ if (id.startsWith('app_')) {
 
       const { getGuild: getBGM, isOnBreak: iobM } = await import('./src/database.js');
 
-      if (iobM(guildId, interaction.user.id)) {
+      if (await iobM(guildId, interaction.user.id)) {
         return interaction.reply({ content: '❌ You are already on break. Use `/break-end` to end it first.', flags: 64 });
       }
 
-      const config = getBGM(guildId);
+      const config = await getBGM(guildId);
       if (!config.break_request_channel_id) {
         return interaction.reply({ content: '❌ No break request channel is configured. Ask an admin to run `/setup-break`.', flags: 64 });
       }
@@ -1206,7 +1207,7 @@ if (id.startsWith('app_')) {
       const guildId = interaction.customId.slice(21);
       const reason  = interaction.fields.getTextInputValue('resign_reason').trim();
       const { getGuild: getRG } = await import('./src/database.js');
-      const config = getRG(guildId);
+      const config = await getRG(guildId);
 
       if (!config.resign_channel_id) {
         return interaction.reply({ content: '❌ No resign request channel is configured. Ask an admin to run `/setup-resign`.', flags: 64 });
@@ -1264,7 +1265,7 @@ if (id.startsWith('app_')) {
       const age        = interaction.fields.getTextInputValue('app_age').trim();
 
       const { getGuild: getAG, saveApplication: saveApp } = await import('./src/database.js');
-      const config = getAG(guildId);
+      const config = await getAG(guildId);
 
       if (!config.applications_channel_id) {
         return interaction.reply({ content: '❌ No applications channel is configured. Ask an admin to run `/setup-resign`.', flags: 64 });
@@ -1276,7 +1277,7 @@ if (id.startsWith('app_')) {
         return interaction.reply({ content: '❌ The configured applications channel could not be found.', flags: 64 });
       }
 
-      saveApp(guildId, interaction.user.id, interaction.user.tag, { why, experience, timezone, age });
+      await saveApp(guildId, interaction.user.id, interaction.user.tag, { why, experience, timezone, age });
 
       const appEmbed = new EmbedBuilder()
         .setColor(0x5865F2)
@@ -1327,7 +1328,7 @@ if (id.startsWith('app_')) {
       const age        = interaction.fields.getTextInputValue('app_age').trim();
 
       const { getNetworkApplyConfig: getNAC, saveNetworkApplication: saveNA } = await import('./src/database.js');
-      const config = getNAC(targetGuildId);
+      const config = await getNAC(targetGuildId);
 
       if (!config.logChannelId) {
         return interaction.reply({ content: '❌ This server has not configured its application system yet. Try again later.', flags: 64 });
@@ -1339,7 +1340,7 @@ if (id.startsWith('app_')) {
       }
 
       const avatar = interaction.user.displayAvatarURL({ size: 64, extension: 'png' });
-      const appId = saveNA(targetGuildId, interaction.user.id, interaction.user.tag, avatar, why, experience, timezone, age);
+      const appId = await saveNA(targetGuildId, interaction.user.id, interaction.user.tag, avatar, why, experience, timezone, age);
 
       const targetGuild = interaction.client.guilds.cache.get(targetGuildId);
       const serverName = targetGuild?.name || 'Unknown Server';
@@ -1504,10 +1505,10 @@ client.on('messageDelete', async (msg) => {
   // Always update snipe cache (used by /snipe command)
   if (msg.author) {
     const avatarUrl = msg.author.displayAvatarURL?.({ size: 64, extension: 'png' }) ?? '';
-    setSnipeCache(msg.guild.id, msg.channel.id, msg.content || '', msg.author.id, msg.author.username, avatarUrl);
+    await setSnipeCache(msg.guild.id, msg.channel.id, msg.content || '', msg.author.id, msg.author.username, avatarUrl);
   }
 
-  const config = getBotGuild(msg.guild.id);
+  const config = await getBotGuild(msg.guild.id);
   if (!config.log_channel_id) return;
 
   try {
@@ -1541,14 +1542,15 @@ client.on('messageDelete', async (msg) => {
 
 client.on('messageCreate', async (msg) => {
   if (!msg.guild || msg.author.bot) return;
-  incrementMessageCount(msg.guild.id, msg.author.id);
-  if (isAdChannel(msg.guild.id, msg.channel.id)) trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
+  await incrementMessageCount(msg.guild.id, msg.author.id);
+  if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
 });
 
 // ── Bot Ready ─────────────────────────────────────────────────────────────────
 
 client.once('clientReady', async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
+  await initDatabase();
   setDiscordClient(client);
   setStaffDiscordClient(client);
   if (CLIENT_ID) {
@@ -1568,13 +1570,13 @@ client.once('clientReady', async () => {
 async function processExpiredBreaks() {
   try {
     const { getExpiredBreaks, endBreak: ebAuto, getGuild: gbAuto } = await import('./src/database.js');
-    const expired = getExpiredBreaks();
+    const expired = await getExpiredBreaks();
     for (const b of expired) {
       try {
-        const entry = ebAuto(b.guild_id, b.user_id);
+        const entry = await ebAuto(b.guild_id, b.user_id);
         if (!entry) continue;
 
-        const config = gbAuto(b.guild_id);
+        const config = await gbAuto(b.guild_id);
         const guild  = client.guilds.cache.get(b.guild_id);
 
         if (guild) {

@@ -15,10 +15,10 @@ const MAIN_GUILD_ID = () => process.env.MAIN_GUILD_ID;
 
 // ── GET referral link ──────────────────────────────────────────────────────────
 
-router.get('/referral-link', requireAuth, (req, res) => {
+router.get('/referral-link', requireAuth, async (req, res) => {
   const guildId = MAIN_GUILD_ID();
   if (!guildId) return res.json({ link: null });
-  const config = getGuild(guildId);
+  const config = await getGuild(guildId);
   res.json({ link: config.referral_link || null });
 });
 
@@ -31,10 +31,10 @@ router.post('/referral-link', requireAuth, (req, res) => {
   const guildId = MAIN_GUILD_ID();
   if (!guildId) return res.status(500).json({ error: 'MAIN_GUILD_ID not set' });
 
-  import('../db.js').then(({ default: db }) => {
+  import('../db.js').then(async ({ default: db }) => {
     const admin = db.getAdmin(req.session.user?.userId);
     if (!admin) return res.status(403).json({ error: 'Admin access required' });
-    setGuildConfig(guildId, { referral_link: link.trim() });
+    await setGuildConfig(guildId, { referral_link: link.trim() });
     res.json({ success: true, link: link.trim() });
   }).catch(() => res.status(500).json({ error: 'Server error' }));
 });
@@ -48,7 +48,7 @@ router.post('/apply-modmail', requireAuth, async (req, res) => {
   const guildId = MAIN_GUILD_ID();
   if (!guildId) return res.status(500).json({ error: 'MAIN_GUILD_ID not set' });
 
-  const config = getGuild(guildId);
+  const config = await getGuild(guildId);
 
   if (!config.modmail_test_channel_id) {
     return res.status(400).json({ error: 'Modmail test channel not configured. Ask an admin to run /setup-resign.' });

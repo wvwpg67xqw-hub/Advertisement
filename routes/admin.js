@@ -125,7 +125,7 @@ async function assignRolesOnAccept(app, reviewerUsername) {
 
     // Post to staff updates channel
     try {
-      const botConfig = getBotGuild(guildId);
+      const botConfig = await getBotGuild(guildId);
       const staffEmbed = buildStaffUpdateEmbed('hired', {
         userId: app.userId,
         moderatorId: null,

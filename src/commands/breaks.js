@@ -37,8 +37,8 @@ export const defs = [
 ];
 
 export async function handleCurrentBreaks(interaction) {
-  if (!hasCommandPermission(interaction.member, 'current-breaks')) return deny(interaction);
-  const breaks = getCurrentBreaks(interaction.guildId);
+  if (!await hasCommandPermission(interaction.member, 'current-breaks')) return deny(interaction);
+  const breaks = await getCurrentBreaks(interaction.guildId);
   if (breaks.length === 0) return interaction.reply({ content: '✅ No staff are currently on break.', flags: 64 });
   const embed = new EmbedBuilder().setColor(0xFFA500).setTitle('☕ Staff On Break')
     .setDescription(breaks.map(b => {
@@ -49,8 +49,8 @@ export async function handleCurrentBreaks(interaction) {
 }
 
 export async function handleBreakRequest(interaction) {
-  if (!hasCommandPermission(interaction.member, 'break-request')) return deny(interaction);
-  if (isOnBreak(interaction.guildId, interaction.user.id)) {
+  if (!await hasCommandPermission(interaction.member, 'break-request')) return deny(interaction);
+  if (await isOnBreak(interaction.guildId, interaction.user.id)) {
     return interaction.reply({ content: '❌ You are already on break. Use `/break-end` to end it first.', flags: 64 });
   }
   const modal = new ModalBuilder()
@@ -70,10 +70,10 @@ export async function handleBreakRequest(interaction) {
 }
 
 export async function handleBreakEnd(interaction) {
-  if (!hasCommandPermission(interaction.member, 'break-end')) return deny(interaction);
-  const row = endBreak(interaction.guildId, interaction.user.id);
+  if (!await hasCommandPermission(interaction.member, 'break-end')) return deny(interaction);
+  const row = await endBreak(interaction.guildId, interaction.user.id);
   if (!row) return interaction.reply({ content: '❌ You are not currently on break.', flags: 64 });
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   const member = await safeFetchMember(interaction.guild, interaction.user.id);
   if (member) {
     if (config.break_role_id) await member.roles.remove(config.break_role_id).catch(() => null);
@@ -98,7 +98,7 @@ export async function handleBreakEnd(interaction) {
 }
 
 export async function handleManageBreak(interaction) {
-  if (!hasCommandPermission(interaction.member, 'manage-break')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'manage-break')) return deny(interaction);
   const action = interaction.options.getString('action');
   const target = interaction.options.getUser('user');
   const days   = interaction.options.getInteger('days');
@@ -108,14 +108,14 @@ export async function handleManageBreak(interaction) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
 
-  if (!isOnBreak(interaction.guildId, target.id)) {
+  if (!await isOnBreak(interaction.guildId, target.id)) {
     return interaction.reply({ content: `❌ **${target.tag}** is not currently on break.`, flags: 64 });
   }
 
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
 
   if (action === 'end') {
-    const entry = endBreak(interaction.guildId, target.id);
+    const entry = await endBreak(interaction.guildId, target.id);
     if (!entry) return interaction.reply({ content: '❌ Could not find that break record.', flags: 64 });
     const member = targetMember || await safeFetchMember(interaction.guild, target.id);
     if (member) {
@@ -140,7 +140,7 @@ export async function handleManageBreak(interaction) {
 
   if (action === 'extend') {
     if (!days) return interaction.reply({ content: '❌ You must provide the number of days to extend.', flags: 64 });
-    const updated = extendBreak(interaction.guildId, target.id, days * 86400);
+    const updated = await extendBreak(interaction.guildId, target.id, days * 86400);
     if (!updated) return interaction.reply({ content: '❌ Could not find that break record.', flags: 64 });
     await target.send({ embeds: [new EmbedBuilder().setColor(0xFFA500).setTitle('☕ Break Extended')
       .setDescription(`Your break has been extended by **${days} day${days !== 1 ? 's' : ''}** by **${interaction.user.tag}**.\nNew end: <t:${updated.end_at}:F>`).setTimestamp()]

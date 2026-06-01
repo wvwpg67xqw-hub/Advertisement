@@ -70,12 +70,12 @@ export async function handleApply(interaction) {
 }
 
 export async function handleUpdate(interaction) {
-  if (!hasCommandPermission(interaction.member, 'update')) return deny(interaction);
+  if (!await hasCommandPermission(interaction.member, 'update')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const type   = interaction.options.getString('type');
   const role   = interaction.options.getString('role');
   const note   = interaction.options.getString('note');
-  const config = getGuild(interaction.guildId);
+  const config = await getGuild(interaction.guildId);
   if (!config.staff_updates_channel_id) {
     return interaction.reply({ content: '❌ No staff updates channel configured. Use `/setup` to set one.', flags: 64 });
   }

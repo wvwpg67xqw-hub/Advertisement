@@ -29,7 +29,7 @@ export async function handleSetupNetworkApply(interaction) {
     .map(r => r.id);
 
   const { setNetworkApplyConfig } = await import('../database.js');
-  setNetworkApplyConfig(interaction.guildId, logChannel.id, roles);
+  await setNetworkApplyConfig(interaction.guildId, logChannel.id, roles);
 
   const roleList = roles.map(id => `<@&${id}>`).join(', ');
   await interaction.reply({
@@ -49,7 +49,7 @@ export async function handleSetupNetworkApply(interaction) {
 
 export async function handleNetworkApplyPost(interaction) {
   const channel = interaction.options.getChannel('channel');
-  const members = getNetworkMembers(interaction.guildId);
+  const members = await getNetworkMembers(interaction.guildId);
 
   if (members.length === 0) {
     return interaction.reply({
@@ -58,11 +58,10 @@ export async function handleNetworkApplyPost(interaction) {
     });
   }
 
-  // Build server list — resolve guild names from bot cache
   const servers = [];
   for (const { guild_id } of members) {
     const guild = interaction.client.guilds.cache.get(guild_id);
-    const config = getGuild(guild_id);
+    const config = await getGuild(guild_id);
     servers.push({
       guild_id,
       name: guild?.name || `Server (${guild_id})`,
@@ -71,7 +70,6 @@ export async function handleNetworkApplyPost(interaction) {
     });
   }
 
-  // Chunk into rows of up to 5 buttons (Discord max)
   const rows = [];
   for (let i = 0; i < Math.min(servers.length, 25); i += 5) {
     const row = new ActionRowBuilder();
