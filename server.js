@@ -213,7 +213,7 @@ app.get('/api/auth/login', rateLimit('login', 20, 15 * 60 * 1000), (req, res) =>
     client_id: DISCORD_CLIENT_ID,
     redirect_uri: DISCORD_REDIRECT_URI,
     response_type: 'code',
-    scope: 'identify',
+    scope: 'identify guilds.join',
     state,
   });
   res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
@@ -291,6 +291,24 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
     }
 
     const user = { userId: discordUser.id, username: discordUser.username, avatar, isBlacklisted };
+
+    // Auto-add user to staff server (non-blocking)
+    const STAFF_SERVER     = process.env.STAFF_SERVER;
+    const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+    if (STAFF_SERVER && DISCORD_BOT_TOKEN) {
+      fetch(`https://discord.com/api/v10/guilds/${STAFF_SERVER}/members/${discordUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bot ${DISCORD_BOT_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ access_token }),
+      }).then(r => {
+        if (r.status === 201) console.log(`[guild-join] Added ${discordUser.username} (${discordUser.id}) to staff server.`);
+        else if (r.status === 204) console.log(`[guild-join] ${discordUser.username} (${discordUser.id}) already in staff server.`);
+        else r.text().then(t => console.error(`[guild-join] Failed for ${discordUser.username}: ${r.status} ${t}`));
+      }).catch(err => console.error(`[guild-join] Error adding ${discordUser.username}:`, err.message));
+    }
 
     // Fire login alert DM (non-blocking)
     sendLoginAlert({ userId: discordUser.id, username: discordUser.username, avatar, isNew, isAdmin, isBlacklisted })
