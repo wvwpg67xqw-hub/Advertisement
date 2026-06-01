@@ -447,6 +447,76 @@ router.delete('/roles/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// ── Apply Servers ─────────────────────────────────────────────────────────────
+
+router.get('/apply-servers', requireAdmin, (req, res) => {
+  res.json(db.getApplyServers(false));
+});
+
+router.get('/apply-servers/guild-info/:guildId', requireAdmin, async (req, res) => {
+  try {
+    if (!discordClient?.isReady()) return res.status(503).json({ error: 'Bot is not connected' });
+    const guild = await discordClient.guilds.fetch(req.params.guildId).catch(() => null);
+    if (!guild) return res.status(404).json({ error: 'Guild not found — make sure the bot is in that server' });
+    const iconUrl = guild.iconURL({ size: 256, extension: 'png' });
+    res.json({ id: guild.id, name: guild.name, icon_url: iconUrl, memberCount: guild.memberCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/apply-servers', requireAdmin, async (req, res) => {
+  try {
+    const { guildId, name, short_name, description, icon_url, log_channel_id } = req.body;
+    if (!guildId?.trim()) return res.status(400).json({ error: 'Guild ID is required' });
+    if (!name?.trim()) return res.status(400).json({ error: 'Server name is required' });
+    const entry = db.insertApplyServer({
+      guildId: String(guildId).trim(),
+      name: String(name).slice(0, 100),
+      short_name: String(short_name || name).slice(0, 30),
+      description: String(description || '').slice(0, 300),
+      icon_url: icon_url ? String(icon_url).slice(0, 500) : null,
+      log_channel_id: log_channel_id ? String(log_channel_id).trim() : null,
+    });
+    res.json({ success: true, server: entry });
+  } catch (err) {
+    res.status(err.message === 'Server already exists' ? 409 : 500).json({ error: err.message });
+  }
+});
+
+router.put('/apply-servers/:id', requireAdmin, (req, res) => {
+  try {
+    const { name, short_name, description, icon_url, log_channel_id } = req.body;
+    const updated = db.updateApplyServer(req.params.id, {
+      ...(name !== undefined && { name: String(name).slice(0, 100) }),
+      ...(short_name !== undefined && { short_name: String(short_name).slice(0, 30) }),
+      ...(description !== undefined && { description: String(description).slice(0, 300) }),
+      ...(icon_url !== undefined && { icon_url: icon_url ? String(icon_url).slice(0, 500) : null }),
+      ...(log_channel_id !== undefined && { log_channel_id: log_channel_id ? String(log_channel_id).trim() : null }),
+    });
+    res.json({ success: true, server: updated });
+  } catch (err) {
+    res.status(err.message === 'Server not found' ? 404 : 500).json({ error: err.message });
+  }
+});
+
+router.patch('/apply-servers/:id/toggle', requireAdmin, (req, res) => {
+  try {
+    const server = db.getApplyServer(req.params.id);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+    const updated = db.updateApplyServer(req.params.id, { active: server.active ? 0 : 1 });
+    res.json({ success: true, active: updated.active });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/apply-servers/:id', requireAdmin, (req, res) => {
+  const result = db.deleteApplyServer(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  res.json({ success: true });
+});
+
 // ── Discord Channel Lock / Unlock ─────────────────────────────────────────────
 
 const VALID_CHANNEL_ID = /^\d{17,20}$/;

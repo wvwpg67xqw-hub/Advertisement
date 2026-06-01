@@ -9,6 +9,11 @@ if (!readCol('app_roles').length) {
   ]);
 }
 
+// ── Seed default apply servers ────────────────────────────────────────────────
+if (!readCol('apply_servers').length) {
+  writeCol('apply_servers', []);
+}
+
 function parseApp(app) {
   if (!app) return null;
   return {
@@ -102,13 +107,14 @@ const db = {
     ) ?? null;
   },
 
-  insertApplication({ userId, username, avatar, role, answers }) {
+  insertApplication({ userId, username, avatar, role, answers, guildId }) {
     const rows = readCol('applications');
     const id = nextId('applications');
     const age = Array.isArray(answers) ? (answers[0] || '') : '';
     const timezone = Array.isArray(answers) ? (answers[1] || '') : '';
     rows.push({
       id, userId, username, avatar: avatar ?? null, role,
+      guildId: guildId || null,
       age, timezone,
       answers: Array.isArray(answers) ? JSON.stringify(answers) : null,
       discord_message_id: null,
@@ -134,6 +140,58 @@ const db = {
       rows[i].discord_thread_id = threadId ?? null;
       writeCol('applications', rows);
     }
+  },
+
+  // ── Apply Servers ──────────────────────────────────────────────────────────
+  getApplyServers(activeOnly = false) {
+    const rows = readCol('apply_servers');
+    const filtered = activeOnly ? rows.filter(s => s.active === 1) : rows;
+    return filtered.sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.id - b.id);
+  },
+
+  getApplyServer(id) {
+    return readCol('apply_servers').find(s => s.id === Number(id)) ?? null;
+  },
+
+  getApplyServerByGuildId(guildId) {
+    return readCol('apply_servers').find(s => s.guildId === guildId) ?? null;
+  },
+
+  insertApplyServer({ guildId, name, short_name, description, icon_url, log_channel_id, sort_order }) {
+    const rows = readCol('apply_servers');
+    if (rows.find(s => s.guildId === guildId)) throw new Error('Server already exists');
+    const entry = {
+      id: nextId('apply_servers'),
+      guildId, name, short_name: short_name || name,
+      description: description || '',
+      icon_url: icon_url || null,
+      log_channel_id: log_channel_id || null,
+      active: 1,
+      sort_order: sort_order ?? rows.length,
+      createdAt: ts(),
+    };
+    rows.push(entry);
+    writeCol('apply_servers', rows);
+    return entry;
+  },
+
+  updateApplyServer(id, fields) {
+    const rows = readCol('apply_servers');
+    const i = rows.findIndex(s => s.id === Number(id));
+    if (i < 0) throw new Error('Server not found');
+    const allowed = ['name', 'short_name', 'description', 'icon_url', 'log_channel_id', 'active', 'sort_order'];
+    for (const key of allowed) {
+      if (key in fields) rows[i][key] = fields[key];
+    }
+    writeCol('apply_servers', rows);
+    return rows[i];
+  },
+
+  deleteApplyServer(id) {
+    const rows = readCol('apply_servers');
+    const next = rows.filter(s => s.id !== Number(id));
+    writeCol('apply_servers', next);
+    return { changes: rows.length - next.length };
   },
 
   // ── User Blacklist ─────────────────────────────────────────────────────────

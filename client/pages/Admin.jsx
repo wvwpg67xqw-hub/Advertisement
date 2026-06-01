@@ -355,6 +355,241 @@ function RolesTab() {
   );
 }
 
+// ── Apply Servers ─────────────────────────────────────────────
+
+function ServersTab() {
+  const [servers, setServers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '' });
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [fetching, setFetching] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const res = await api('/api/admin/apply-servers');
+    setServers(await res.json().catch(() => []));
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  function openAdd() {
+    setForm({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '' });
+    setErr(''); setEditing(null); setShowAdd(true);
+  }
+
+  function openEdit(server) {
+    setForm({
+      guildId: server.guildId,
+      name: server.name,
+      short_name: server.short_name || '',
+      description: server.description || '',
+      icon_url: server.icon_url || '',
+      log_channel_id: server.log_channel_id || '',
+    });
+    setErr(''); setEditing(server); setShowAdd(true);
+  }
+
+  async function fetchGuildInfo() {
+    if (!form.guildId.trim()) return setErr('Enter a Guild ID first');
+    setFetching(true); setErr('');
+    try {
+      const res = await api(`/api/admin/apply-servers/guild-info/${form.guildId.trim()}`);
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'Failed to fetch guild info'); }
+      else {
+        setForm(f => ({
+          ...f,
+          name: data.name || f.name,
+          short_name: f.short_name || '',
+          icon_url: data.icon_url || f.icon_url,
+        }));
+      }
+    } catch { setErr('Network error'); }
+    setFetching(false);
+  }
+
+  async function handleSave(e) {
+    e.preventDefault(); setErr('');
+    if (!form.name.trim()) return setErr('Server name is required');
+    if (!editing && !form.guildId.trim()) return setErr('Guild ID is required');
+    setSaving(true);
+    const payload = {
+      name: form.name, short_name: form.short_name, description: form.description,
+      icon_url: form.icon_url, log_channel_id: form.log_channel_id,
+      ...(!editing && { guildId: form.guildId }),
+    };
+    const res = editing
+      ? await api(`/api/admin/apply-servers/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+      : await api('/api/admin/apply-servers', { method: 'POST', body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error || 'Failed to save'); setSaving(false); return; }
+    setShowAdd(false); load(); setSaving(false);
+  }
+
+  async function handleToggle(server) {
+    await api(`/api/admin/apply-servers/${server.id}/toggle`, { method: 'PATCH' });
+    load();
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Remove this server from the apply list?')) return;
+    await api(`/api/admin/apply-servers/${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }));
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
+          These servers appear as cards on the Apply page. Each can route applications to its own Discord log channel.
+        </p>
+        <button className="btn btn-primary btn-sm" onClick={openAdd} style={{ flexShrink: 0, marginLeft: 16 }}>+ Add Server</button>
+      </div>
+
+      <div style={{ background: 'rgba(88,101,242,0.08)', border: '1px solid rgba(88,101,242,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+        💡 If no servers are added, the apply page skips server selection and goes straight to the form.
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {servers.map(server => (
+            <div key={server.id} style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 10, padding: '14px 16px',
+              opacity: server.active ? 1 : 0.5,
+            }}>
+              {server.icon_url ? (
+                <img src={server.icon_url} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🖥️</div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {server.name}
+                  {server.short_name && server.short_name !== server.name && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>({server.short_name})</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 2 }}>
+                  <span style={{ fontFamily: 'monospace' }}>{server.guildId}</span>
+                  {server.log_channel_id && <span>📢 Custom channel</span>}
+                  {server.description && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{server.description}</span>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: server.active ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                  {server.active ? 'Active' : 'Hidden'}
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={() => handleToggle(server)}>
+                  {server.active ? 'Hide' : 'Show'}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(server)}>Edit</button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(server.id)}>Remove</button>
+              </div>
+            </div>
+          ))}
+          {servers.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-state-icon">🖥️</div>
+              <div style={{ fontWeight: 600 }}>No servers added yet</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Add a server to enable per-server selection on the apply page.</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showAdd && (
+        <Modal title={editing ? 'Edit Server' : 'Add Server'} onClose={() => setShowAdd(false)}>
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {err && <div className="alert alert-error">{err}</div>}
+
+            {!editing && (
+              <div className="form-group">
+                <label className="form-label">Discord Guild ID *</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. 1234567890123456789"
+                    value={form.guildId}
+                    onChange={set('guildId')}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={fetchGuildInfo}
+                    disabled={fetching}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {fetching ? <div className="spinner" style={{ width: 14, height: 14 }} /> : '🔍 Auto-fill'}
+                  </button>
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Bot must be in the server. Auto-fill pulls name &amp; icon from Discord.
+                </span>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Full Server Name *</label>
+                <input className="form-input" placeholder="e.g. Advertising Kingdom" value={form.name} onChange={set('name')} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Short Name <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(shown bold on card)</span></label>
+                <input className="form-input" placeholder="e.g. AK" maxLength={30} value={form.short_name} onChange={set('short_name')} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Description <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                <input className="form-input" placeholder="Short description shown on the card" value={form.description} onChange={set('description')} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Icon URL <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(auto-filled or paste custom)</span></label>
+                <input className="form-input" placeholder="https://cdn.discordapp.com/..." value={form.icon_url} onChange={set('icon_url')} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Application Log Channel ID <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional — overrides default)</span></label>
+                <input className="form-input" placeholder="Leave blank to use default channel" value={form.log_channel_id} onChange={set('log_channel_id')} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Applications for this server will post to this Discord channel.</span>
+              </div>
+            </div>
+
+            {/* Preview */}
+            {(form.name || form.icon_url) && (
+              <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', alignSelf: 'flex-start' }}>Card Preview</div>
+                {form.icon_url ? (
+                  <img src={form.icon_url} alt="" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+                ) : (
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🖥️</div>
+                )}
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{form.short_name || form.name || 'Server Name'}</div>
+                {form.short_name && form.short_name !== form.name && (
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{form.name}</div>
+                )}
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? '...' : editing ? 'Save Changes' : 'Add Server'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ── Channels ──────────────────────────────────────────────────
 
 function ChannelsTab() {
@@ -596,6 +831,7 @@ export default function Admin() {
   const tabs = [
     { id: 'applications', label: '📋 Applications' },
     { id: 'roles',        label: '🎭 Roles' },
+    { id: 'servers',      label: '🖥️ Servers' },
     { id: 'channels',     label: '🔒 Channels' },
     { id: 'blacklist',    label: '🚫 Blacklist' },
     { id: 'admins',       label: '👑 Admins' },
@@ -621,6 +857,7 @@ export default function Admin() {
       <div className="card">
         {tab === 'applications' && <ApplicationsTab />}
         {tab === 'roles'        && <RolesTab />}
+        {tab === 'servers'      && <ServersTab />}
         {tab === 'channels'     && <ChannelsTab />}
         {tab === 'blacklist'    && <BlacklistTab />}
         {tab === 'admins'       && <AdminsTab />}

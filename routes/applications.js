@@ -90,6 +90,17 @@ function truncate(value, max) {
   return sanitize(value).slice(0, max);
 }
 
+// ── GET /api/apply-servers (public) ──────────────────────────────────────────
+
+router.get('/servers', (req, res) => {
+  try {
+    res.json(db.getApplyServers(true));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── POST /api/applications ────────────────────────────────────────────────────
 
 router.post(
@@ -98,7 +109,7 @@ router.post(
   rateLimit('applications', 5, 60 * 60 * 1000),
   async (req, res) => {
     try {
-      const { role, answers } = req.body;
+      const { role, answers, guildId } = req.body;
       const { userId, username, avatar } = req.session.user;
 
       if (!role) return res.status(400).json({ error: 'Role is required' });
@@ -136,15 +147,27 @@ router.post(
         return res.status(409).json({ error: 'You already have a pending application for this role' });
       }
 
+      // Validate guildId if provided
+      let applyServer = null;
+      if (guildId) {
+        applyServer = db.getApplyServerByGuildId(String(guildId));
+        if (!applyServer) return res.status(400).json({ error: 'Invalid server selected' });
+      }
+
       const result = db.insertApplication({
         userId, username, avatar,
         role: validRole.name,
         answers: cleanAnswers,
+        guildId: applyServer?.guildId || null,
       });
 
       const applicationId = result.lastInsertRowid;
 
       // ── Discord: Preview embed ──────────────────────────────────────────────
+
+      const serverField = applyServer
+        ? [{ name: '🏠 Server', value: applyServer.name, inline: true }]
+        : [];
 
       const previewEmbed = new EmbedBuilder()
         .setTitle('📋 New Staff Application')
@@ -153,6 +176,7 @@ router.post(
         .addFields(
           { name: '👤 Applicant', value: `**${username}**\n\`${userId}\``, inline: true },
           { name: '📌 Role', value: `${validRole.emoji || ''} ${validRole.name}`, inline: true },
+          ...serverField,
           { name: '\u200b', value: '\u200b', inline: true },
           { name: '🎂 Age', value: cleanAnswers[0] || 'N/A', inline: true },
           { name: '🌍 Timezone', value: cleanAnswers[1] || 'N/A', inline: true },
@@ -177,7 +201,8 @@ router.post(
           .setStyle(ButtonStyle.Danger),
       );
 
-      const channelId = '1503147704522637494';
+      // Use server-specific log channel if set, else fall back to default
+      const channelId = applyServer?.log_channel_id || '1503147704522637494';
       const channel = await client.channels.fetch(channelId).catch(() => null);
 
       if (channel) {

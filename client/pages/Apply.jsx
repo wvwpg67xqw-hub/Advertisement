@@ -73,10 +73,81 @@ export const ROLE_QUESTIONS = {
   ],
 };
 
+function ServerCard({ server, selected, onClick }) {
+  const isSelected = selected?.id === server.id;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(server)}
+      style={{
+        background: isSelected ? 'rgba(88,101,242,0.15)' : 'var(--surface2)',
+        border: `2px solid ${isSelected ? '#5865f2' : 'var(--border)'}`,
+        borderRadius: 14,
+        padding: '24px 20px',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 12,
+        transition: 'all 0.15s',
+        width: '100%',
+        textAlign: 'center',
+        outline: 'none',
+      }}
+    >
+      {server.icon_url ? (
+        <img
+          src={server.icon_url}
+          alt={server.name}
+          style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+          onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+        />
+      ) : null}
+      <div style={{
+        width: 64, height: 64, borderRadius: '50%',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        display: server.icon_url ? 'none' : 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 28,
+        flexShrink: 0,
+      }}>
+        🖥️
+      </div>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)', marginBottom: 4 }}>
+          {server.short_name || server.name}
+        </div>
+        {server.short_name && server.short_name !== server.name && (
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+            {server.name}
+          </div>
+        )}
+        {server.description && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+            {server.description}
+          </div>
+        )}
+      </div>
+      {isSelected && (
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#5865f2', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          ✓ Selected
+        </div>
+      )}
+    </button>
+  );
+}
+
 export default function Apply() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  const [applyServers, setApplyServers] = useState([]);
+  const [serversLoading, setServersLoading] = useState(true);
+  const [selectedServer, setSelectedServer] = useState(null);
+
   const [roles, setRoles] = useState([]);
   const [role, setRole] = useState(searchParams.get('role') || '');
   const [answers, setAnswers] = useState(Array(20).fill(''));
@@ -84,6 +155,11 @@ export default function Apply() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    fetch('/api/applications/servers')
+      .then(r => r.json())
+      .then(data => { setApplyServers(Array.isArray(data) ? data : []); setServersLoading(false); })
+      .catch(() => setServersLoading(false));
+
     fetch('/api/roles')
       .then(r => r.json())
       .then(data => setRoles(Array.isArray(data) ? data : []))
@@ -91,6 +167,7 @@ export default function Apply() {
   }, []);
 
   const questions = ROLE_QUESTIONS[role] || [];
+  const useServerSelection = applyServers.length > 0;
 
   function setAnswer(i, val) {
     setAnswers(prev => { const next = [...prev]; next[i] = val; return next; });
@@ -99,6 +176,7 @@ export default function Apply() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (useServerSelection && !selectedServer) return setError('Please select a server.');
     if (!role) return setError('Please select a role.');
     for (let i = 0; i < questions.length; i++) {
       if (!answers[i]?.trim()) return setError(`Please answer question ${i + 1}.`);
@@ -109,7 +187,7 @@ export default function Apply() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ role, answers }),
+        body: JSON.stringify({ role, answers, guildId: selectedServer?.guildId || null }),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || 'Submission failed');
@@ -137,6 +215,36 @@ export default function Apply() {
         <span style={{ marginLeft: 'auto', background: 'rgba(88,101,242,0.15)', color: '#7289da', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600 }}>via Discord</span>
       </div>
 
+      {/* ── Server Selection ── */}
+      {useServerSelection && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🖥️ Select Server</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Which server within the network are you applying for?</div>
+          </div>
+
+          {serversLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gap: 12,
+            }}>
+              {applyServers.map(server => (
+                <ServerCard
+                  key={server.id}
+                  server={server}
+                  selected={selectedServer}
+                  onClick={s => { setSelectedServer(s); setError(''); }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Application Form ── */}
       <div className="card">
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {error && <div className="alert alert-error">{error}</div>}
@@ -152,6 +260,17 @@ export default function Apply() {
           {role && questions.length > 0 && (
             <>
               <div style={{ height: 1, background: 'var(--border)' }} />
+
+              {selectedServer && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(88,101,242,0.1)', border: '1px solid rgba(88,101,242,0.3)', borderRadius: 8, padding: '10px 14px' }}>
+                  {selectedServer.icon_url && <img src={selectedServer.icon_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />}
+                  <div style={{ fontSize: 13 }}>
+                    Applying to <strong>{selectedServer.name}</strong>
+                    <button type="button" onClick={() => setSelectedServer(null)} style={{ marginLeft: 10, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13 }}>Change</button>
+                  </div>
+                </div>
+              )}
+
               <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
                 {questions.length} questions for <strong>{role}</strong> — answer all of them.
               </div>
