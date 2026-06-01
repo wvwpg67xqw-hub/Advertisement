@@ -83,11 +83,6 @@ export async function handleWarn(interaction) {
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
 
-  const targetMember = await safeFetchMember(interaction.guild, target.id);
-  if (!canModerate(interaction.member, targetMember)) {
-    return interaction.reply({ content: RANK_ERR, flags: 64 });
-  }
-
   const caseId = addWarn(interaction.guildId, target.id, interaction.user.id, reason);
   const totalWarns = getWarnCount(interaction.guildId, target.id);
   const embed = buildWarnEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
@@ -126,11 +121,6 @@ export async function handleAdWarn(interaction) {
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const messageId = interaction.options.getString('message-id');
-
-  const targetMember = await safeFetchMember(interaction.guild, target.id);
-  if (!canModerate(interaction.member, targetMember)) {
-    return interaction.reply({ content: RANK_ERR, flags: 64 });
-  }
 
   let deletedContent = null;
   if (messageId) {
