@@ -11,12 +11,12 @@ export function setStaffDiscordClient(client) {
   discordClient = client;
 }
 
-const MAIN_GUILD_ID = () => process.env.MAIN_GUILD_ID;
+const MAIN_GUILD_ID = (req) => (req?.query?.guildId) || process.env.MAIN_GUILD_ID || null;
 
 // ── GET referral link ──────────────────────────────────────────────────────────
 
 router.get('/referral-link', requireAuth, async (req, res) => {
-  const guildId = MAIN_GUILD_ID();
+  const guildId = MAIN_GUILD_ID(req);
   if (!guildId) return res.json({ link: null });
   const config = await getGuild(guildId);
   res.json({ link: config.referral_link || null });
@@ -25,11 +25,11 @@ router.get('/referral-link', requireAuth, async (req, res) => {
 // ── SET referral link (admin only) ────────────────────────────────────────────
 
 router.post('/referral-link', requireAuth, (req, res) => {
-  const { link } = req.body;
+  const { link, guildId: bodyGuildId } = req.body;
   if (!link || typeof link !== 'string') return res.status(400).json({ error: 'Invalid link' });
 
-  const guildId = MAIN_GUILD_ID();
-  if (!guildId) return res.status(500).json({ error: 'MAIN_GUILD_ID not set' });
+  const guildId = bodyGuildId || MAIN_GUILD_ID(req);
+  if (!guildId) return res.status(400).json({ error: 'No guildId provided' });
 
   import('../db.js').then(async ({ default: db }) => {
     const admin = db.getAdmin(req.session.user?.userId);
@@ -45,8 +45,8 @@ router.post('/apply-modmail', requireAuth, async (req, res) => {
   const user = req.session.user;
   if (!user) return res.status(401).json({ error: 'Not authenticated' });
 
-  const guildId = MAIN_GUILD_ID();
-  if (!guildId) return res.status(500).json({ error: 'MAIN_GUILD_ID not set' });
+  const guildId = req.body.guildId || MAIN_GUILD_ID(req);
+  if (!guildId) return res.status(400).json({ error: 'No guildId provided. Pass guildId in the request body.' });
 
   const config = await getGuild(guildId);
 

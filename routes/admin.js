@@ -89,7 +89,7 @@ async function postThreadDecision(app, decision, adminUsername) {
 
 async function assignRolesOnAccept(app, reviewerUsername) {
   if (!discordClient) return;
-  const guildId = process.env.MAIN_GUILD_ID;
+  const guildId = app.guildId || process.env.MAIN_GUILD_ID;
   if (!guildId) return;
   try {
     const guild = await discordClient.guilds.fetch(guildId);
@@ -142,13 +142,10 @@ async function assignRolesOnAccept(app, reviewerUsername) {
 
 async function notifyApplicantDenied(app) {
   if (!discordClient) return;
-  const guildId = process.env.MAIN_GUILD_ID;
-  if (!guildId) return;
   try {
-    const guild = await discordClient.guilds.fetch(guildId);
-    const member = await guild.members.fetch(app.userId).catch(() => null);
-    if (member) {
-      await member.send({
+    const user = await discordClient.users.fetch(app.userId).catch(() => null);
+    if (user) {
+      await user.send({
         content: `❌ Your application for **${app.role}** was reviewed and has been denied. You may apply again in the future.`,
       }).catch(() => null);
     }
