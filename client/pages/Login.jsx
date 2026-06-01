@@ -21,7 +21,7 @@ const errorMessages = {
 
 export default function Login() {
   const [searchParams] = useSearchParams();
-  const error    = searchParams.get('error');
+  const error     = searchParams.get('error');
   const loggedOut = searchParams.get('loggedout') === '1';
   const { guild_name, pfp_url } = useBranding();
   const [hovering, setHovering] = useState(false);
@@ -55,43 +55,38 @@ export default function Login() {
       <PageBackground />
       <div style={styles.outer}>
         <div style={styles.card}>
-          {/* Icon */}
           <div style={styles.iconCircle}>
             {pfp_url
               ? <img src={pfp_url} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
               : '🏅'}
           </div>
 
-          {/* Title */}
           <h1 style={styles.title}>{displayName}</h1>
           <p style={styles.subtitle}>
             Join our network of communities. Login with Discord to begin your application.
           </p>
 
-          {/* Error */}
           {error && (
             <div style={styles.errorBox}>
               {errorMessages[error] || 'Something went wrong. Please try again.'}
             </div>
           )}
 
-          {/* Logged out notice */}
           {loggedOut && !error && (
             <div style={styles.loggedOutBox}>Logged out successfully</div>
           )}
 
-          {/* Discord button */}
           <a
             href="/api/auth/login"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
             style={{
               ...styles.discordBtn,
-              background: hovering ? '#a31515' : '#c41a1a',
+              background: hovering ? '#1d4ed8' : '#2563eb',
               transform: hovering ? 'translateY(-1px)' : 'none',
               boxShadow: hovering
-                ? '0 6px 24px rgba(200,20,20,0.55)'
-                : '0 4px 14px rgba(180,10,10,0.4)',
+                ? '0 6px 24px rgba(37,99,235,0.55)'
+                : '0 4px 14px rgba(37,99,235,0.4)',
             }}
           >
             {DISCORD_SVG}
@@ -106,7 +101,7 @@ export default function Login() {
           <Link to="/" style={styles.backLink}>← Back to home</Link>
         </div>
 
-        <p style={styles.credit}>A Dev_Aarons production</p>
+        <p style={styles.credit}>made by mycattiger2010</p>
       </div>
     </>
   );
@@ -118,7 +113,7 @@ function PageBackground() {
       position: 'fixed',
       inset: 0,
       zIndex: -1,
-      background: 'radial-gradient(ellipse at 50% -10%, #5c0c0c 0%, #2b0404 35%, #0c0000 100%)',
+      background: 'radial-gradient(ellipse at 50% -10%, #0c1e5c 0%, #040d2b 35%, #00060f 100%)',
     }} />
   );
 }
@@ -136,8 +131,8 @@ const styles = {
   card: {
     width: '100%',
     maxWidth: 400,
-    background: 'rgba(18, 3, 3, 0.96)',
-    border: '1px solid rgba(220, 38, 38, 0.35)',
+    background: 'rgba(3, 6, 24, 0.96)',
+    border: '1px solid rgba(59, 130, 246, 0.35)',
     borderRadius: 20,
     padding: '40px 32px 32px',
     display: 'flex',
@@ -145,25 +140,25 @@ const styles = {
     alignItems: 'center',
     gap: 16,
     textAlign: 'center',
-    boxShadow: '0 8px 48px rgba(160, 0, 0, 0.25), 0 0 0 1px rgba(255,60,60,0.06)',
+    boxShadow: '0 8px 48px rgba(0, 40, 160, 0.25), 0 0 0 1px rgba(60,120,255,0.06)',
   },
   iconCircle: {
     width: 72,
     height: 72,
     borderRadius: '50%',
-    background: '#c41a1a',
+    background: '#1e40af',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: 34,
     marginBottom: 4,
-    boxShadow: '0 4px 20px rgba(200,20,20,0.5)',
+    boxShadow: '0 4px 20px rgba(37,99,235,0.5)',
     flexShrink: 0,
   },
   title: {
     fontSize: 26,
     fontWeight: 700,
-    color: '#f87171',
+    color: '#93c5fd',
     lineHeight: 1.25,
     marginBottom: 2,
   },
@@ -179,7 +174,7 @@ const styles = {
     width: '100%',
     padding: '13px 20px',
     borderRadius: 10,
-    background: '#c41a1a',
+    background: '#2563eb',
     color: '#fff',
     fontWeight: 700,
     fontSize: 15,
@@ -217,7 +212,7 @@ const styles = {
   },
   backLink: {
     fontSize: 13,
-    color: '#f87171',
+    color: '#93c5fd',
     opacity: 0.7,
   },
   credit: {
