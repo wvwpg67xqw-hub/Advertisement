@@ -464,7 +464,7 @@ router.get('/apply-servers/guild-info/:guildId', requireAdmin, async (req, res) 
 
 router.post('/apply-servers', requireAdmin, async (req, res) => {
   try {
-    const { guildId, name, short_name, description, icon_url, log_channel_id } = req.body;
+    const { guildId, name, short_name, description, icon_url, log_channel_id, apply_channel_id } = req.body;
     if (!guildId?.trim()) return res.status(400).json({ error: 'Guild ID is required' });
     if (!name?.trim()) return res.status(400).json({ error: 'Server name is required' });
     const entry = db.insertApplyServer({
@@ -474,6 +474,7 @@ router.post('/apply-servers', requireAdmin, async (req, res) => {
       description: String(description || '').slice(0, 300),
       icon_url: icon_url ? String(icon_url).slice(0, 500) : null,
       log_channel_id: log_channel_id ? String(log_channel_id).trim() : null,
+      apply_channel_id: apply_channel_id ? String(apply_channel_id).trim() : null,
     });
     res.json({ success: true, server: entry });
   } catch (err) {
@@ -483,17 +484,66 @@ router.post('/apply-servers', requireAdmin, async (req, res) => {
 
 router.put('/apply-servers/:id', requireAdmin, (req, res) => {
   try {
-    const { name, short_name, description, icon_url, log_channel_id } = req.body;
+    const { name, short_name, description, icon_url, log_channel_id, apply_channel_id } = req.body;
     const updated = db.updateApplyServer(req.params.id, {
       ...(name !== undefined && { name: String(name).slice(0, 100) }),
       ...(short_name !== undefined && { short_name: String(short_name).slice(0, 30) }),
       ...(description !== undefined && { description: String(description).slice(0, 300) }),
       ...(icon_url !== undefined && { icon_url: icon_url ? String(icon_url).slice(0, 500) : null }),
       ...(log_channel_id !== undefined && { log_channel_id: log_channel_id ? String(log_channel_id).trim() : null }),
+      ...(apply_channel_id !== undefined && { apply_channel_id: apply_channel_id ? String(apply_channel_id).trim() : null }),
     });
     res.json({ success: true, server: updated });
   } catch (err) {
     res.status(err.message === 'Server not found' ? 404 : 500).json({ error: err.message });
+  }
+});
+
+router.post('/apply-servers/:id/post-apply-message', requireAdmin, async (req, res) => {
+  try {
+    if (!discordClient?.isReady()) return res.status(503).json({ error: 'Bot is not connected' });
+
+    const server = db.getApplyServer(req.params.id);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+    if (!server.apply_channel_id) return res.status(400).json({ error: 'No apply channel set for this server' });
+
+    const channel = await discordClient.channels.fetch(server.apply_channel_id).catch(() => null);
+    if (!channel) return res.status(404).json({ error: 'Channel not found — make sure the bot is in that server and has access to the channel' });
+
+    const domain = (process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || '').split(',')[0].trim();
+    const baseUrl = domain ? `https://${domain}` : '';
+
+    const roles = [
+      { label: '🔨 Moderator', role: 'Moderator', style: ButtonStyle.Primary },
+      { label: '🤝 Human Resources', role: 'Human Resources', style: ButtonStyle.Success },
+      { label: '🌐 Partnership Manager', role: 'Partnership', style: ButtonStyle.Secondary },
+    ];
+
+    const embed = new EmbedBuilder()
+      .setTitle(`📋 Apply for Staff — ${server.name}`)
+      .setColor(0x5865f2)
+      .setDescription(
+        `Want to join the **${server.name}** staff team?\n\nClick a button below to start your application for that role. You'll be taken to our application portal to fill out the form.\n\n**Available Positions:**\n🔨 **Moderator** — Enforce rules, handle reports\n🤝 **Human Resources** — Manage staff, onboarding\n🌐 **Partnership Manager** — Build community partnerships`
+      )
+      .setFooter({ text: 'Applications are reviewed by our team. Good luck!' })
+      .setTimestamp();
+
+    if (server.icon_url) embed.setThumbnail(server.icon_url);
+
+    const row = new ActionRowBuilder().addComponents(
+      ...roles.map(r =>
+        new ButtonBuilder()
+          .setLabel(r.label)
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${baseUrl}/apply?role=${encodeURIComponent(r.role)}&guildId=${server.guildId}`)
+      )
+    );
+
+    const msg = await channel.send({ embeds: [embed], components: [row] });
+    res.json({ success: true, messageId: msg.id });
+  } catch (err) {
+    console.error('post-apply-message error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -154,10 +154,20 @@ export default function Apply() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const preselectedGuildId = searchParams.get('guildId') || '';
+
   useEffect(() => {
     fetch('/api/applications/servers')
       .then(r => r.json())
-      .then(data => { setApplyServers(Array.isArray(data) ? data : []); setServersLoading(false); })
+      .then(data => {
+        const list = Array.isArray(data) ? data : [];
+        setApplyServers(list);
+        if (preselectedGuildId) {
+          const match = list.find(s => s.guildId === preselectedGuildId);
+          if (match) setSelectedServer(match);
+        }
+        setServersLoading(false);
+      })
       .catch(() => setServersLoading(false));
 
     fetch('/api/roles')

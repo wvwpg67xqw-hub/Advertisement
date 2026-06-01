@@ -157,7 +157,7 @@ const db = {
     return readCol('apply_servers').find(s => s.guildId === guildId) ?? null;
   },
 
-  insertApplyServer({ guildId, name, short_name, description, icon_url, log_channel_id, sort_order }) {
+  insertApplyServer({ guildId, name, short_name, description, icon_url, log_channel_id, apply_channel_id, sort_order }) {
     const rows = readCol('apply_servers');
     if (rows.find(s => s.guildId === guildId)) throw new Error('Server already exists');
     const entry = {
@@ -166,6 +166,7 @@ const db = {
       description: description || '',
       icon_url: icon_url || null,
       log_channel_id: log_channel_id || null,
+      apply_channel_id: apply_channel_id || null,
       active: 1,
       sort_order: sort_order ?? rows.length,
       createdAt: ts(),
@@ -179,7 +180,7 @@ const db = {
     const rows = readCol('apply_servers');
     const i = rows.findIndex(s => s.id === Number(id));
     if (i < 0) throw new Error('Server not found');
-    const allowed = ['name', 'short_name', 'description', 'icon_url', 'log_channel_id', 'active', 'sort_order'];
+    const allowed = ['name', 'short_name', 'description', 'icon_url', 'log_channel_id', 'apply_channel_id', 'active', 'sort_order'];
     for (const key of allowed) {
       if (key in fields) rows[i][key] = fields[key];
     }

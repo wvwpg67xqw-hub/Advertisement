@@ -362,7 +362,9 @@ function ServersTab() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '' });
+  const [form, setForm] = useState({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '', apply_channel_id: '' });
+  const [postingMsg, setPostingMsg] = useState(null);
+  const [postResult, setPostResult] = useState({});
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -377,8 +379,22 @@ function ServersTab() {
   useEffect(() => { load(); }, []);
 
   function openAdd() {
-    setForm({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '' });
+    setForm({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '', apply_channel_id: '' });
     setErr(''); setEditing(null); setShowAdd(true);
+  }
+
+  async function postApplyMessage(server) {
+    setPostingMsg(server.id);
+    setPostResult(p => ({ ...p, [server.id]: null }));
+    try {
+      const res = await api(`/api/admin/apply-servers/${server.id}/post-apply-message`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) setPostResult(p => ({ ...p, [server.id]: { error: data.error || 'Failed' } }));
+      else setPostResult(p => ({ ...p, [server.id]: { success: true } }));
+    } catch {
+      setPostResult(p => ({ ...p, [server.id]: { error: 'Network error' } }));
+    }
+    setPostingMsg(null);
   }
 
   function openEdit(server) {
@@ -389,6 +405,7 @@ function ServersTab() {
       description: server.description || '',
       icon_url: server.icon_url || '',
       log_channel_id: server.log_channel_id || '',
+      apply_channel_id: server.apply_channel_id || '',
     });
     setErr(''); setEditing(server); setShowAdd(true);
   }
@@ -420,6 +437,7 @@ function ServersTab() {
     const payload = {
       name: form.name, short_name: form.short_name, description: form.description,
       icon_url: form.icon_url, log_channel_id: form.log_channel_id,
+      apply_channel_id: form.apply_channel_id,
       ...(!editing && { guildId: form.guildId }),
     };
     const res = editing
@@ -461,7 +479,8 @@ function ServersTab() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {servers.map(server => (
-            <div key={server.id} style={{
+            <React.Fragment key={server.id}>
+            <div style={{
               display: 'flex', alignItems: 'center', gap: 14,
               background: 'var(--surface2)', border: '1px solid var(--border)',
               borderRadius: 10, padding: '14px 16px',
@@ -485,10 +504,20 @@ function ServersTab() {
                   {server.description && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{server.description}</span>}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <span style={{ fontSize: 12, color: server.active ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
                   {server.active ? 'Active' : 'Hidden'}
                 </span>
+                {server.apply_channel_id && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={postingMsg === server.id}
+                    onClick={() => postApplyMessage(server)}
+                    title="Post the apply message with role buttons to the configured apply channel"
+                  >
+                    {postingMsg === server.id ? <div className="spinner" style={{ width: 12, height: 12 }} /> : '📤 Post Apply Message'}
+                  </button>
+                )}
                 <button className="btn btn-ghost btn-sm" onClick={() => handleToggle(server)}>
                   {server.active ? 'Hide' : 'Show'}
                 </button>
@@ -496,6 +525,15 @@ function ServersTab() {
                 <button className="btn btn-danger btn-sm" onClick={() => handleDelete(server.id)}>Remove</button>
               </div>
             </div>
+            {postResult[server.id] && (
+              <div style={{ paddingLeft: 58, paddingBottom: 6 }}>
+                {postResult[server.id].error
+                  ? <span style={{ fontSize: 12, color: 'var(--danger)' }}>❌ {postResult[server.id].error}</span>
+                  : <span style={{ fontSize: 12, color: 'var(--success)' }}>✅ Apply message posted to Discord!</span>
+                }
+              </div>
+            )}
+            </React.Fragment>
           ))}
           {servers.length === 0 && (
             <div className="empty-state">
@@ -559,7 +597,12 @@ function ServersTab() {
               <div className="form-group" style={{ gridColumn: '1/-1' }}>
                 <label className="form-label">Application Log Channel ID <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional — overrides default)</span></label>
                 <input className="form-input" placeholder="Leave blank to use default channel" value={form.log_channel_id} onChange={set('log_channel_id')} />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Applications for this server will post to this Discord channel.</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Submitted applications for this server will post here for admin review.</span>
+              </div>
+              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                <label className="form-label">Apply Channel ID <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                <input className="form-input" placeholder="Channel where members click to apply" value={form.apply_channel_id} onChange={set('apply_channel_id')} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Once set, use the <strong>📤 Post Apply Message</strong> button to send an embed with Mod / HR / Partnership buttons to this channel.</span>
               </div>
             </div>
 
