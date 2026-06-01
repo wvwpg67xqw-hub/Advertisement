@@ -348,7 +348,6 @@ app.get('/api/bot/guilds', (req, res) => {
   if (!client.isReady()) return res.json([]);
   const exclude = new Set([
     process.env.STAFF_SERVER,
-    process.env.MAIN_GUILD_ID,
   ].filter(Boolean));
   const guilds = [...client.guilds.cache.values()]
     .filter(g => !exclude.has(g.id))
