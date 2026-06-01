@@ -32,6 +32,7 @@ import {
   handleResetMessages, handleResetMessagesAll,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
+  handleSetupNetworkApply, handleNetworkApplyPost,
 } from './src/commands/index.js';
 
 import {
@@ -425,6 +426,8 @@ const botHandlers = {
   'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll,
   'resign-request': handleResignRequest, apply: handleApply, update: handleUpdate,
+  'setup-network-apply': handleSetupNetworkApply,
+  'network-apply-post': handleNetworkApplyPost,
 };
 
 // ── Interaction Handler ───────────────────────────────────────────────────────
@@ -623,6 +626,128 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0xef4444)
                 .setTitle('❌ Break Denied')
                 .setDescription(`Your break request was denied by **${interaction.user.tag}**.`)
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        return;
+      }
+
+      // ── Network Apply: Open Modal ─────────────────────────────────────────
+      if (id.startsWith('napply_') && !id.startsWith('napply_accept_') && !id.startsWith('napply_deny_')) {
+        const targetGuildId = id.slice(7);
+        const targetGuild = interaction.client.guilds.cache.get(targetGuildId);
+        const serverName = targetGuild?.name || 'this server';
+
+        const { ModalBuilder: MB, TextInputBuilder: TIB, TextInputStyle: TIS, ActionRowBuilder: ARB2 } = discordPkg;
+        const modal = new MB()
+          .setCustomId(`napply_modal_${targetGuildId}`)
+          .setTitle(`Apply — ${serverName}`.slice(0, 45));
+        modal.addComponents(
+          new ARB2().addComponents(new TIB().setCustomId('app_why').setLabel('Why do you want to join this server?').setStyle(TIS.Paragraph).setRequired(true).setMaxLength(1000)),
+          new ARB2().addComponents(new TIB().setCustomId('app_experience').setLabel('What relevant experience do you have?').setStyle(TIS.Paragraph).setRequired(true).setMaxLength(1000)),
+          new ARB2().addComponents(new TIB().setCustomId('app_timezone').setLabel('What is your timezone?').setStyle(TIS.Short).setRequired(true).setMaxLength(50)),
+          new ARB2().addComponents(new TIB().setCustomId('app_age').setLabel('How old are you?').setStyle(TIS.Short).setRequired(true).setMaxLength(3)),
+        );
+        return interaction.showModal(modal);
+      }
+
+      // ── Network Apply: Accept ──────────────────────────────────────────────
+      if (id.startsWith('napply_accept_')) {
+        const parts = id.slice(14).split('_');
+        const targetGuildId = parts[0];
+        const applicantId   = parts[1];
+        const appId         = parts[2];
+
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: '❌ Only Administrators can accept or deny applications.', flags: 64 });
+        }
+
+        const { getNetworkApplyConfig, resolveNetworkApplication } = await import('./src/database.js');
+        const app = resolveNetworkApplication(appId, 'accepted');
+        if (!app) return interaction.reply({ content: '❌ Application not found.', flags: 64 });
+
+        const config = getNetworkApplyConfig(targetGuildId);
+        const targetGuild = interaction.client.guilds.cache.get(targetGuildId)
+          || await interaction.client.guilds.fetch(targetGuildId).catch(() => null);
+
+        let rolesGiven = [];
+        if (targetGuild && config.roles?.length) {
+          const member = await targetGuild.members.fetch(applicantId).catch(() => null);
+          if (member) {
+            await member.roles.add(config.roles).catch(() => null);
+            rolesGiven = config.roles;
+          }
+        }
+
+        const roleList = rolesGiven.length ? rolesGiven.map(r => `<@&${r}>`).join(', ') : 'None';
+        const acceptedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+          .setColor(0x57F287)
+          .addFields(
+            { name: '✅ Accepted By', value: `<@${interaction.user.id}>`, inline: true },
+            { name: '🎭 Roles Given', value: roleList, inline: true },
+          );
+        await interaction.update({
+          embeds: [acceptedEmbed],
+          components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`napply_accept_${targetGuildId}_${applicantId}_${appId}`).setLabel('✅ Accepted').setStyle(ButtonStyle.Success).setDisabled(true),
+            new ButtonBuilder().setCustomId(`napply_deny_${targetGuildId}_${applicantId}_${appId}`).setLabel('❌ Deny').setStyle(ButtonStyle.Danger).setDisabled(true),
+          )],
+        });
+
+        try {
+          const applicant = await interaction.client.users.fetch(applicantId).catch(() => null);
+          if (applicant) {
+            await applicant.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle('🎉 Application Accepted!')
+                .setDescription(`Your application to join **${targetGuild?.name || 'the server'}** has been **accepted**!\n\nAn admin has reviewed your application and you have been given your roles. Welcome to the team!`)
+                .setTimestamp()
+              ]
+            }).catch(() => null);
+          }
+        } catch {}
+
+        return;
+      }
+
+      // ── Network Apply: Deny ────────────────────────────────────────────────
+      if (id.startsWith('napply_deny_')) {
+        const parts = id.slice(12).split('_');
+        const targetGuildId = parts[0];
+        const applicantId   = parts[1];
+        const appId         = parts[2];
+
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: '❌ Only Administrators can accept or deny applications.', flags: 64 });
+        }
+
+        const { resolveNetworkApplication: resolveNA } = await import('./src/database.js');
+        resolveNA(appId, 'denied');
+
+        const targetGuild = interaction.client.guilds.cache.get(targetGuildId);
+        const deniedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+          .setColor(0xED4245)
+          .addFields({ name: '❌ Denied By', value: `<@${interaction.user.id}>`, inline: true });
+        await interaction.update({
+          embeds: [deniedEmbed],
+          components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`napply_accept_${targetGuildId}_${applicantId}_${appId}`).setLabel('✅ Accept').setStyle(ButtonStyle.Success).setDisabled(true),
+            new ButtonBuilder().setCustomId(`napply_deny_${targetGuildId}_${applicantId}_${appId}`).setLabel('❌ Denied').setStyle(ButtonStyle.Danger).setDisabled(true),
+          )],
+        });
+
+        try {
+          const applicant = await interaction.client.users.fetch(applicantId).catch(() => null);
+          if (applicant) {
+            await applicant.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0xED4245)
+                .setTitle('❌ Application Denied')
+                .setDescription(`Your application to join **${targetGuild?.name || 'the server'}** was **not accepted** at this time.\n\nThank you for your interest. You are welcome to apply again in the future.`)
                 .setTimestamp()
               ]
             }).catch(() => null);
@@ -1187,6 +1312,73 @@ if (id.startsWith('app_')) {
           .setColor(0x57F287)
           .setTitle('✅ Application Submitted')
           .setDescription('Your application has been submitted and is under review. You will be notified of the outcome.')
+          .setTimestamp()
+        ],
+        flags: 64,
+      });
+    }
+
+    // ── Network Apply Modal Submit ─────────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('napply_modal_')) {
+      const targetGuildId = interaction.customId.slice(13);
+      const why        = interaction.fields.getTextInputValue('app_why').trim();
+      const experience = interaction.fields.getTextInputValue('app_experience').trim();
+      const timezone   = interaction.fields.getTextInputValue('app_timezone').trim();
+      const age        = interaction.fields.getTextInputValue('app_age').trim();
+
+      const { getNetworkApplyConfig: getNAC, saveNetworkApplication: saveNA } = await import('./src/database.js');
+      const config = getNAC(targetGuildId);
+
+      if (!config.logChannelId) {
+        return interaction.reply({ content: '❌ This server has not configured its application system yet. Try again later.', flags: 64 });
+      }
+
+      const logChannel = await interaction.client.channels.fetch(config.logChannelId).catch(() => null);
+      if (!logChannel) {
+        return interaction.reply({ content: '❌ The application review channel could not be reached. Please contact an admin.', flags: 64 });
+      }
+
+      const avatar = interaction.user.displayAvatarURL({ size: 64, extension: 'png' });
+      const appId = saveNA(targetGuildId, interaction.user.id, interaction.user.tag, avatar, why, experience, timezone, age);
+
+      const targetGuild = interaction.client.guilds.cache.get(targetGuildId);
+      const serverName = targetGuild?.name || 'Unknown Server';
+
+      const appEmbed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`📋 Server Application — ${serverName}`)
+        .setDescription(`**${interaction.user.tag}** wants to join **${serverName}**.`)
+        .setThumbnail(avatar)
+        .addFields(
+          { name: '👤 Applicant', value: `<@${interaction.user.id}> (\`${interaction.user.id}\`)`, inline: true },
+          { name: '🎂 Age', value: age, inline: true },
+          { name: '🌍 Timezone', value: timezone, inline: true },
+          { name: '❓ Why they want to join', value: why },
+          { name: '📜 Experience', value: experience },
+          { name: '🎭 Roles on Acceptance', value: config.roles.length ? config.roles.map(r => `<@&${r}>`).join(', ') : 'None configured', inline: true },
+          { name: '🕒 Submitted', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+        )
+        .setFooter({ text: `Application ID: ${appId}` })
+        .setTimestamp();
+
+      const appRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`napply_accept_${targetGuildId}_${interaction.user.id}_${appId}`)
+          .setLabel('✅ Accept Application')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`napply_deny_${targetGuildId}_${interaction.user.id}_${appId}`)
+          .setLabel('❌ Deny Application')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await logChannel.send({ embeds: [appEmbed], components: [appRow] });
+
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('✅ Application Submitted!')
+          .setDescription(`Your application to join **${serverName}** has been submitted. An admin will review it and you'll receive a DM with the outcome.`)
           .setTimestamp()
         ],
         flags: 64,

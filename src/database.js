@@ -18,6 +18,7 @@ export function getGuild(guildId) {
       resign_channel_id: null, verified_role_id: null, applications_channel_id: null,
       referral_link: null, modmail_test_channel_id: null,
       pfp_url: null, banner_url: null,
+      network_apply_log_channel_id: null, network_apply_roles: [],
     };
     rows.push(row);
     writeCol('guilds', rows);
@@ -30,6 +31,8 @@ export function getGuild(guildId) {
   if (!('applications_channel_id' in row)) row.applications_channel_id = null;
   if (!('referral_link' in row)) row.referral_link = null;
   if (!('modmail_test_channel_id' in row)) row.modmail_test_channel_id = null;
+  if (!('network_apply_log_channel_id' in row)) row.network_apply_log_channel_id = null;
+  if (!('network_apply_roles' in row)) row.network_apply_roles = [];
   return row;
 }
 
@@ -47,6 +50,7 @@ export function setGuildConfig(guildId, fields) {
     'resign_channel_id', 'verified_role_id', 'applications_channel_id',
     'referral_link', 'modmail_test_channel_id',
     'pfp_url', 'banner_url',
+    'network_apply_log_channel_id', 'network_apply_roles',
   ];
   for (const [key, val] of Object.entries(fields)) {
     if (allowed.includes(key)) rows[i][key] = val;
@@ -338,6 +342,50 @@ export function isBlacklisted(guildId, userId) {
 
 export function getBlacklistEntry(guildId, userId) {
   return readCol('bot_blacklist').find(r => r.guild_id === guildId && r.user_id === userId) ?? null;
+}
+
+// ─── Network Apply Config ─────────────────────────────────────────────────────
+
+export function setNetworkApplyConfig(guildId, logChannelId, roles) {
+  getGuild(guildId);
+  const rows = readCol('guilds');
+  const i = rows.findIndex(g => g.guild_id === guildId);
+  rows[i].network_apply_log_channel_id = logChannelId;
+  rows[i].network_apply_roles = roles || [];
+  writeCol('guilds', rows);
+}
+
+export function getNetworkApplyConfig(guildId) {
+  const g = getGuild(guildId);
+  return {
+    logChannelId: g.network_apply_log_channel_id || null,
+    roles: g.network_apply_roles || [],
+  };
+}
+
+export function saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age) {
+  const rows = readCol('network_applications');
+  const id = nextId('network_applications');
+  rows.push({
+    id, target_guild_id: targetGuildId, applicant_id: applicantId,
+    applicant_username: applicantUsername, applicant_avatar: applicantAvatar,
+    why, experience, timezone, age, status: 'pending', created_at: ts(),
+  });
+  writeCol('network_applications', rows);
+  return id;
+}
+
+export function getNetworkApplication(id) {
+  return readCol('network_applications').find(r => r.id === Number(id)) ?? null;
+}
+
+export function resolveNetworkApplication(id, status) {
+  const rows = readCol('network_applications');
+  const i = rows.findIndex(r => r.id === Number(id));
+  if (i < 0) return null;
+  rows[i].status = status;
+  writeCol('network_applications', rows);
+  return rows[i];
 }
 
 // ─── Ad Channels ──────────────────────────────────────────────────────────────
