@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
 // Kill any process already holding the port so restarts never get EADDRINUSE
-const port = process.env.PORT || 25849;
+const port = process.env.PORT || 5000;
 try { execSync(`fuser -k ${port}/tcp 2>/dev/null || true`); } catch {}
 
 const distPath = './client/dist';

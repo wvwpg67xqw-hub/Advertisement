@@ -51,7 +51,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // In-memory state for pending application approvals (role selection before confirm)
 const pendingApprovals = new Map(); // key: `GUILDID_APPROVERID` → { applicantId, staffRoleId, teamRoleId }
-const PORT = process.env.PORT || 25849;
+const PORT = process.env.PORT || 5000;
 
 const DISCORD_CLIENT_ID     = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
