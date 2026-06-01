@@ -147,18 +147,21 @@ router.post(
         return res.status(409).json({ error: 'You already have a pending application for this role' });
       }
 
-      // Validate guildId if provided
+      // Look up optional per-server config (log channel override etc.)
       let applyServer = null;
+      let resolvedGuildId = null;
       if (guildId) {
-        applyServer = db.getApplyServerByGuildId(String(guildId));
-        if (!applyServer) return res.status(400).json({ error: 'Invalid server selected' });
+        resolvedGuildId = String(guildId).trim();
+        applyServer = db.getApplyServerByGuildId(resolvedGuildId) || null;
+        // Don't block submission if no manual config exists — any guild the bot
+        // is in is valid; it will just use the default log channel.
       }
 
       const result = db.insertApplication({
         userId, username, avatar,
         role: validRole.name,
         answers: cleanAnswers,
-        guildId: applyServer?.guildId || null,
+        guildId: resolvedGuildId || null,
       });
 
       const applicationId = result.lastInsertRowid;

@@ -342,6 +342,25 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/roles', (req, res) => res.json(db.getActiveRoles()));
 
+// ── Public: bot guilds (excluding staff server) ───────────────────────────────
+
+app.get('/api/bot/guilds', (req, res) => {
+  if (!client.isReady()) return res.json([]);
+  const exclude = new Set([
+    process.env.STAFF_SERVER,
+    process.env.MAIN_GUILD_ID,
+  ].filter(Boolean));
+  const guilds = [...client.guilds.cache.values()]
+    .filter(g => !exclude.has(g.id))
+    .map(g => ({
+      id: g.id,
+      name: g.name,
+      icon_url: g.iconURL({ size: 256, extension: 'png' }) || null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  res.json(guilds);
+});
+
 // ── Public: server branding ───────────────────────────────────────────────────
 
 app.get('/api/branding', async (req, res) => {

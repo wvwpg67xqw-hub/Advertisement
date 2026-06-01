@@ -73,111 +73,63 @@ export const ROLE_QUESTIONS = {
   ],
 };
 
-function ServerCard({ server, selected, onClick }) {
-  const isSelected = selected?.id === server.id;
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(server)}
-      style={{
-        background: isSelected ? 'rgba(88,101,242,0.15)' : 'var(--surface2)',
-        border: `2px solid ${isSelected ? '#5865f2' : 'var(--border)'}`,
-        borderRadius: 14,
-        padding: '24px 20px',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 12,
-        transition: 'all 0.15s',
-        width: '100%',
-        textAlign: 'center',
-        outline: 'none',
-      }}
-    >
-      {server.icon_url ? (
-        <img
-          src={server.icon_url}
-          alt={server.name}
-          style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-          onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-        />
-      ) : null}
-      <div style={{
-        width: 64, height: 64, borderRadius: '50%',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        display: server.icon_url ? 'none' : 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 28,
-        flexShrink: 0,
-      }}>
-        🖥️
-      </div>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)', marginBottom: 4 }}>
-          {server.short_name || server.name}
-        </div>
-        {server.short_name && server.short_name !== server.name && (
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-            {server.name}
-          </div>
-        )}
-        {server.description && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-            {server.description}
-          </div>
-        )}
-      </div>
-      {isSelected && (
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#5865f2', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          ✓ Selected
-        </div>
-      )}
-    </button>
-  );
-}
+const ROLES = [
+  { key: 'Moderator',        label: 'Moderator',           emoji: '🔨', desc: 'Enforce rules, handle reports, maintain order',          color: '#6c63ff' },
+  { key: 'Human Resources',  label: 'Human Resources',     emoji: '🤝', desc: 'Manage staff, onboarding, and team wellbeing',           color: '#22c55e' },
+  { key: 'Partnership',      label: 'Partnership Manager', emoji: '🌐', desc: 'Build community partnerships and grow the network',      color: '#f59e0b' },
+];
 
 export default function Apply() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [applyServers, setApplyServers] = useState([]);
-  const [serversLoading, setServersLoading] = useState(true);
-  const [selectedServer, setSelectedServer] = useState(null);
-
-  const [roles, setRoles] = useState([]);
-  const [role, setRole] = useState(searchParams.get('role') || '');
-  const [answers, setAnswers] = useState(Array(20).fill(''));
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
   const preselectedGuildId = searchParams.get('guildId') || '';
+  const preselectedRole    = searchParams.get('role') || '';
+
+  const initialStep = preselectedGuildId
+    ? (preselectedRole ? 'form' : 'role')
+    : 'server';
+
+  const [step, setStep]                 = useState(initialStep);
+  const [servers, setServers]           = useState([]);
+  const [serversLoading, setLoading1]   = useState(true);
+  const [selectedServer, setSelectedServer] = useState(null);
+  const [role, setRole]                 = useState(preselectedRole);
+  const [answers, setAnswers]           = useState(Array(20).fill(''));
+  const [error, setError]               = useState('');
+  const [submitting, setSubmitting]     = useState(false);
 
   useEffect(() => {
-    fetch('/api/applications/servers')
+    fetch('/api/bot/guilds')
       .then(r => r.json())
       .then(data => {
         const list = Array.isArray(data) ? data : [];
-        setApplyServers(list);
+        setServers(list);
         if (preselectedGuildId) {
-          const match = list.find(s => s.guildId === preselectedGuildId);
+          const match = list.find(s => s.id === preselectedGuildId);
           if (match) setSelectedServer(match);
         }
-        setServersLoading(false);
+        setLoading1(false);
       })
-      .catch(() => setServersLoading(false));
-
-    fetch('/api/roles')
-      .then(r => r.json())
-      .then(data => setRoles(Array.isArray(data) ? data : []))
-      .catch(() => {});
+      .catch(() => setLoading1(false));
   }, []);
 
   const questions = ROLE_QUESTIONS[role] || [];
-  const useServerSelection = applyServers.length > 0;
+  const roleInfo  = ROLES.find(r => r.key === role);
+
+  function pickServer(server) {
+    setSelectedServer(server);
+    setStep('role');
+    setError('');
+  }
+
+  function pickRole(r) {
+    setRole(r);
+    setAnswers(Array(20).fill(''));
+    setStep('form');
+    setError('');
+  }
 
   function setAnswer(i, val) {
     setAnswers(prev => { const next = [...prev]; next[i] = val; return next; });
@@ -186,18 +138,18 @@ export default function Apply() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (useServerSelection && !selectedServer) return setError('Please select a server.');
-    if (!role) return setError('Please select a role.');
+    if (!selectedServer) return setError('Please select a server.');
+    if (!role)           return setError('Please select a role.');
     for (let i = 0; i < questions.length; i++) {
       if (!answers[i]?.trim()) return setError(`Please answer question ${i + 1}.`);
     }
-    setLoading(true);
+    setSubmitting(true);
     try {
       const res = await fetch('/api/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ role, answers, guildId: selectedServer?.guildId || null }),
+        body: JSON.stringify({ role, answers, guildId: selectedServer.id }),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || 'Submission failed');
@@ -205,149 +157,229 @@ export default function Apply() {
     } catch {
       setError('Network error. Please try again.');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
+  const stepDefs = [
+    { id: 'server', label: '1. Server' },
+    { id: 'role',   label: '2. Role'   },
+    { id: 'form',   label: '3. Form'   },
+  ];
+  const stepIndex = stepDefs.findIndex(s => s.id === step);
+
   return (
-    <div className="page-container" style={{ maxWidth: 740 }}>
+    <div className="page-container" style={{ maxWidth: 720 }}>
       <div className="page-header">
         <h1 className="page-title">📋 Staff Application</h1>
         <p className="page-subtitle">Take your time and answer thoughtfully — quality answers improve your chances.</p>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px', marginBottom: 24 }}>
-        {user?.avatar && <img src={user.avatar} alt="" style={{ width: 44, height: 44, borderRadius: '50%', flexShrink: 0 }} />}
+      {/* User badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+        {user?.avatar && <img src={user.avatar} alt="" style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0 }} />}
         <div>
           <div style={{ fontWeight: 600 }}>{user?.username}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Applying as · ID {user?.userId}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Applying as · {user?.userId}</div>
         </div>
         <span style={{ marginLeft: 'auto', background: 'rgba(88,101,242,0.15)', color: '#7289da', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600 }}>via Discord</span>
       </div>
 
-      {/* ── Server Selection ── */}
-      {useServerSelection && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🖥️ Select Server</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Which server within the network are you applying for?</div>
+      {/* Step breadcrumb */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 20, fontSize: 13 }}>
+        {stepDefs.map((s, i) => {
+          const done   = i < stepIndex;
+          const active = i === stepIndex;
+          return (
+            <React.Fragment key={s.id}>
+              {i > 0 && <span style={{ color: 'var(--border)', margin: '0 2px' }}>›</span>}
+              <span style={{ fontWeight: active || done ? 600 : 400, color: active ? 'var(--text)' : done ? 'var(--success)' : 'var(--text-muted)' }}>
+                {done ? '✓ ' : ''}{s.label}
+              </span>
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* ── Step 1: Server ── */}
+      {step === 'server' && (
+        <div className="card">
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>🖥️ Choose a Server</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Which server are you applying to join the staff team for?</div>
           </div>
 
           {serversLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+          ) : servers.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">🤖</div>
+              <div style={{ fontWeight: 600 }}>No servers available</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>The bot isn't in any eligible servers right now.</div>
+            </div>
           ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-              gap: 12,
-            }}>
-              {applyServers.map(server => (
-                <ServerCard
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+              {servers.map(server => (
+                <button
                   key={server.id}
-                  server={server}
-                  selected={selectedServer}
-                  onClick={s => { setSelectedServer(s); setError(''); }}
-                />
+                  type="button"
+                  onClick={() => pickServer(server)}
+                  style={{
+                    background: 'var(--surface2)',
+                    border: '2px solid var(--border)',
+                    borderRadius: 14,
+                    padding: '20px 14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 10,
+                    textAlign: 'center',
+                    outline: 'none',
+                    transition: 'border-color 0.15s, background 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#5865f2'; e.currentTarget.style.background = 'rgba(88,101,242,0.08)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--surface2)'; }}
+                >
+                  {server.icon_url ? (
+                    <img src={server.icon_url} alt={server.name} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>🖥️</div>
+                  )}
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', lineHeight: 1.3, wordBreak: 'break-word' }}>{server.name}</div>
+                </button>
               ))}
             </div>
           )}
         </div>
       )}
 
-      {/* ── Application Form ── */}
-      <div className="card">
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {error && <div className="alert alert-error">{error}</div>}
-
-          <div className="form-group">
-            <label className="form-label">Role Applying For *</label>
-            <select className="form-input" value={role} onChange={e => { setRole(e.target.value); setAnswers(Array(20).fill('')); }}>
-              <option value="">Select a role to see questions</option>
-              {roles.map(r => <option key={r.id} value={r.name}>{r.emoji} {r.name}</option>)}
-            </select>
+      {/* ── Step 2: Role ── */}
+      {step === 'role' && (
+        <div className="card">
+          {/* Server context */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
+            {selectedServer?.icon_url && (
+              <img src={selectedServer.icon_url} alt="" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />
+            )}
+            <div>
+              <div style={{ fontWeight: 700 }}>{selectedServer?.name}</div>
+              <button type="button" onClick={() => { setStep('server'); setError(''); }} style={{ background: 'none', border: 'none', color: '#5865f2', cursor: 'pointer', fontSize: 12, padding: 0, marginTop: 1 }}>
+                ← Change server
+              </button>
+            </div>
           </div>
 
-          {role && questions.length > 0 && (
-            <>
-              <div style={{ height: 1, background: 'var(--border)' }} />
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>🎭 Choose a Role</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Which position are you applying for?</div>
+          </div>
 
-              {selectedServer && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(88,101,242,0.1)', border: '1px solid rgba(88,101,242,0.3)', borderRadius: 8, padding: '10px 14px' }}>
-                  {selectedServer.icon_url && <img src={selectedServer.icon_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />}
-                  <div style={{ fontSize: 13 }}>
-                    Applying to <strong>{selectedServer.name}</strong>
-                    <button type="button" onClick={() => setSelectedServer(null)} style={{ marginLeft: 10, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13 }}>Change</button>
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {ROLES.map(r => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => pickRole(r.key)}
+                style={{
+                  background: 'var(--surface2)',
+                  border: '2px solid var(--border)',
+                  borderRadius: 12,
+                  padding: '16px 18px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 14,
+                  textAlign: 'left',
+                  outline: 'none',
+                  transition: 'border-color 0.15s, background 0.15s',
+                  width: '100%',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = r.color; e.currentTarget.style.background = r.color + '18'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--surface2)'; }}
+              >
+                <div style={{ width: 46, height: 46, borderRadius: 10, background: r.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                  {r.emoji}
                 </div>
-              )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{r.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{r.desc}</div>
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 20, flexShrink: 0 }}>›</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
-                {questions.length} questions for <strong>{role}</strong> — answer all of them.
+      {/* ── Step 3: Form ── */}
+      {step === 'form' && (
+        <div className="card">
+          {/* Context bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(88,101,242,0.08)', border: '1px solid rgba(88,101,242,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 24 }}>
+            {selectedServer?.icon_url && (
+              <img src={selectedServer.icon_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0 }} />
+            )}
+            <span style={{ fontSize: 13, flex: 1 }}>
+              <strong>{selectedServer?.name}</strong>
+              <span style={{ color: 'var(--text-muted)', margin: '0 6px' }}>·</span>
+              {roleInfo?.emoji} <strong>{roleInfo?.label || role}</strong>
+            </span>
+            <button type="button" onClick={() => { setStep('role'); setError(''); }} style={{ background: 'none', border: 'none', color: '#5865f2', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>
+              ← Change role
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+            {error && <div className="alert alert-error">{error}</div>}
+
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
+              {questions.length} questions — answer all of them carefully.
+            </div>
+
+            {questions.map((q, i) => (
+              <div key={i} className="form-group">
+                <label className="form-label">
+                  <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>Q{i + 1}.</span>
+                  {q} *
+                </label>
+                {i === 0 ? (
+                  <input className="form-input" type="number" min="13" max="99" placeholder="Your age" value={answers[i]} onChange={e => setAnswer(i, e.target.value)} />
+                ) : i === 1 ? (
+                  <select className="form-input" value={answers[i]} onChange={e => setAnswer(i, e.target.value)}>
+                    <option value="">Select your timezone</option>
+                    {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                  </select>
+                ) : (
+                  <textarea className="form-input" placeholder="Your answer..." value={answers[i]} onChange={e => setAnswer(i, e.target.value)} style={{ minHeight: 88, resize: 'vertical' }} />
+                )}
               </div>
+            ))}
 
-              {questions.map((q, i) => (
-                <div key={i} className="form-group">
-                  <label className="form-label">
-                    <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>Q{i + 1}.</span>
-                    {q} *
-                  </label>
-
-                  {i === 0 ? (
-                    <input
-                      className="form-input"
-                      type="number"
-                      min="13"
-                      max="99"
-                      placeholder="Your age"
-                      value={answers[i]}
-                      onChange={e => setAnswer(i, e.target.value)}
-                    />
-                  ) : i === 1 ? (
-                    <select className="form-input" value={answers[i]} onChange={e => setAnswer(i, e.target.value)}>
-                      <option value="">Select your timezone</option>
-                      {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-                    </select>
-                  ) : (
-                    <textarea
-                      className="form-input"
-                      placeholder="Your answer..."
-                      value={answers[i]}
-                      onChange={e => setAnswer(i, e.target.value)}
-                      style={{ minHeight: 90, resize: 'vertical' }}
-                    />
-                  )}
+            {answers.filter(a => a.trim()).length >= 4 && (
+              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Preview</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {answers[0] && <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Age: </span><strong>{answers[0]}</strong></div>}
+                  {answers[1] && <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Timezone: </span><strong>{answers[1]}</strong></div>}
+                  {answers[2] && <div style={{ gridColumn: '1/-1', fontSize: 13, color: 'var(--text-muted)' }}><span style={{ fontWeight: 600 }}>Q3: </span>{answers[2].slice(0, 120)}{answers[2].length > 120 ? '…' : ''}</div>}
+                  {answers[3] && <div style={{ gridColumn: '1/-1', fontSize: 13, color: 'var(--text-muted)' }}><span style={{ fontWeight: 600 }}>Q4: </span>{answers[3].slice(0, 120)}{answers[3].length > 120 ? '…' : ''}</div>}
                 </div>
-              ))}
-
-              {answers.filter(a => a.trim()).length >= 4 && (
-                <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Preview</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {answers[0] && <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Age: </span><strong>{answers[0]}</strong></div>}
-                    {answers[1] && <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Timezone: </span><strong>{answers[1]}</strong></div>}
-                    {answers[2] && <div style={{ gridColumn: '1/-1', fontSize: 13, color: 'var(--text-muted)' }}>
-                      <span style={{ fontWeight: 600 }}>Q3: </span>{answers[2].slice(0, 120)}{answers[2].length > 120 ? '…' : ''}
-                    </div>}
-                    {answers[3] && <div style={{ gridColumn: '1/-1', fontSize: 13, color: 'var(--text-muted)' }}>
-                      <span style={{ fontWeight: 600 }}>Q4: </span>{answers[3].slice(0, 120)}{answers[3].length > 120 ? '…' : ''}
-                    </div>}
-                  </div>
-                  <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
-                    ✅ {answers.filter(a => a.trim()).length} / {questions.length} questions answered
-                  </div>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                  ✅ {answers.filter(a => a.trim()).length} / {questions.length} answered
                 </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 12, paddingTop: 4 }}>
-                <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
-                  {loading ? <div className="spinner" /> : 'Submit Application'}
-                </button>
               </div>
-            </>
-          )}
-        </form>
-      </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 12, paddingTop: 4 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={submitting} style={{ flex: 1 }}>
+                {submitting ? <div className="spinner" /> : 'Submit Application'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
