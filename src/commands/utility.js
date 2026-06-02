@@ -40,8 +40,8 @@ export const defs = [
 
   new SlashCommandBuilder()
     .setName('release-notes')
-    .setDescription('Post a release notes announcement — auto-fills from GitHub if linked')
-    .addStringOption(o => o.setName('version').setDescription('Version tag (e.g. v1.2.3)').setRequired(true))
+    .setDescription('Post a release notes announcement — auto-fills version and commits from GitHub if linked')
+    .addStringOption(o => o.setName('version').setDescription('Version tag (e.g. v1.2.3) — auto-detected from GitHub if blank'))
     .addStringOption(o => o.setName('changes').setDescription('Override: manually write what changed (leave blank to pull from GitHub)'))
     .addStringOption(o => o.setName('since').setDescription('Previous version tag to compare from (e.g. v1.2.2) — used for GitHub diff'))
     .addStringOption(o => o.setName('title').setDescription('Short release title (e.g. "Performance improvements")'))
@@ -132,15 +132,30 @@ export async function handleResetMessagesAll(interaction) {
 const RELEASE_COLORS = { major: 0x5865F2, update: 0x57F287, minor: 0xFEE75C, hotfix: 0xED4245 };
 const RELEASE_LABELS = { major: '🚀 Major Release', update: '✨ Update', minor: '🔧 Minor Fix', hotfix: '🔥 Hotfix' };
 
-async function fetchGithubChanges(repo, version, since) {
+async function fetchGithubMeta(repo) {
   const headers = { 'User-Agent': 'discord-bot' };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
 
+  const relRes = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { headers }).catch(() => null);
+  if (relRes?.ok) {
+    const rel = await relRes.json();
+    if (rel.tag_name) return { version: rel.tag_name, headers };
+  }
+
+  const tagRes = await fetch(`https://api.github.com/repos/${repo}/tags?per_page=1`, { headers }).catch(() => null);
+  if (tagRes?.ok) {
+    const tags = await tagRes.json();
+    if (Array.isArray(tags) && tags[0]?.name) return { version: tags[0].name, headers };
+  }
+
+  return { version: null, headers };
+}
+
+async function fetchGithubChanges(repo, version, since, headers) {
   let commits = [];
 
-  if (since) {
-    const url = `https://api.github.com/repos/${repo}/compare/${since}...${version}`;
-    const res = await fetch(url, { headers }).catch(() => null);
+  if (since && version) {
+    const res = await fetch(`https://api.github.com/repos/${repo}/compare/${since}...${version}`, { headers }).catch(() => null);
     if (res?.ok) {
       const data = await res.json();
       commits = data.commits || [];
@@ -148,19 +163,13 @@ async function fetchGithubChanges(repo, version, since) {
   }
 
   if (!commits.length) {
-    const url = `https://api.github.com/repos/${repo}/commits?per_page=15`;
-    const res = await fetch(url, { headers }).catch(() => null);
+    const res = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=20`, { headers }).catch(() => null);
     if (res?.ok) commits = await res.json();
   }
 
   if (!Array.isArray(commits) || !commits.length) return null;
 
   return commits
-    .filter(c => {
-      const author = (c.commit?.author?.name || '').toLowerCase();
-      const login = (c.author?.login || '').toLowerCase();
-      return !author.includes('replit') && !login.includes('replit');
-    })
     .map(c => c.commit?.message?.split('\n')[0].trim())
     .filter(msg => msg && !msg.startsWith('Merge '))
     .slice(0, 20)
@@ -172,7 +181,7 @@ export async function handleReleaseNotes(interaction) {
   if (!await hasCommandPermission(interaction.member, 'release-notes')) return deny(interaction);
   await interaction.deferReply({ flags: 64 });
 
-  const version = interaction.options.getString('version');
+  let version = interaction.options.getString('version');
   const manualChanges = interaction.options.getString('changes');
   const since = interaction.options.getString('since');
   const title = interaction.options.getString('title');
@@ -182,17 +191,21 @@ export async function handleReleaseNotes(interaction) {
   let formatted;
 
   if (manualChanges) {
+    if (!version) return interaction.editReply({ content: '❌ Please provide a `version` when using the manual `changes` option.' });
     const lines = manualChanges.replace(/\\n/g, '\n').split('\n').filter(l => l.trim());
     formatted = lines.map(l => l.startsWith('-') || l.startsWith('•') ? l : `• ${l}`).join('\n');
   } else {
     const config = await getGuild(interaction.guildId);
     if (!config.github_repo) {
-      return interaction.editReply({ content: '❌ No GitHub repo linked. Run `/setup-github` first, or manually provide the `changes` option.' });
+      return interaction.editReply({ content: '❌ No GitHub repo linked. Run `/setup-github` first, or provide `changes` manually.' });
     }
-    const auto = await fetchGithubChanges(config.github_repo, version, since);
-    if (!auto) {
-      return interaction.editReply({ content: `❌ Could not fetch commits from \`${config.github_repo}\`. Check the repo name and try again.` });
-    }
+
+    const { version: autoVersion, headers } = await fetchGithubMeta(config.github_repo);
+    if (!version) version = autoVersion;
+    if (!version) return interaction.editReply({ content: '❌ Could not auto-detect a version tag from GitHub. Provide `version` manually or create a release/tag on GitHub.' });
+
+    const auto = await fetchGithubChanges(config.github_repo, version, since, headers);
+    if (!auto) return interaction.editReply({ content: `❌ No commits found in \`${config.github_repo}\`.` });
     formatted = auto;
   }
 
