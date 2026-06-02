@@ -1,6 +1,6 @@
 import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = pkg;
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub } from './database.js';
 
 const ALL_COMMANDS = [
   'warn',
@@ -630,21 +630,32 @@ export async function handleSetupNetworkReset(interaction) {
 }
 
 export async function handleSetupNetworkHub(interaction) {
+  await interaction.deferReply();
+
+  const previousHub = await getNetworkHub();
+  if (previousHub && previousHub.guild_id !== interaction.guildId) {
+    await clearNetworkHub(previousHub.guild_id);
+  }
+
   await setNetworkHub(interaction.guildId, true);
+
+  const allGuildIds = [...interaction.client.guilds.cache.keys()];
+  await autoLinkGuilds(interaction.guildId, allGuildIds);
+
+  const linked = allGuildIds.filter(id => id !== interaction.guildId);
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
-    .setTitle('🌐 Network Hub Configured')
+    .setTitle('🌐 Network Hub Set')
     .setDescription(
-      `**${interaction.guild.name}** is now the **network hub** (staff server).\n\n` +
-      `All request logs from linked main servers will be forwarded here.\n\n` +
-      `Run \`/setup-network-roles\` here to set which roles count as Mod/Team Lead/Admin across the whole network.\n\n` +
-      `Then run \`/setup-network-join\` in each of your main servers using this server's ID:\n\n` +
-      `\`\`\`${interaction.guildId}\`\`\``
+      `**${interaction.guild.name}** is now the **staff/hub server**.\n\n` +
+      `✅ **${linked.length} server${linked.length !== 1 ? 's' : ''}** automatically linked to this hub.\n\n` +
+      `Any server the bot joins in the future will also be linked automatically.\n\n` +
+      `Run \`/setup-network-roles\` here to set which roles count as Mod/Team Lead/Admin across the whole network.`
     )
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed] });
+  await interaction.editReply({ embeds: [embed] });
 }
 
 export async function handleSetupStaffRoles(interaction) {

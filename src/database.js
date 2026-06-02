@@ -91,6 +91,18 @@ export async function clearHubGuildId(guildId) {
   await q('UPDATE guilds SET hub_guild_id = NULL WHERE guild_id = ?', [guildId]);
 }
 
+export async function getNetworkHub() {
+  return q1('SELECT * FROM guilds WHERE is_hub = 1 LIMIT 1');
+}
+
+export async function autoLinkGuilds(hubGuildId, guildIds) {
+  for (const guildId of guildIds) {
+    if (guildId === hubGuildId) continue;
+    await getGuild(guildId);
+    await q('UPDATE guilds SET hub_guild_id = ? WHERE guild_id = ?', [hubGuildId, guildId]);
+  }
+}
+
 export async function setHubStaffRoles(guildId, modRoleId, teamLeadRoleId, adminRoleId) {
   await getGuild(guildId);
   await q(
@@ -101,9 +113,13 @@ export async function setHubStaffRoles(guildId, modRoleId, teamLeadRoleId, admin
 
 export async function resolveNetworkRoleIds(guildId) {
   const guild = await getGuild(guildId);
-  const source = (!guild.is_hub && guild.hub_guild_id)
-    ? await getGuild(guild.hub_guild_id)
-    : guild;
+
+  let source = guild;
+  if (!guild.is_hub) {
+    const hubId = guild.hub_guild_id || (await getNetworkHub())?.guild_id;
+    if (hubId) source = await getGuild(hubId);
+  }
+
   return {
     modRoleId:      source.hub_mod_role_id      || null,
     teamLeadRoleId: source.hub_team_lead_role_id || null,

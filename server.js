@@ -45,7 +45,7 @@ import {
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
@@ -1772,6 +1772,25 @@ client.once('clientReady', async () => {
     } catch (err) {
       console.error('❌ Failed to register commands:', err.message);
     }
+  }
+
+  const hub = await getNetworkHub().catch(() => null);
+  if (hub) {
+    const allGuildIds = [...client.guilds.cache.keys()];
+    await autoLinkGuilds(hub.guild_id, allGuildIds).catch(() => {});
+    console.log(`🌐 Auto-linked ${allGuildIds.length - 1} servers to network hub (${hub.guild_id})`);
+  }
+});
+
+client.on('guildCreate', async (guild) => {
+  try {
+    const hub = await getNetworkHub();
+    if (hub && hub.guild_id !== guild.id) {
+      await autoLinkGuilds(hub.guild_id, [guild.id]);
+      console.log(`🌐 Auto-linked new server "${guild.name}" (${guild.id}) to network hub`);
+    }
+  } catch (err) {
+    console.error('guildCreate auto-link error:', err.message);
   }
 });
 
