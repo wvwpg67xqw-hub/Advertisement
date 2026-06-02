@@ -60,6 +60,7 @@ export const handleNetworkBanRequest = i => handleRequest(i, 'network-ban');
 export const handlePartnershipRequest = i => handleRequest(i, 'partnership');
 
 export async function handleRequestButton(interaction) {
+  if (!interaction.isButton() || !interaction.customId?.startsWith('req:')) return;
   const [, action, type, targetId, originGuildId] = interaction.customId.split(':');
 
   if (getStaffRank(interaction.member) < 3 && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {

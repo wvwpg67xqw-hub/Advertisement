@@ -1438,7 +1438,9 @@ if (id.startsWith('app_')) {
       }
     }
 
-    if (handleRequestButton) await handleRequestButton(interaction);
+    if (interaction.isButton() && interaction.customId?.startsWith('req:')) {
+      await handleRequestButton(interaction);
+    }
   } catch (err) {
     console.error('Interaction error:', err);
     try {

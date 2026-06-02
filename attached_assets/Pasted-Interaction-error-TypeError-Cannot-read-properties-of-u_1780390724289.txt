@@ -1,0 +1,100 @@
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Interaction error: TypeError: Cannot read properties of undefined (reading 'split')
+    at handleRequestButton [90m(file:///home/container/[39msrc/commands/requests.js:63:74[90m)[39m
+    at Client.<anonymous> [90m(file:///home/container/[39mserver.js:1441:36[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
