@@ -29,7 +29,7 @@ export const commandDefs = [
 ];
 
 // ── Handlers (re-exported from each module) ───────────────────────────────────
-export { handleWarn, handleWarns, handleWarnLeaderboard, handleAdWarn, handleRemoveAdWarn, handleMute, handleUnmute, handleBan, handleFire, handleJail, handleUnjail } from './moderation.js';
+export { handleWarn, handleWarns, handleWarnLeaderboard, handleAdWarn, handleRemoveAdWarn, handleRemoveWarn, handleMute, handleUnmute, handleBan, handleFire, handleJail, handleUnjail } from './moderation.js';
 export { handlePromote, handleDemoteUser, handleStrike, handleStrikeRemove } from './staff-management.js';
 export { handleBanRequest, handleBlacklistRequest, handleNetworkBanRequest, handlePartnershipRequest, handleRequestButton } from './requests.js';
 export { handleNetworkBan, handleNetworkUnban } from './network.js';

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, deny, noConfig, STAFF_ROLE_ID } from './shared.js';
 import {
-  addWarn, getWarns, getWarnCount, getWarnLeaderboard,
+  addWarn, getWarns, getWarnCount, getWarnLeaderboard, removeWarn, getLastWarnTime,
   addAdWarn, getAdWarns, removeAdWarn, getAdWarnCountByModerator,
   jailUser, unjailUser, isJailed, getGuild,
 } from '../database.js';
@@ -11,6 +11,7 @@ import {
 } from '../utils.js';
 
 const RANK_ERR = '❌ You cannot use this command on a user of equal or higher rank.';
+const WARN_COOLDOWN_MS = 60 * 60 * 1000;
 
 export const defs = [
   new SlashCommandBuilder()
@@ -34,6 +35,11 @@ export const defs = [
     .addUserOption(o => o.setName('user').setDescription('User to warn').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true))
     .addStringOption(o => o.setName('message-id').setDescription('ID of the ad message to delete')),
+
+  new SlashCommandBuilder()
+    .setName('remove-warn')
+    .setDescription('Remove a warning by case ID')
+    .addStringOption(o => o.setName('case-id').setDescription('Case ID (e.g. CASE-0001)').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('remove-ad-warn')
@@ -83,12 +89,52 @@ export async function handleWarn(interaction) {
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
 
+  const lastWarnTime = await getLastWarnTime(interaction.guildId, target.id);
+  if (lastWarnTime) {
+    const elapsed = Date.now() - lastWarnTime * 1000;
+    if (elapsed < WARN_COOLDOWN_MS) {
+      const remaining = Math.ceil((WARN_COOLDOWN_MS - elapsed) / 60000);
+      return interaction.reply({
+        content: `⏳ **${target.username}** was already warned recently. Please wait **${remaining} minute${remaining !== 1 ? 's' : ''}** before warning them again.`,
+        flags: 64,
+      });
+    }
+  }
+
   const caseId = await addWarn(interaction.guildId, target.id, interaction.user.id, reason);
   const totalWarns = await getWarnCount(interaction.guildId, target.id);
   const embed = buildWarnEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
   embed.setFooter({ text: `Total warnings: ${totalWarns}` });
   await interaction.reply({ embeds: [embed], flags: 64 });
   await sendLog(interaction.guild, await getGuild(interaction.guildId), 'warn', embed);
+
+  const dmEmbed = new EmbedBuilder()
+    .setColor(0xFFAA00)
+    .setTitle('⚠️ You have received a warning')
+    .setDescription(`You were warned in **${interaction.guild?.name || 'a server'}**.`)
+    .addFields(
+      { name: '📋 Reason', value: reason, inline: false },
+      { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: '🗂️ Case ID', value: caseId, inline: true },
+      { name: '⚠️ Total Warnings', value: String(totalWarns), inline: true },
+    )
+    .setFooter({ text: 'Please review the server rules to avoid further action.' })
+    .setTimestamp();
+  await target.send({ embeds: [dmEmbed] }).catch(() => null);
+}
+
+export async function handleRemoveWarn(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'remove-warn')) return deny(interaction);
+  const caseId = interaction.options.getString('case-id').toUpperCase();
+  const removed = await removeWarn(interaction.guildId, caseId);
+  if (!removed) return interaction.reply({ content: `❌ No warning found with case ID **${caseId}**.`, flags: 64 });
+  await interaction.reply({
+    embeds: [new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('✅ Warning Removed')
+      .setDescription(`Case **${caseId}** has been removed from the database.`)
+      .setTimestamp()],
+  });
 }
 
 export async function handleWarns(interaction) {

@@ -177,6 +177,16 @@ export async function getWarnCount(guildId, userId) {
   return Number(row?.c) || 0;
 }
 
+export async function removeWarn(guildId, caseId) {
+  const result = await q('DELETE FROM warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  return result.affectedRows > 0;
+}
+
+export async function getLastWarnTime(guildId, userId) {
+  const row = await q1('SELECT created_at FROM warns WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1', [guildId, userId]);
+  return row?.created_at ?? null;
+}
+
 export async function getWarnLeaderboard(guildId, limit = 10) {
   return q('SELECT user_id, COUNT(*) AS count FROM warns WHERE guild_id = ? GROUP BY user_id ORDER BY count DESC LIMIT ?',
     [guildId, limit]);

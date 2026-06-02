@@ -22,7 +22,7 @@ import { setStaffDiscordClient } from './routes/staff.js';
 
 import {
   commandDefs, handleWarn, handleWarns, handleWarnLeaderboard,
-  handleAdWarn, handleRemoveAdWarn, handleMute, handleUnmute,
+  handleAdWarn, handleRemoveAdWarn, handleRemoveWarn, handleMute, handleUnmute,
   handleBan, handleFire, handlePromote, handleDemoteUser,
   handleStrike, handleStrikeRemove, handleJail, handleUnjail,
   handleBanRequest, handleBlacklistRequest, handleNetworkBanRequest,
@@ -456,6 +456,7 @@ const botHandlers = {
   'setup-branding': handleSetupBranding,
   'network-ban': handleNetworkBan, 'network-unban': handleNetworkUnban,
   warn: handleWarn, warns: handleWarns, 'warn-leaderboard': handleWarnLeaderboard,
+  'remove-warn': handleRemoveWarn,
   'ad-warn': handleAdWarn, 'remove-ad-warn': handleRemoveAdWarn,
   mute: handleMute, unmute: handleUnmute, ban: handleBan, fire: handleFire,
   promote: handlePromote, 'demote-user': handleDemoteUser,
