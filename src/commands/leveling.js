@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
 import {
   getUserLevel, addUserXp, setUserXp, getLevelLeaderboard,
-  computeLevel, xpForLevel,
+  computeLevel, xpForLevel, setGuildConfig,
 } from '../database.js';
 import { hasCommandPermission } from '../utils.js';
 
@@ -18,6 +18,12 @@ function xpForTargetLevel(targetLevel) {
 }
 
 export const defs = [
+  new SlashCommandBuilder()
+    .setName('toggle-leveling')
+    .setDescription('Enable or disable the XP leveling system in this server')
+    .setDefaultMemberPermissions(0x8) // Administrator
+    .addBooleanOption(o => o.setName('enabled').setDescription('true = enable leveling, false = disable it').setRequired(true)),
+
   new SlashCommandBuilder()
     .setName('level')
     .setDescription("Check your level or another user's level")
@@ -51,6 +57,21 @@ export const defs = [
     .addUserOption(o => o.setName('user').setDescription('User').setRequired(true))
     .addIntegerOption(o => o.setName('level').setDescription('Level to set').setRequired(true).setMinValue(0)),
 ];
+
+export async function handleToggleLeveling(interaction) {
+  const enabled = interaction.options.getBoolean('enabled');
+  await setGuildConfig(interaction.guildId, { leveling_enabled: enabled ? 1 : 0 });
+  await interaction.reply({
+    embeds: [new EmbedBuilder()
+      .setColor(enabled ? 0x57F287 : 0xED4245)
+      .setTitle(enabled ? '✅ Leveling Enabled' : '❌ Leveling Disabled')
+      .setDescription(enabled
+        ? 'The XP leveling system is now **active**. Users will earn XP for sending messages.'
+        : 'The XP leveling system has been **paused**. No XP will be earned until re-enabled.')
+      .setTimestamp()],
+    flags: 64,
+  });
+}
 
 export async function handleLevel(interaction) {
   const target = interaction.options.getUser('user') || interaction.user;

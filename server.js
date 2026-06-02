@@ -33,7 +33,7 @@ import {
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
   handleSetupNetworkApply, handleNetworkApplyPost,
-  handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
+  handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
 } from './src/commands/index.js';
 
 import {
@@ -45,7 +45,7 @@ import {
   handleToggleCommand,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
@@ -479,6 +479,7 @@ const botHandlers = {
   'add-xp': handleAddXp, 'remove-xp': handleRemoveXp,
   'add-level': handleAddLevel, 'set-level': handleSetLevel,
   'toggle-command': handleToggleCommand,
+  'toggle-leveling': handleToggleLeveling,
 };
 
 // ── Interaction Handler ───────────────────────────────────────────────────────
@@ -1596,7 +1597,43 @@ client.on('messageDelete', async (msg) => {
 // ── Message Tracking ──────────────────────────────────────────────────────────
 
 client.on('messageCreate', async (msg) => {
-  if (!msg.guild || msg.author.bot) return;
+  if (msg.author.bot) return;
+
+  // ── Owner DM commands ───────────────────────────────────────────────────────
+  if (!msg.guild && msg.author.id === OWNER_ID) {
+    const parts = msg.content.trim().split(/\s+/);
+    const cmd = parts[0]?.toLowerCase();
+    try {
+      if (cmd === 'disable' && parts[1] && parts[2]) {
+        await dbDisableCmd(parts[1], parts[2]);
+        await msg.reply(`✅ \`/${parts[2]}\` disabled in guild \`${parts[1]}\`.`);
+      } else if (cmd === 'enable' && parts[1] && parts[2]) {
+        await dbEnableCmd(parts[1], parts[2]);
+        await msg.reply(`✅ \`/${parts[2]}\` enabled in guild \`${parts[1]}\`.`);
+      } else if (cmd === 'leveling' && parts[1] && parts[2]) {
+        const on = parts[1].toLowerCase() === 'on';
+        await dbSetGuildConfig(parts[2], { leveling_enabled: on ? 1 : 0 });
+        await msg.reply(`✅ Leveling **${on ? 'enabled' : 'disabled'}** in guild \`${parts[2]}\`.`);
+      } else if (cmd === 'list' && parts[1]) {
+        const disabled = await dbGetDisabledCmds(parts[1]);
+        await msg.reply(disabled.length ? `Disabled commands in \`${parts[1]}\`:\n${disabled.map(c => `\`/${c}\``).join(', ')}` : `No disabled commands in \`${parts[1]}\`.`);
+      } else if (cmd === 'help') {
+        await msg.reply([
+          '**Owner DM Commands**',
+          '`disable <guildId> <command>` — disable a command in a server',
+          '`enable <guildId> <command>` — re-enable a command',
+          '`leveling on/off <guildId>` — toggle the leveling system',
+          '`list <guildId>` — list disabled commands in a server',
+        ].join('\n'));
+      }
+    } catch (e) {
+      await msg.reply(`❌ Error: ${e.message}`).catch(() => null);
+    }
+    return;
+  }
+
+  if (!msg.guild) return;
+
   await incrementMessageCount(msg.guild.id, msg.author.id);
   if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
 
@@ -1604,32 +1641,29 @@ client.on('messageCreate', async (msg) => {
   const cdKey = `${msg.guild.id}-${msg.author.id}`;
   const now = Date.now();
   if (now - (xpCooldowns.get(cdKey) || 0) >= 60000) {
-    // Check if XP is restricted to a specific channel
     const xpConfig = await getBotGuild(msg.guild.id).catch(() => null);
-    if (xpConfig?.level_xp_channel_id && msg.channel.id !== xpConfig.level_xp_channel_id) {
-      // not the XP channel — skip
-    } else {
-      xpCooldowns.set(cdKey, now);
-      const xpGain = Math.floor(Math.random() * 11) + 15;
-      const newTotal = await addUserXp(msg.guild.id, msg.author.id, xpGain);
-      const oldTotal = newTotal - xpGain;
-      const { level: newLevel } = computeLevel(newTotal);
-      const { level: oldLevel } = computeLevel(oldTotal);
-      if (newLevel > oldLevel) {
-        try {
-          const config = xpConfig || await getBotGuild(msg.guild.id).catch(() => null);
-          if (config?.level_log_channel_id) {
-            const levelCh = await client.channels.fetch(config.level_log_channel_id).catch(() => null);
-            if (levelCh) {
-              await levelCh.send(`🎉 <@${msg.author.id}> just leveled up to **Level ${newLevel}**! Congratulations! 🎊`);
-            }
-          } else if (!dmmedOwnerGuilds.has(msg.guild.id)) {
-            dmmedOwnerGuilds.add(msg.guild.id);
-            const owner = await client.users.fetch(OWNER_ID).catch(() => null);
-            if (owner) await owner.send(`⚠️ **Level-up alert** in **${msg.guild.name}**: a user just reached Level ${newLevel} but no level log channel is configured.\nUse \`/setup level-log:#channel\` to set one.`).catch(() => null);
-          }
-        } catch {}
-      }
+    // Skip if leveling is disabled for this guild
+    if (xpConfig?.leveling_enabled === 0) return;
+    // Skip if XP is restricted to a specific channel and this isn't it
+    if (xpConfig?.level_xp_channel_id && msg.channel.id !== xpConfig.level_xp_channel_id) return;
+
+    xpCooldowns.set(cdKey, now);
+    const xpGain = Math.floor(Math.random() * 11) + 15;
+    const newTotal = await addUserXp(msg.guild.id, msg.author.id, xpGain);
+    const oldTotal = newTotal - xpGain;
+    const { level: newLevel } = computeLevel(newTotal);
+    const { level: oldLevel } = computeLevel(oldTotal);
+    if (newLevel > oldLevel) {
+      try {
+        if (xpConfig?.level_log_channel_id) {
+          const levelCh = await client.channels.fetch(xpConfig.level_log_channel_id).catch(() => null);
+          if (levelCh) await levelCh.send(`🎉 <@${msg.author.id}> just leveled up to **Level ${newLevel}**! Congratulations! 🎊`);
+        } else if (!dmmedOwnerGuilds.has(msg.guild.id)) {
+          dmmedOwnerGuilds.add(msg.guild.id);
+          const owner = await client.users.fetch(OWNER_ID).catch(() => null);
+          if (owner) await owner.send(`⚠️ **Level-up alert** in **${msg.guild.name}**: a user just reached Level ${newLevel} but no level log channel is configured.\nUse \`/setup level-log:#channel\` to set one.`).catch(() => null);
+        }
+      } catch {}
     }
   }
 });

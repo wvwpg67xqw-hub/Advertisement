@@ -40,4 +40,4 @@ export { handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance
 export { handleCurrentBreaks, handleBreakRequest, handleBreakEnd, handleManageBreak } from './breaks.js';
 export { handleResignRequest, handleApply, handleUpdate } from './staff.js';
 export { handleSetupNetworkApply, handleNetworkApplyPost } from './network-apply.js';
-export { handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel } from './leveling.js';
+export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel } from './leveling.js';
