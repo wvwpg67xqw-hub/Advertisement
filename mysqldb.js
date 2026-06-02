@@ -159,6 +159,33 @@ export async function initDatabase() {
   for (const sql of tables) {
     await pool.execute(sql);
   }
+
+  const migrations = [
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS ad_warn_dm_log_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS network_apply_log_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS network_apply_roles TEXT`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS pfp_url TEXT`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS banner_url TEXT`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS modmail_test_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS referral_link TEXT`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS applications_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS verified_role_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS resign_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS main_break_role_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS break_role_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS break_request_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS hub_guild_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS is_hub TINYINT(1) DEFAULT 0`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS partnership_request_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS network_ban_request_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS blacklist_request_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS ban_request_channel_id VARCHAR(20)`,
+  ];
+
+  for (const sql of migrations) {
+    await pool.execute(sql).catch(() => {});
+  }
+
   console.log('✅ MySQL tables initialized');
 }
 
