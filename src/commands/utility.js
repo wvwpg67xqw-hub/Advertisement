@@ -148,6 +148,16 @@ async function fetchGithubMeta(repo) {
     if (Array.isArray(tags) && tags[0]?.name) return { version: tags[0].name, headers };
   }
 
+  const commitRes = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`, { headers }).catch(() => null);
+  if (commitRes?.ok) {
+    const commits = await commitRes.json();
+    if (Array.isArray(commits) && commits[0]?.commit?.author?.date) {
+      const date = new Date(commits[0].commit.author.date);
+      const label = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      return { version: label, headers };
+    }
+  }
+
   return { version: null, headers };
 }
 
