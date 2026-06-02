@@ -37,6 +37,20 @@ export const defs = [
   new SlashCommandBuilder()
     .setName('reset-messages-all')
     .setDescription('Reset message counts for ALL users in this server'),
+
+  new SlashCommandBuilder()
+    .setName('release-notes')
+    .setDescription('Post a release notes announcement for a new update')
+    .addStringOption(o => o.setName('version').setDescription('Version tag (e.g. v1.2.3)').setRequired(true))
+    .addStringOption(o => o.setName('changes').setDescription('What changed — use \\n to separate lines').setRequired(true))
+    .addStringOption(o => o.setName('title').setDescription('Short release title (e.g. "Performance improvements")'))
+    .addStringOption(o => o.setName('type').setDescription('Release type').addChoices(
+      { name: '🚀 Major Release', value: 'major' },
+      { name: '✨ Update', value: 'update' },
+      { name: '🔧 Minor Fix', value: 'minor' },
+      { name: '🔥 Hotfix', value: 'hotfix' },
+    ))
+    .addChannelOption(o => o.setName('channel').setDescription('Channel to post in (defaults to current channel)')),
 ];
 
 export async function handleMessages(interaction) {
@@ -112,4 +126,37 @@ export async function handleResetMessagesAll(interaction) {
   if (!await hasCommandPermission(interaction.member, 'reset-messages-all')) return deny(interaction);
   await resetMessagesAll(interaction.guildId);
   await interaction.reply({ content: '✅ All message counts have been reset.', flags: 64 });
+}
+
+const RELEASE_COLORS = { major: 0x5865F2, update: 0x57F287, minor: 0xFEE75C, hotfix: 0xED4245 };
+const RELEASE_LABELS = { major: '🚀 Major Release', update: '✨ Update', minor: '🔧 Minor Fix', hotfix: '🔥 Hotfix' };
+
+export async function handleReleaseNotes(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'release-notes')) return deny(interaction);
+
+  const version = interaction.options.getString('version');
+  const rawChanges = interaction.options.getString('changes');
+  const title = interaction.options.getString('title');
+  const type = interaction.options.getString('type') || 'update';
+  const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+
+  const lines = rawChanges.replace(/\\n/g, '\n').split('\n').filter(l => l.trim());
+  const formatted = lines.map(l => l.startsWith('-') || l.startsWith('•') ? l : `• ${l}`).join('\n');
+
+  const embed = new EmbedBuilder()
+    .setColor(RELEASE_COLORS[type])
+    .setTitle(`${RELEASE_LABELS[type]}  —  ${version}`)
+    .setTimestamp()
+    .setFooter({ text: `Posted by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
+
+  if (title) embed.setDescription(`**${title}**`);
+
+  embed.addFields({ name: '📋 What\'s Changed', value: formatted.slice(0, 1024) });
+
+  try {
+    await targetChannel.send({ embeds: [embed] });
+    await interaction.reply({ content: `✅ Release notes posted in ${targetChannel}.`, flags: 64 });
+  } catch {
+    await interaction.reply({ content: '❌ Could not post in that channel. Check my permissions.', flags: 64 });
+  }
 }
