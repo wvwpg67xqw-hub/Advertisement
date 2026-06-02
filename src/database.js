@@ -412,6 +412,46 @@ export async function getBlacklistEntry(guildId, userId) {
   return q1('SELECT * FROM bot_blacklist WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
 }
 
+// ── Leveling ──────────────────────────────────────────────────────────────────
+
+export function xpForLevel(level) {
+  return 5 * level * level + 50 * level + 100;
+}
+
+export function computeLevel(totalXp) {
+  let level = 0;
+  let remaining = Math.max(0, totalXp);
+  while (remaining >= xpForLevel(level)) {
+    remaining -= xpForLevel(level);
+    level++;
+  }
+  return { level, currentXp: remaining, xpNeeded: xpForLevel(level), totalXp };
+}
+
+export async function getUserLevel(guildId, userId) {
+  return q1('SELECT total_xp FROM levels WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+}
+
+export async function addUserXp(guildId, userId, amount) {
+  await q(
+    'INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE total_xp = total_xp + ?',
+    [guildId, userId, amount, amount]
+  );
+  const row = await q1('SELECT total_xp FROM levels WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return Number(row?.total_xp) || 0;
+}
+
+export async function setUserXp(guildId, userId, xp) {
+  await q(
+    'INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE total_xp = ?',
+    [guildId, userId, xp, xp]
+  );
+}
+
+export async function getLevelLeaderboard(guildId, limit = 10) {
+  return q('SELECT user_id, total_xp FROM levels WHERE guild_id = ? ORDER BY total_xp DESC LIMIT ?', [guildId, limit]);
+}
+
 // ── Network Applications ──────────────────────────────────────────────────────
 
 export async function saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age) {

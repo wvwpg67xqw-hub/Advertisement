@@ -3,7 +3,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = 
 import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels } from './database.js';
 
 const ALL_COMMANDS = [
-  'warn', 'warn-leaderboard',
+  'warn',
   'ad-warn', 'remove-ad-warn',
   'mute', 'unmute', 'ban', 'fire', 'promote', 'demote-user',
   'strike', 'strike-remove',
@@ -11,6 +11,7 @@ const ALL_COMMANDS = [
   'ban-request', 'blacklist-request', 'network-ban-request', 'partnership-request',
   'message-leaderboard', 'case-info',
   'reset-messages', 'reset-messages-all',
+  'add-xp', 'remove-xp', 'add-level', 'set-level',
 ];
 
 export const setupCommands = [
@@ -29,7 +30,8 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('muted-role').setDescription('Role applied to muted users'))
     .addChannelOption(o => o.setName('break-request-channel').setDescription('Channel where break requests are sent for approval'))
     .addRoleOption(o => o.setName('break-role').setDescription('Role given to staff on break in this server'))
-    .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff on break in the main server')),
+    .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff on break in the main server'))
+    .addChannelOption(o => o.setName('level-log').setDescription('Channel where level-up announcements are posted')),
 
   new SlashCommandBuilder()
     .setName('setup-roles')
@@ -77,6 +79,7 @@ export const setupCommands = [
           { name: 'request-log', value: 'request_log_channel_id' },
           { name: 'ad-warn-log', value: 'ad_warn_log_channel_id' },
           { name: 'ad-warn-dm-log', value: 'ad_warn_dm_log_channel_id' },
+          { name: 'level-log', value: 'level_log_channel_id' },
           { name: 'staff-updates', value: 'staff_updates_channel_id' },
           { name: 'jail-role', value: 'jail_role_id' },
           { name: 'muted-role', value: 'muted_role_id' },
@@ -214,6 +217,7 @@ export async function handleSetup(interaction) {
   const requestLog = interaction.options.getChannel('request-log');
   const adWarnLog = interaction.options.getChannel('ad-warn-log');
   const adWarnDmLog = interaction.options.getChannel('ad-warn-dm-log');
+  const levelLog = interaction.options.getChannel('level-log');
   const staffUpdates = interaction.options.getChannel('staff-updates');
   const jailRole = interaction.options.getRole('jail-role');
   const mutedRole = interaction.options.getRole('muted-role');
@@ -227,6 +231,7 @@ export async function handleSetup(interaction) {
   if (requestLog) fields.request_log_channel_id = requestLog.id;
   if (adWarnLog) fields.ad_warn_log_channel_id = adWarnLog.id;
   if (adWarnDmLog) fields.ad_warn_dm_log_channel_id = adWarnDmLog.id;
+  if (levelLog) fields.level_log_channel_id = levelLog.id;
   if (staffUpdates) fields.staff_updates_channel_id = staffUpdates.id;
   if (jailRole) fields.jail_role_id = jailRole.id;
   if (mutedRole) fields.muted_role_id = mutedRole.id;
@@ -312,6 +317,7 @@ export async function handleSetupStatus(interaction) {
       { name: 'Request Log', value: ch(config.request_log_channel_id), inline: true },
       { name: 'Ad-Warn Log', value: ch(config.ad_warn_log_channel_id), inline: true },
       { name: 'Ad-Warn DM Log', value: ch(config.ad_warn_dm_log_channel_id), inline: true },
+      { name: 'Level Log', value: ch(config.level_log_channel_id), inline: true },
       { name: 'Staff Updates', value: ch(config.staff_updates_channel_id), inline: true },
       { name: 'Jail Role', value: rl(config.jail_role_id), inline: true },
       { name: 'Muted Role', value: rl(config.muted_role_id), inline: true },

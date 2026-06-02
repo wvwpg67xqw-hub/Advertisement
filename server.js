@@ -33,6 +33,7 @@ import {
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
   handleSetupNetworkApply, handleNetworkApplyPost,
+  handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
 } from './src/commands/index.js';
 
 import {
@@ -43,7 +44,7 @@ import {
   handleSetupBreak, handleSetupRolesBulk, handleSetupResign, handleSetupBranding,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
@@ -51,6 +52,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // In-memory state for pending application approvals (role selection before confirm)
 const pendingApprovals = new Map(); // key: `GUILDID_APPROVERID` → { applicantId, staffRoleId, teamRoleId }
+const xpCooldowns = new Map(); // key: `${guildId}-${userId}` → last XP gain timestamp
 const PORT = process.env.PORT || 5000;
 
 const DISCORD_CLIENT_ID     = process.env.DISCORD_CLIENT_ID;
@@ -471,6 +473,9 @@ const botHandlers = {
   'resign-request': handleResignRequest, apply: handleApply, update: handleUpdate,
   'setup-network-apply': handleSetupNetworkApply,
   'network-apply-post': handleNetworkApplyPost,
+  level: handleLevel, 'level-leaderboard': handleLevelLeaderboard,
+  'add-xp': handleAddXp, 'remove-xp': handleRemoveXp,
+  'add-level': handleAddLevel, 'set-level': handleSetLevel,
 };
 
 // ── Interaction Handler ───────────────────────────────────────────────────────
@@ -1588,6 +1593,33 @@ client.on('messageCreate', async (msg) => {
   if (!msg.guild || msg.author.bot) return;
   await incrementMessageCount(msg.guild.id, msg.author.id);
   if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
+
+  // XP gain (60-second cooldown, 15–25 XP per message)
+  const cdKey = `${msg.guild.id}-${msg.author.id}`;
+  const now = Date.now();
+  if (now - (xpCooldowns.get(cdKey) || 0) >= 60000) {
+    xpCooldowns.set(cdKey, now);
+    const xpGain = Math.floor(Math.random() * 11) + 15;
+    const newTotal = await addUserXp(msg.guild.id, msg.author.id, xpGain);
+    const oldTotal = newTotal - xpGain;
+    const { level: newLevel } = computeLevel(newTotal);
+    const { level: oldLevel } = computeLevel(oldTotal);
+    if (newLevel > oldLevel) {
+      try {
+        const config = await getBotGuild(msg.guild.id);
+        if (config.level_log_channel_id) {
+          const lvlEmbed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle('🎉 Level Up!')
+            .setDescription(`<@${msg.author.id}> just reached **Level ${newLevel}**!`)
+            .setThumbnail(msg.author.displayAvatarURL())
+            .setFooter({ text: `${newTotal.toLocaleString()} total XP` })
+            .setTimestamp();
+          await sendLog(msg.guild, config, 'level_up', lvlEmbed);
+        }
+      } catch {}
+    }
+  }
 });
 
 // ── Bot Ready ─────────────────────────────────────────────────────────────────
