@@ -103,6 +103,11 @@ export async function autoLinkGuilds(hubGuildId, guildIds) {
   }
 }
 
+export async function setGithubRepo(guildId, repo) {
+  await getGuild(guildId);
+  await q('UPDATE guilds SET github_repo = ? WHERE guild_id = ?', [repo || null, guildId]);
+}
+
 export async function setHubStaffRoles(guildId, modRoleId, teamLeadRoleId, adminRoleId) {
   await getGuild(guildId);
   await q(

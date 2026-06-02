@@ -1,6 +1,6 @@
 import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = pkg;
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo } from './database.js';
 
 const ALL_COMMANDS = [
   'warn',
@@ -230,6 +230,12 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('role3').setDescription('Allowed role 3'))
     .addRoleOption(o => o.setName('role4').setDescription('Allowed role 4'))
     .addRoleOption(o => o.setName('role5').setDescription('Allowed role 5')),
+
+  new SlashCommandBuilder()
+    .setName('setup-github')
+    .setDescription('Link a GitHub repository so /release-notes auto-fills commit history')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o => o.setName('repo').setDescription('Repository in owner/repo format (e.g. myname/mybot)').setRequired(true)),
 ];
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -942,4 +948,29 @@ export async function handleToggleCommand(interaction) {
   }
 
   await interaction.reply({ embeds: [embed], flags: 64 });
+}
+
+export async function handleSetupGithub(interaction) {
+  const raw = interaction.options.getString('repo').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
+  if (!/^[\w.-]+\/[\w.-]+$/.test(raw)) {
+    return interaction.reply({ content: '❌ Invalid format. Use `owner/repo` (e.g. `myname/mybot`).', flags: 64 });
+  }
+
+  const testRes = await fetch(`https://api.github.com/repos/${raw}`, {
+    headers: { 'User-Agent': 'discord-bot', ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) },
+  }).catch(() => null);
+
+  if (!testRes || testRes.status === 404) {
+    return interaction.reply({ content: `❌ Repository \`${raw}\` not found. Make sure it's public, or add a \`GITHUB_TOKEN\` secret for private repos.`, flags: 64 });
+  }
+
+  await setGithubRepo(interaction.guildId, raw);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x57F287)
+    .setTitle('✅ GitHub Repository Linked')
+    .setDescription(`\`${raw}\` is now linked to this server.\n\n\`/release-notes\` will automatically pull your latest commit messages when you don't provide a \`changes\` value.`)
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
 }

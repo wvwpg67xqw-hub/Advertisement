@@ -200,6 +200,7 @@ export async function initDatabase() {
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS network_ban_request_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS blacklist_request_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS ban_request_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS github_repo VARCHAR(200)`,
   ];
 
   for (const sql of migrations) {

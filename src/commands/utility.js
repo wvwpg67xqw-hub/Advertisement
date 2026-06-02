@@ -40,9 +40,10 @@ export const defs = [
 
   new SlashCommandBuilder()
     .setName('release-notes')
-    .setDescription('Post a release notes announcement for a new update')
+    .setDescription('Post a release notes announcement — auto-fills from GitHub if linked')
     .addStringOption(o => o.setName('version').setDescription('Version tag (e.g. v1.2.3)').setRequired(true))
-    .addStringOption(o => o.setName('changes').setDescription('What changed — use \\n to separate lines').setRequired(true))
+    .addStringOption(o => o.setName('changes').setDescription('Override: manually write what changed (leave blank to pull from GitHub)'))
+    .addStringOption(o => o.setName('since').setDescription('Previous version tag to compare from (e.g. v1.2.2) — used for GitHub diff'))
     .addStringOption(o => o.setName('title').setDescription('Short release title (e.g. "Performance improvements")'))
     .addStringOption(o => o.setName('type').setDescription('Release type').addChoices(
       { name: '🚀 Major Release', value: 'major' },
@@ -131,17 +132,64 @@ export async function handleResetMessagesAll(interaction) {
 const RELEASE_COLORS = { major: 0x5865F2, update: 0x57F287, minor: 0xFEE75C, hotfix: 0xED4245 };
 const RELEASE_LABELS = { major: '🚀 Major Release', update: '✨ Update', minor: '🔧 Minor Fix', hotfix: '🔥 Hotfix' };
 
+async function fetchGithubChanges(repo, version, since) {
+  const headers = { 'User-Agent': 'discord-bot' };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+
+  let commits = [];
+
+  if (since) {
+    const url = `https://api.github.com/repos/${repo}/compare/${since}...${version}`;
+    const res = await fetch(url, { headers }).catch(() => null);
+    if (res?.ok) {
+      const data = await res.json();
+      commits = data.commits || [];
+    }
+  }
+
+  if (!commits.length) {
+    const url = `https://api.github.com/repos/${repo}/commits?per_page=15`;
+    const res = await fetch(url, { headers }).catch(() => null);
+    if (res?.ok) commits = await res.json();
+  }
+
+  if (!Array.isArray(commits) || !commits.length) return null;
+
+  return commits
+    .map(c => c.commit?.message?.split('\n')[0].trim())
+    .filter(msg => msg && !msg.startsWith('Merge '))
+    .slice(0, 20)
+    .map(msg => `• ${msg}`)
+    .join('\n');
+}
+
 export async function handleReleaseNotes(interaction) {
   if (!await hasCommandPermission(interaction.member, 'release-notes')) return deny(interaction);
+  await interaction.deferReply({ flags: 64 });
 
   const version = interaction.options.getString('version');
-  const rawChanges = interaction.options.getString('changes');
+  const manualChanges = interaction.options.getString('changes');
+  const since = interaction.options.getString('since');
   const title = interaction.options.getString('title');
   const type = interaction.options.getString('type') || 'update';
   const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
 
-  const lines = rawChanges.replace(/\\n/g, '\n').split('\n').filter(l => l.trim());
-  const formatted = lines.map(l => l.startsWith('-') || l.startsWith('•') ? l : `• ${l}`).join('\n');
+  let formatted;
+
+  if (manualChanges) {
+    const lines = manualChanges.replace(/\\n/g, '\n').split('\n').filter(l => l.trim());
+    formatted = lines.map(l => l.startsWith('-') || l.startsWith('•') ? l : `• ${l}`).join('\n');
+  } else {
+    const config = await getGuild(interaction.guildId);
+    if (!config.github_repo) {
+      return interaction.editReply({ content: '❌ No GitHub repo linked. Run `/setup-github` first, or manually provide the `changes` option.' });
+    }
+    const auto = await fetchGithubChanges(config.github_repo, version, since);
+    if (!auto) {
+      return interaction.editReply({ content: `❌ Could not fetch commits from \`${config.github_repo}\`. Check the repo name and try again.` });
+    }
+    formatted = auto;
+  }
 
   const embed = new EmbedBuilder()
     .setColor(RELEASE_COLORS[type])
@@ -150,13 +198,12 @@ export async function handleReleaseNotes(interaction) {
     .setFooter({ text: `Posted by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
 
   if (title) embed.setDescription(`**${title}**`);
-
   embed.addFields({ name: '📋 What\'s Changed', value: formatted.slice(0, 1024) });
 
   try {
     await targetChannel.send({ embeds: [embed] });
-    await interaction.reply({ content: `✅ Release notes posted in ${targetChannel}.`, flags: 64 });
+    await interaction.editReply({ content: `✅ Release notes posted in ${targetChannel}.` });
   } catch {
-    await interaction.reply({ content: '❌ Could not post in that channel. Check my permissions.', flags: 64 });
+    await interaction.editReply({ content: '❌ Could not post in that channel. Check my permissions.' });
   }
 }
