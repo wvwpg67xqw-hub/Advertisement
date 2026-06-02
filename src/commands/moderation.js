@@ -263,18 +263,19 @@ export async function handleMute(interaction) {
   const reason = interaction.options.getString('reason') || 'No reason provided';
   const seconds = parseDuration(durationStr);
   if (!seconds) return interaction.reply({ content: '❌ Invalid duration. Use formats like `10m`, `1h`, `1d`.', flags: 64 });
-  const config = await getGuild(interaction.guildId);
-  if (!config.muted_role_id) return noConfig(interaction, 'muted-role');
+  const MAX_TIMEOUT = 28 * 24 * 60 * 60;
+  if (seconds > MAX_TIMEOUT) return interaction.reply({ content: '❌ Maximum timeout duration is 28 days.', flags: 64 });
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
   if (!await canModerateInGuild(interaction.member, member, interaction.guildId)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
-  await member.roles.add(config.muted_role_id, reason).catch(() => {});
-  setTimeout(async () => {
-    const m = await safeFetchMember(interaction.guild, target.id);
-    if (m) await m.roles.remove(config.muted_role_id).catch(() => {});
-  }, seconds * 1000);
+  try {
+    await member.timeout(seconds * 1000, reason);
+  } catch {
+    return interaction.reply({ content: '❌ Failed to timeout that member. Check my permissions and role position.', flags: 64 });
+  }
+  const config = await getGuild(interaction.guildId);
   const embed = buildModEmbed('mute', { userId: target.id, moderatorId: interaction.user.id, reason, duration: formatDuration(seconds) });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
@@ -284,14 +285,20 @@ export async function handleUnmute(interaction) {
   if (!await hasCommandPermission(interaction.member, 'unmute')) return deny(interaction);
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason') || 'No reason provided';
-  const config = await getGuild(interaction.guildId);
-  if (!config.muted_role_id) return noConfig(interaction, 'muted-role');
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
   if (!await canModerateInGuild(interaction.member, member, interaction.guildId)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
-  await member.roles.remove(config.muted_role_id, reason).catch(() => {});
+  if (!member.isCommunicationDisabled()) {
+    return interaction.reply({ content: '❌ That user is not currently timed out.', flags: 64 });
+  }
+  try {
+    await member.timeout(null, reason);
+  } catch {
+    return interaction.reply({ content: '❌ Failed to remove timeout. Check my permissions and role position.', flags: 64 });
+  }
+  const config = await getGuild(interaction.guildId);
   const embed = buildModEmbed('unmute', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
