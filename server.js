@@ -482,6 +482,59 @@ const botHandlers = {
   'toggle-leveling': handleToggleLeveling,
 };
 
+// ── Owner Command Panel ───────────────────────────────────────────────────────
+
+const PANEL_CMD_ROWS = [
+  ['warn', 'ad-warn', 'mute', 'ban', 'fire'],
+  ['promote', 'demote-user', 'strike', 'jail', 'unjail'],
+  ['ban-request', 'blacklist-request', 'network-ban-request', 'partnership-request'],
+  ['add-xp', 'remove-xp', 'add-level', 'set-level'],
+];
+
+async function buildOwnerPanel(guildId) {
+  const config = await getBotGuild(guildId).catch(() => null);
+  const disabledList = await dbGetDisabledCmds(guildId).catch(() => []);
+  const disabled = new Set(disabledList);
+  const guild = client.guilds.cache.get(guildId);
+  const guildName = guild?.name || `Guild ${guildId}`;
+  const levelingOn = config?.leveling_enabled !== 0;
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle(`⚙️ Command Panel — ${guildName}`)
+    .setDescription([
+      `**Guild ID:** \`${guildId}\``,
+      `**Leveling:** ${levelingOn ? '✅ Active' : '❌ Paused'}`,
+      `**Disabled:** ${disabled.size > 0 ? [...disabled].map(c => `\`/${c}\``).join(', ') : 'None'}`,
+    ].join('\n'))
+    .setFooter({ text: 'Green = enabled  ·  Red = disabled  ·  Click to toggle' })
+    .setTimestamp();
+
+  const cmdRows = PANEL_CMD_ROWS.map(cmds =>
+    new ActionRowBuilder().addComponents(
+      cmds.map(cmd =>
+        new ButtonBuilder()
+          .setCustomId(`ownertgl:${guildId}:${cmd}`)
+          .setLabel(cmd)
+          .setStyle(disabled.has(cmd) ? ButtonStyle.Danger : ButtonStyle.Success)
+      )
+    )
+  );
+
+  const controlRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`ownerlvl:${guildId}`)
+      .setLabel(`Leveling ${levelingOn ? '✅ ON' : '❌ OFF'}`)
+      .setStyle(levelingOn ? ButtonStyle.Success : ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`ownerref:${guildId}`)
+      .setLabel('🔄 Refresh')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  return { embeds: [embed], components: [...cmdRows, controlRow] };
+}
+
 // ── Interaction Handler ───────────────────────────────────────────────────────
 
 client.on('interactionCreate', async (interaction) => {
@@ -493,6 +546,35 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton()) {
       const id = interaction.customId;
+
+      // ── Owner command panel buttons (works in DMs) ─────────────────────────
+      if (
+        interaction.user.id === OWNER_ID &&
+        (id.startsWith('ownertgl:') || id.startsWith('ownerlvl:') || id.startsWith('ownerref:'))
+      ) {
+        await interaction.deferUpdate();
+        const parts = id.split(':');
+        const guildId = parts[1];
+
+        if (id.startsWith('ownertgl:')) {
+          const commandName = parts.slice(2).join(':');
+          const already = await dbGetDisabledCmds(guildId).catch(() => []);
+          if (already.includes(commandName)) {
+            await dbEnableCmd(guildId, commandName);
+          } else {
+            await dbDisableCmd(guildId, commandName);
+          }
+        } else if (id.startsWith('ownerlvl:')) {
+          const cfg = await getBotGuild(guildId).catch(() => null);
+          const nowOn = cfg?.leveling_enabled !== 0;
+          await dbSetGuildConfig(guildId, { leveling_enabled: nowOn ? 0 : 1 });
+        }
+        // ownerref: just rebuilds the panel — no action needed
+
+        const panel = await buildOwnerPanel(guildId);
+        await interaction.editReply(panel);
+        return;
+      }
 
       // All portal/appeal/security DM buttons are owner-only
       if (id.startsWith('portal_') || id.startsWith('appeal_') || id.startsWith('sec_')) {
@@ -1604,7 +1686,10 @@ client.on('messageCreate', async (msg) => {
     const parts = msg.content.trim().split(/\s+/);
     const cmd = parts[0]?.toLowerCase();
     try {
-      if (cmd === 'disable' && parts[1] && parts[2]) {
+      if (cmd === 'panel' && parts[1]) {
+        const panel = await buildOwnerPanel(parts[1]);
+        await msg.reply(panel);
+      } else if (cmd === 'disable' && parts[1] && parts[2]) {
         await dbDisableCmd(parts[1], parts[2]);
         await msg.reply(`✅ \`/${parts[2]}\` disabled in guild \`${parts[1]}\`.`);
       } else if (cmd === 'enable' && parts[1] && parts[2]) {
@@ -1620,10 +1705,11 @@ client.on('messageCreate', async (msg) => {
       } else if (cmd === 'help') {
         await msg.reply([
           '**Owner DM Commands**',
-          '`disable <guildId> <command>` — disable a command in a server',
+          '`panel <guildId>` — open the interactive button panel for a server',
+          '`disable <guildId> <command>` — disable a command',
           '`enable <guildId> <command>` — re-enable a command',
           '`leveling on/off <guildId>` — toggle the leveling system',
-          '`list <guildId>` — list disabled commands in a server',
+          '`list <guildId>` — list disabled commands',
         ].join('\n'));
       }
     } catch (e) {
