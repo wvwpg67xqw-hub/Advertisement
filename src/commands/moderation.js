@@ -31,10 +31,9 @@ export const defs = [
 
   new SlashCommandBuilder()
     .setName('ad-warn')
-    .setDescription('Warn a user for advertising and optionally delete their message')
-    .addUserOption(o => o.setName('user').setDescription('User to warn').setRequired(true))
-    .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true))
-    .addStringOption(o => o.setName('message-id').setDescription('ID of the ad message to delete')),
+    .setDescription('Warn the author of an ad message or thread')
+    .addStringOption(o => o.setName('reason').setDescription('Reason for the warning').setRequired(true))
+    .addStringOption(o => o.setName('message-id').setDescription('Message ID or thread ID of the ad').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('remove-warn')
@@ -164,17 +163,42 @@ export async function handleWarnLeaderboard(interaction) {
 
 export async function handleAdWarn(interaction) {
   if (!await hasCommandPermission(interaction.member, 'ad-warn')) return deny(interaction);
-  const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
-  const messageId = interaction.options.getString('message-id');
+  const rawId = interaction.options.getString('message-id').trim();
 
+  await interaction.deferReply({ flags: 64 });
+
+  let target = null;
   let deletedContent = null;
-  if (messageId) {
-    const msg = await interaction.channel.messages.fetch(messageId).catch(() => null);
-    if (msg) { deletedContent = msg.content; await msg.delete().catch(() => {}); }
+  let resolvedMessageId = rawId;
+  let resolvedChannelId = interaction.channelId;
+
+  const msg = await interaction.channel.messages.fetch(rawId).catch(() => null);
+  if (msg) {
+    target = msg.author;
+    deletedContent = msg.content || null;
+    await msg.delete().catch(() => null);
+  } else {
+    const thread = await interaction.guild.channels.fetch(rawId).catch(() => null);
+    if (thread && thread.isThread()) {
+      const starterMsg = await thread.fetchStarterMessage().catch(() => null);
+      if (starterMsg) {
+        target = starterMsg.author;
+        deletedContent = starterMsg.content || null;
+        resolvedMessageId = starterMsg.id;
+        resolvedChannelId = thread.id;
+        await starterMsg.delete().catch(() => null);
+      } else {
+        target = thread.owner ?? null;
+      }
+    }
   }
 
-  const caseId = await addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, messageId, deletedContent);
+  if (!target) {
+    return interaction.editReply({ content: `❌ Could not find a message or thread with ID **${rawId}**. Make sure you use it in the same channel as the message, or provide the thread ID.` });
+  }
+
+  const caseId = await addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, resolvedMessageId, deletedContent);
   const adWarns = await getAdWarns(interaction.guildId, target.id);
   const totalWarns = adWarns.length;
   const moderatorAdWarnCount = await getAdWarnCountByModerator(interaction.guildId, interaction.user.id);
@@ -184,10 +208,24 @@ export async function handleAdWarn(interaction) {
     moderatorUsername: interaction.user.username, moderatorAdWarnCount,
     guildName: interaction.guild?.name || 'Moderation',
     caseId, reason, messageContent: deletedContent,
-    channelId: interaction.channelId, messageId, totalWarns,
+    channelId: resolvedChannelId, messageId: resolvedMessageId, totalWarns,
   });
-  await interaction.reply({ embeds: [embed] });
+  await interaction.editReply({ embeds: [embed], flags: undefined });
   await sendLog(interaction.guild, await getGuild(interaction.guildId), 'ad_warn', embed);
+
+  const dmEmbed = new EmbedBuilder()
+    .setColor(0xFF5555)
+    .setTitle('🚫 You have received an ad warning')
+    .setDescription(`You were warned for advertising in **${interaction.guild?.name || 'a server'}**.`)
+    .addFields(
+      { name: '📋 Reason', value: reason, inline: false },
+      { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: '🗂️ Case ID', value: caseId, inline: true },
+      { name: '⚠️ Total Ad Warnings', value: String(totalWarns), inline: true },
+    )
+    .setFooter({ text: 'Please review the server advertising rules.' })
+    .setTimestamp();
+  await target.send({ embeds: [dmEmbed] }).catch(() => null);
 }
 
 export async function handleRemoveAdWarn(interaction) {
