@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, deny } from './shared.js';
 import { addBlacklist, getNetworkMembers, getGuild } from '../database.js';
 import { hasCommandPermission, getStaffRank, sendLog, buildRequestEmbed } from '../utils.js';
+import { resolveNetworkRoleIds } from '../database.js';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -63,7 +64,8 @@ export async function handleRequestButton(interaction) {
   if (!interaction.isButton() || !interaction.customId?.startsWith('req:')) return;
   const [, action, type, targetId, originGuildId] = interaction.customId.split(':');
 
-  if (getStaffRank(interaction.member) < 3 && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+  const _roleIds = await resolveNetworkRoleIds(interaction.guildId);
+  if (getStaffRank(interaction.member, _roleIds) < 3 && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ Only Administration can accept or deny requests.', flags: 64 });
   }
 

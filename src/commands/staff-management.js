@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
 import { addStrike, getStrikeCount, removeStrike, getGuild } from '../database.js';
-import { safeFetchMember, hasCommandPermission, canModerate, sendLog, buildModEmbed, buildStrikeEmbed, buildStaffUpdateEmbed } from '../utils.js';
+import { safeFetchMember, hasCommandPermission, canModerateInGuild, sendLog, buildModEmbed, buildStrikeEmbed, buildStaffUpdateEmbed } from '../utils.js';
 
 const RANK_ERR = '❌ You cannot use this command on a user of equal or higher rank.';
 
@@ -38,7 +38,7 @@ export async function handlePromote(interaction) {
   const reason = interaction.options.getString('reason') || 'No reason provided';
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
-  if (!canModerate(interaction.member, member)) {
+  if (!await canModerateInGuild(interaction.member, member, interaction.guildId)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
   await member.roles.add(role.id, reason).catch(e => {
@@ -59,7 +59,7 @@ export async function handleDemoteUser(interaction) {
   const reason = interaction.options.getString('reason') || 'No reason provided';
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
-  if (!canModerate(interaction.member, member)) {
+  if (!await canModerateInGuild(interaction.member, member, interaction.guildId)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
   await member.roles.remove(role.id, reason).catch(e => {
@@ -79,7 +79,7 @@ export async function handleStrike(interaction) {
   const reason = interaction.options.getString('reason');
 
   const targetMember = await safeFetchMember(interaction.guild, target.id);
-  if (!canModerate(interaction.member, targetMember)) {
+  if (!await canModerateInGuild(interaction.member, targetMember, interaction.guildId)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
 

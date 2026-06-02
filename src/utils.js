@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { getCommandRoles } from './database.js';
+import { getCommandRoles, resolveNetworkRoleIds } from './database.js';
 
 // ─── Staff Hierarchy ──────────────────────────────────────────────────────────
 
@@ -41,18 +41,21 @@ const COMMAND_MIN_RANK = {
  * Falls back to Discord Administrator = rank 3 when no hierarchy env vars are set,
  * so the system keeps working out-of-the-box before roles are configured.
  */
-export function getStaffRank(member) {
+export function getStaffRank(member, roleIds = null) {
   if (!member) return 0;
 
   if (member.id === member.guild.ownerId) return 4;
 
-  const { MOD_ROLE_ID, TEAM_LEAD_ROLE_ID, ADMIN_ROLE_ID } = process.env;
-  const hierarchyEnabled = !!(MOD_ROLE_ID || TEAM_LEAD_ROLE_ID || ADMIN_ROLE_ID);
+  const modRoleId      = roleIds?.modRoleId      ?? process.env.MOD_ROLE_ID;
+  const teamLeadRoleId = roleIds?.teamLeadRoleId  ?? process.env.TEAM_LEAD_ROLE_ID;
+  const adminRoleId    = roleIds?.adminRoleId     ?? process.env.ADMIN_ROLE_ID;
+
+  const hierarchyEnabled = !!(modRoleId || teamLeadRoleId || adminRoleId);
 
   if (hierarchyEnabled) {
-    if (ADMIN_ROLE_ID      && member.roles.cache.has(ADMIN_ROLE_ID))      return 3;
-    if (TEAM_LEAD_ROLE_ID  && member.roles.cache.has(TEAM_LEAD_ROLE_ID))  return 2;
-    if (MOD_ROLE_ID        && member.roles.cache.has(MOD_ROLE_ID))        return 1;
+    if (adminRoleId      && member.roles.cache.has(adminRoleId))      return 3;
+    if (teamLeadRoleId   && member.roles.cache.has(teamLeadRoleId))   return 2;
+    if (modRoleId        && member.roles.cache.has(modRoleId))        return 1;
     return 0;
   }
 
@@ -60,18 +63,26 @@ export function getStaffRank(member) {
   return 0;
 }
 
-export function getStaffRankLabel(member) {
-  return RANK_LABELS[getStaffRank(member)] ?? 'Non-Staff';
+export function getStaffRankLabel(member, roleIds = null) {
+  return RANK_LABELS[getStaffRank(member, roleIds)] ?? 'Non-Staff';
 }
 
 /**
- * Returns true when executor's rank is strictly greater than target's rank.
- * Non-staff targets (rank 0) can always be moderated by any staff member.
- * If target is null (not in server), treat as rank 0 → allowed.
+ * Sync rank check using passed-in roleIds (or env vars as fallback).
  */
-export function canModerate(executorMember, targetMember) {
+export function canModerate(executorMember, targetMember, roleIds = null) {
   if (!targetMember) return true;
-  return getStaffRank(executorMember) > getStaffRank(targetMember);
+  return getStaffRank(executorMember, roleIds) > getStaffRank(targetMember, roleIds);
+}
+
+/**
+ * Async rank check — resolves role IDs from the network hub DB config first.
+ * Use this in all command handlers instead of the sync canModerate.
+ */
+export async function canModerateInGuild(executorMember, targetMember, guildId) {
+  if (!targetMember) return true;
+  const roleIds = await resolveNetworkRoleIds(guildId);
+  return getStaffRank(executorMember, roleIds) > getStaffRank(targetMember, roleIds);
 }
 
 // ─── Safe Fetchers ────────────────────────────────────────────────────────────
@@ -127,11 +138,14 @@ export function formatDuration(seconds) {
 export async function hasCommandPermission(member, commandName) {
   if (!member) return false;
 
-  const { MOD_ROLE_ID, TEAM_LEAD_ROLE_ID, ADMIN_ROLE_ID } = process.env;
-  const hierarchyEnabled = !!(MOD_ROLE_ID || TEAM_LEAD_ROLE_ID || ADMIN_ROLE_ID);
+  const networkRoleIds = await resolveNetworkRoleIds(member.guild.id);
+  const networkEnabled = !!(networkRoleIds.modRoleId || networkRoleIds.teamLeadRoleId || networkRoleIds.adminRoleId);
+  const envEnabled     = !!(process.env.MOD_ROLE_ID || process.env.TEAM_LEAD_ROLE_ID || process.env.ADMIN_ROLE_ID);
+  const hierarchyEnabled = networkEnabled || envEnabled;
 
   if (hierarchyEnabled) {
-    const userRank = getStaffRank(member);
+    const roleIds  = networkEnabled ? networkRoleIds : null;
+    const userRank = getStaffRank(member, roleIds);
     const minRank  = COMMAND_MIN_RANK[commandName] ?? 3;
     return userRank >= minRank;
   }

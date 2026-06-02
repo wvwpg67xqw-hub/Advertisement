@@ -42,7 +42,7 @@ import {
   handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin,
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
   handleSetupBreak, handleSetupRolesBulk, handleSetupResign, handleSetupBranding,
-  handleToggleCommand,
+  handleToggleCommand, handleSetupNetworkRoles,
 } from './src/setup.js';
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig } from './src/database.js';
@@ -456,6 +456,7 @@ const botHandlers = {
   'setup-requests': handleSetupRequests, 'setup-ad-channels': handleSetupAdChannels,
   'setup-network-hub': handleSetupNetworkHub, 'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset, 'network-status': handleNetworkStatus,
+  'setup-network-roles': handleSetupNetworkRoles,
   'setup-break': handleSetupBreak, 'setup-roles-bulk': handleSetupRolesBulk, 'setup-resign': handleSetupResign,
   'setup-branding': handleSetupBranding,
   'network-ban': handleNetworkBan, 'network-unban': handleNetworkUnban,

@@ -2,7 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilde
 import {
   startBreak, endBreak, extendBreak, getCurrentBreaks, isOnBreak, getGuild,
 } from '../database.js';
-import { safeFetchMember, formatDuration, hasCommandPermission, canModerate } from '../utils.js';
+import { safeFetchMember, formatDuration, hasCommandPermission, canModerateInGuild } from '../utils.js';
 import { deny } from './shared.js';
 
 const RANK_ERR = '❌ You cannot use this command on a user of equal or higher rank.';
@@ -104,7 +104,7 @@ export async function handleManageBreak(interaction) {
   const days   = interaction.options.getInteger('days');
 
   const targetMember = await safeFetchMember(interaction.guild, target.id);
-  if (!canModerate(interaction.member, targetMember)) {
+  if (!await canModerateInGuild(interaction.member, targetMember, interaction.guildId)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
 

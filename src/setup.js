@@ -1,6 +1,6 @@
 import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = pkg;
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles } from './database.js';
 
 const ALL_COMMANDS = [
   'warn',
@@ -134,6 +134,14 @@ export const setupCommands = [
     .setName('setup-network-hub')
     .setDescription('Mark this server as the network hub (staff server). All request logs will route here.')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('setup-network-roles')
+    .setDescription('Set the staff rank roles for the entire network — must be run in the hub server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addRoleOption(o => o.setName('mod-role').setDescription('Role for Mods (Rank 1)').setRequired(true))
+    .addRoleOption(o => o.setName('team-lead-role').setDescription('Role for Team Leads (Rank 2)').setRequired(true))
+    .addRoleOption(o => o.setName('admin-role').setDescription('Role for Admins (Rank 3)').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('setup-network-join')
@@ -622,9 +630,40 @@ export async function handleSetupNetworkHub(interaction) {
     .setDescription(
       `**${interaction.guild.name}** is now the **network hub** (staff server).\n\n` +
       `All request logs from linked main servers will be forwarded here.\n\n` +
-      `Run \`/setup-requests\` here to create the request channels, then run \`/setup-network-join\` in each of your main servers using this server's ID:\n\n` +
+      `Run \`/setup-network-roles\` here to set which roles count as Mod/Team Lead/Admin across the whole network.\n\n` +
+      `Then run \`/setup-network-join\` in each of your main servers using this server's ID:\n\n` +
       `\`\`\`${interaction.guildId}\`\`\``
     )
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
+}
+
+export async function handleSetupNetworkRoles(interaction) {
+  const config = await getGuild(interaction.guildId);
+  if (!config.is_hub) {
+    return interaction.reply({
+      content: '❌ This command can only be used in the **network hub** server. Run `/setup-network-hub` in the hub server first.',
+      flags: 64,
+    });
+  }
+
+  const modRole      = interaction.options.getRole('mod-role');
+  const teamLeadRole = interaction.options.getRole('team-lead-role');
+  const adminRole    = interaction.options.getRole('admin-role');
+
+  await setHubStaffRoles(interaction.guildId, modRole.id, teamLeadRole.id, adminRole.id);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x57F287)
+    .setTitle('✅ Network Staff Roles Configured')
+    .setDescription('These roles now define staff ranks **across every server in the network**. Linked servers automatically inherit this hierarchy.')
+    .addFields(
+      { name: '🟡 Mod (Rank 1)',       value: `<@&${modRole.id}>`,      inline: true },
+      { name: '🟠 Team Lead (Rank 2)', value: `<@&${teamLeadRole.id}>`, inline: true },
+      { name: '🔴 Admin (Rank 3)',     value: `<@&${adminRole.id}>`,    inline: true },
+    )
+    .setFooter({ text: 'No env vars needed — role IDs are stored in the database.' })
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed] });

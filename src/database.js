@@ -45,6 +45,7 @@ export async function setGuildConfig(guildId, fields) {
     'referral_link', 'modmail_test_channel_id',
     'pfp_url', 'banner_url',
     'network_apply_log_channel_id', 'network_apply_roles',
+    'hub_mod_role_id', 'hub_team_lead_role_id', 'hub_admin_role_id',
   ];
   const sets = [];
   const params = [];
@@ -88,6 +89,26 @@ export async function clearNetworkHub(guildId) {
 export async function clearHubGuildId(guildId) {
   await getGuild(guildId);
   await q('UPDATE guilds SET hub_guild_id = NULL WHERE guild_id = ?', [guildId]);
+}
+
+export async function setHubStaffRoles(guildId, modRoleId, teamLeadRoleId, adminRoleId) {
+  await getGuild(guildId);
+  await q(
+    'UPDATE guilds SET hub_mod_role_id = ?, hub_team_lead_role_id = ?, hub_admin_role_id = ? WHERE guild_id = ?',
+    [modRoleId || null, teamLeadRoleId || null, adminRoleId || null, guildId]
+  );
+}
+
+export async function resolveNetworkRoleIds(guildId) {
+  const guild = await getGuild(guildId);
+  const source = (!guild.is_hub && guild.hub_guild_id)
+    ? await getGuild(guild.hub_guild_id)
+    : guild;
+  return {
+    modRoleId:      source.hub_mod_role_id      || null,
+    teamLeadRoleId: source.hub_team_lead_role_id || null,
+    adminRoleId:    source.hub_admin_role_id     || null,
+  };
 }
 
 export async function getNetworkMembers(hubGuildId) {
