@@ -136,6 +136,14 @@ export const setupCommands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
+    .setName('setup-staff-roles')
+    .setDescription('Set which roles count as Mod, Team Lead, and Admin — replaces the need for env vars')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addRoleOption(o => o.setName('mod-role').setDescription('Role for Mods (Rank 1 — can warn, mute, etc.)'))
+    .addRoleOption(o => o.setName('team-lead-role').setDescription('Role for Team Leads (Rank 2 — can strike, promote, etc.)'))
+    .addRoleOption(o => o.setName('admin-role').setDescription('Role for Admins (Rank 3 — can ban, fire, setup, etc.)')),
+
+  new SlashCommandBuilder()
     .setName('setup-network-roles')
     .setDescription('Set the staff rank roles for the entire network — must be run in the hub server')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
@@ -637,6 +645,55 @@ export async function handleSetupNetworkHub(interaction) {
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed] });
+}
+
+export async function handleSetupStaffRoles(interaction) {
+  const modRole      = interaction.options.getRole('mod-role');
+  const teamLeadRole = interaction.options.getRole('team-lead-role');
+  const adminRole    = interaction.options.getRole('admin-role');
+
+  if (!modRole && !teamLeadRole && !adminRole) {
+    const config = await getGuild(interaction.guildId);
+    const rl = id => id ? `<@&${id}>` : '`Not set`';
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('🏷️ Staff Role Configuration')
+        .setDescription('Current staff rank roles for this server. Run this command with options to update them.')
+        .addFields(
+          { name: '🟡 Mod (Rank 1)',       value: rl(config.hub_mod_role_id),       inline: true },
+          { name: '🟠 Team Lead (Rank 2)', value: rl(config.hub_team_lead_role_id), inline: true },
+          { name: '🔴 Admin (Rank 3)',     value: rl(config.hub_admin_role_id),     inline: true },
+        )
+        .setFooter({ text: 'These override MOD_ROLE_ID / TEAM_LEAD_ROLE_ID / ADMIN_ROLE_ID env vars.' })
+        .setTimestamp()],
+      flags: 64,
+    });
+  }
+
+  const current = await getGuild(interaction.guildId);
+  await setHubStaffRoles(
+    interaction.guildId,
+    modRole?.id      ?? current.hub_mod_role_id      ?? null,
+    teamLeadRole?.id ?? current.hub_team_lead_role_id ?? null,
+    adminRole?.id    ?? current.hub_admin_role_id     ?? null,
+  );
+
+  const saved = await getGuild(interaction.guildId);
+  const rl = id => id ? `<@&${id}>` : '`Not set`';
+
+  await interaction.reply({
+    embeds: [new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('✅ Staff Roles Configured')
+      .setDescription('Staff ranks for this server are now set. No env vars needed.')
+      .addFields(
+        { name: '🟡 Mod (Rank 1)',       value: rl(saved.hub_mod_role_id),       inline: true },
+        { name: '🟠 Team Lead (Rank 2)', value: rl(saved.hub_team_lead_role_id), inline: true },
+        { name: '🔴 Admin (Rank 3)',     value: rl(saved.hub_admin_role_id),     inline: true },
+      )
+      .setTimestamp()],
+  });
 }
 
 export async function handleSetupNetworkRoles(interaction) {
