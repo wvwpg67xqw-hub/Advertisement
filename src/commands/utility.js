@@ -156,11 +156,16 @@ async function fetchGithubChanges(repo, version, since) {
   if (!Array.isArray(commits) || !commits.length) return null;
 
   return commits
+    .filter(c => {
+      const author = (c.commit?.author?.name || '').toLowerCase();
+      const login = (c.author?.login || '').toLowerCase();
+      return !author.includes('replit') && !login.includes('replit');
+    })
     .map(c => c.commit?.message?.split('\n')[0].trim())
     .filter(msg => msg && !msg.startsWith('Merge '))
     .slice(0, 20)
     .map(msg => `• ${msg}`)
-    .join('\n');
+    .join('\n') || null;
 }
 
 export async function handleReleaseNotes(interaction) {
