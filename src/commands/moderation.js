@@ -210,7 +210,7 @@ export async function handleAdWarn(interaction) {
     caseId, reason, messageContent: deletedContent,
     channelId: resolvedChannelId, messageId: resolvedMessageId, totalWarns,
   });
-  await interaction.editReply({ embeds: [embed], flags: undefined });
+  await interaction.editReply({ embeds: [embed] });
   await sendLog(interaction.guild, await getGuild(interaction.guildId), 'ad_warn', embed);
 
   const dmEmbed = new EmbedBuilder()
