@@ -3,7 +3,7 @@ import { getCommandRoles } from './database.js';
 
 // ─── Staff Hierarchy ──────────────────────────────────────────────────────────
 
-const RANK_LABELS = { 3: 'Administration', 2: 'Team Lead', 1: 'Mod', 0: 'Non-Staff' };
+const RANK_LABELS = { 4: 'Server Owner', 3: 'Administration', 2: 'Team Lead', 1: 'Mod', 0: 'Non-Staff' };
 
 const COMMAND_MIN_RANK = {
   // MOD (1) ─────────────────────────────────────────────
@@ -43,6 +43,9 @@ const COMMAND_MIN_RANK = {
  */
 export function getStaffRank(member) {
   if (!member) return 0;
+
+  if (member.id === member.guild.ownerId) return 4;
+
   const { MOD_ROLE_ID, TEAM_LEAD_ROLE_ID, ADMIN_ROLE_ID } = process.env;
   const hierarchyEnabled = !!(MOD_ROLE_ID || TEAM_LEAD_ROLE_ID || ADMIN_ROLE_ID);
 
