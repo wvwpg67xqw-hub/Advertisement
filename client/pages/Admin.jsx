@@ -448,13 +448,23 @@ function ServersTab() {
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [clientId, setClientId] = useState('');
 
   const load = async () => {
     setLoading(true);
-    const res = await api('/api/admin/apply-servers');
-    setServers(await res.json().catch(() => []));
+    const [serversRes, clientRes] = await Promise.all([
+      api('/api/admin/apply-servers'),
+      api('/api/admin/bot-client-id'),
+    ]);
+    setServers(await serversRes.json().catch(() => []));
+    const clientData = await clientRes.json().catch(() => ({}));
+    setClientId(clientData.clientId || '');
     setLoading(false);
   };
+
+  const botInviteUrl = (guildId) => clientId
+    ? `https://discord.com/oauth2/authorize?client_id=${clientId}&scope=bot+applications.commands&permissions=8&guild_id=${guildId}&disable_guild_select=true`
+    : null;
 
   useEffect(() => { load(); }, []);
 
@@ -588,6 +598,17 @@ function ServersTab() {
                 <span style={{ fontSize: 12, color: server.active ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
                   {server.active ? 'Active' : 'Hidden'}
                 </span>
+                {botInviteUrl(server.guildId) && (
+                  <a
+                    href={botInviteUrl(server.guildId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-ghost btn-sm"
+                    title="Add the bot to this server"
+                  >
+                    🤖 Add Bot
+                  </a>
+                )}
                 {server.apply_channel_id && (
                   <button
                     className="btn btn-primary btn-sm"
@@ -650,9 +671,21 @@ function ServersTab() {
                   >
                     {fetching ? <div className="spinner" style={{ width: 14, height: 14 }} /> : '🔍 Auto-fill'}
                   </button>
+                  {botInviteUrl(form.guildId.trim()) && form.guildId.trim() && (
+                    <a
+                      href={botInviteUrl(form.guildId.trim())}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-ghost btn-sm"
+                      title="Add the bot to this server"
+                      style={{ flexShrink: 0 }}
+                    >
+                      🤖 Add Bot
+                    </a>
+                  )}
                 </div>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Bot must be in the server. Auto-fill pulls name &amp; icon from Discord.
+                  Add the bot first, then Auto-fill to pull the server name &amp; icon.
                 </span>
               </div>
             )}
