@@ -22,6 +22,7 @@ export async function initDatabase() {
       ad_warn_log_channel_id       VARCHAR(20),
       ad_warn_dm_log_channel_id    VARCHAR(20),
       level_log_channel_id         VARCHAR(20),
+      level_xp_channel_id          VARCHAR(20),
       staff_updates_channel_id     VARCHAR(20),
       jail_role_id                 VARCHAR(20),
       muted_role_id                VARCHAR(20),
@@ -127,6 +128,11 @@ export async function initDatabase() {
       total_xp  BIGINT DEFAULT 0,
       PRIMARY KEY (guild_id, user_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS disabled_commands (
+      guild_id     VARCHAR(20),
+      command_name VARCHAR(100),
+      PRIMARY KEY (guild_id, command_name)
+    )`,
     `CREATE TABLE IF NOT EXISTS bot_blacklist (
       id           INT AUTO_INCREMENT PRIMARY KEY,
       guild_id     VARCHAR(20),
@@ -170,6 +176,7 @@ export async function initDatabase() {
   const migrations = [
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS ad_warn_dm_log_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS level_log_channel_id VARCHAR(20)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS level_xp_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS network_apply_log_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS network_apply_roles TEXT`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS pfp_url TEXT`,

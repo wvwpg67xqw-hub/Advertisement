@@ -452,6 +452,26 @@ export async function getLevelLeaderboard(guildId, limit = 10) {
   return q('SELECT user_id, total_xp FROM levels WHERE guild_id = ? ORDER BY total_xp DESC LIMIT ?', [guildId, limit]);
 }
 
+// ── Command Toggles ───────────────────────────────────────────────────────────
+
+export async function disableCommand(guildId, commandName) {
+  await q('INSERT IGNORE INTO disabled_commands (guild_id, command_name) VALUES (?, ?)', [guildId, commandName]);
+}
+
+export async function enableCommand(guildId, commandName) {
+  await q('DELETE FROM disabled_commands WHERE guild_id = ? AND command_name = ?', [guildId, commandName]);
+}
+
+export async function isCommandDisabled(guildId, commandName) {
+  const row = await q1('SELECT 1 FROM disabled_commands WHERE guild_id = ? AND command_name = ?', [guildId, commandName]);
+  return !!row;
+}
+
+export async function getDisabledCommands(guildId) {
+  const rows = await q('SELECT command_name FROM disabled_commands WHERE guild_id = ?', [guildId]);
+  return rows.map(r => r.command_name);
+}
+
 // ── Network Applications ──────────────────────────────────────────────────────
 
 export async function saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age) {
