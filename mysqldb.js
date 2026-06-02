@@ -20,6 +20,7 @@ export async function initDatabase() {
       strike_log_channel_id        VARCHAR(20),
       request_log_channel_id       VARCHAR(20),
       ad_warn_log_channel_id       VARCHAR(20),
+      ad_warn_dm_log_channel_id    VARCHAR(20),
       staff_updates_channel_id     VARCHAR(20),
       jail_role_id                 VARCHAR(20),
       muted_role_id                VARCHAR(20),

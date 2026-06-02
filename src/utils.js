@@ -150,6 +150,7 @@ export async function sendLog(guild, config, type, embed, components = null) {
     strike: config.strike_log_channel_id,
     request: config.request_log_channel_id,
     ad_warn: config.ad_warn_log_channel_id,
+    ad_warn_dm: config.ad_warn_dm_log_channel_id,
     general: config.log_channel_id,
     staff_updates: config.staff_updates_channel_id,
     'ban-request': config.ban_request_channel_id || config.request_log_channel_id,

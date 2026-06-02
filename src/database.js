@@ -36,7 +36,7 @@ export async function setGuildConfig(guildId, fields) {
   await getGuild(guildId);
   const allowed = [
     'log_channel_id', 'warn_log_channel_id', 'strike_log_channel_id',
-    'request_log_channel_id', 'ad_warn_log_channel_id', 'staff_updates_channel_id',
+    'request_log_channel_id', 'ad_warn_log_channel_id', 'ad_warn_dm_log_channel_id', 'staff_updates_channel_id',
     'jail_role_id', 'muted_role_id',
     'ban_request_channel_id', 'blacklist_request_channel_id',
     'network_ban_request_channel_id', 'partnership_request_channel_id',

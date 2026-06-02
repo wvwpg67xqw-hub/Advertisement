@@ -203,15 +203,17 @@ export async function handleAdWarn(interaction) {
   const totalWarns = adWarns.length;
   const moderatorAdWarnCount = await getAdWarnCountByModerator(interaction.guildId, interaction.user.id);
 
-  const embed = buildAdWarnEmbed({
+  const guildConfig = await getGuild(interaction.guildId);
+
+  const logEmbed = buildAdWarnEmbed({
     userId: target.id, moderatorId: interaction.user.id,
     moderatorUsername: interaction.user.username, moderatorAdWarnCount,
     guildName: interaction.guild?.name || 'Moderation',
-    caseId, reason, messageContent: deletedContent,
+    caseId, reason, messageContent: null,
     channelId: resolvedChannelId, messageId: resolvedMessageId, totalWarns,
   });
-  await interaction.editReply({ embeds: [embed] });
-  await sendLog(interaction.guild, await getGuild(interaction.guildId), 'ad_warn', embed);
+  await interaction.editReply({ embeds: [logEmbed] });
+  await sendLog(interaction.guild, guildConfig, 'ad_warn', logEmbed);
 
   const dmEmbed = new EmbedBuilder()
     .setColor(0xFF5555)
@@ -226,7 +228,21 @@ export async function handleAdWarn(interaction) {
     )
     .setFooter({ text: 'Please review the server advertising rules.' })
     .setTimestamp();
-  await target.send({ embeds: [dmEmbed] }).catch(() => null);
+  const dmSent = await target.send({ embeds: [dmEmbed] }).catch(() => null);
+
+  const dmLogEmbed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('📬 Ad-Warn DM Log')
+    .addFields(
+      { name: '👤 User', value: `<@${target.id}> (${target.id})`, inline: false },
+      { name: '🗂️ Case ID', value: caseId, inline: true },
+      { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: '✉️ DM Delivered', value: dmSent ? 'Yes' : 'No (DMs closed)', inline: true },
+      { name: '📋 Reason', value: reason, inline: false },
+      ...(deletedContent ? [{ name: '🗑️ Deleted Message', value: deletedContent.length > 1024 ? deletedContent.slice(0, 1021) + '...' : deletedContent, inline: false }] : []),
+    )
+    .setTimestamp();
+  await sendLog(interaction.guild, guildConfig, 'ad_warn_dm', dmLogEmbed);
 }
 
 export async function handleRemoveAdWarn(interaction) {
