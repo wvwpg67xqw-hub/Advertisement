@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
 import {
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
-  getSnipeCache, getBalance, getCaseInfo, getGuild,
+  getSnipeCache, getBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact,
 } from '../database.js';
 import { hasCommandPermission } from '../utils.js';
 
@@ -37,6 +37,15 @@ export const defs = [
   new SlashCommandBuilder()
     .setName('reset-messages-all')
     .setDescription('Reset message counts for ALL users in this server'),
+
+  new SlashCommandBuilder()
+    .setName('ar')
+    .setDescription('Set an auto-react emoji — bot reacts to every message you send')
+    .addStringOption(o => o.setName('emoji').setDescription('A custom emoji from this server').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('ar-clear')
+    .setDescription('Remove your auto-react emoji'),
 
   new SlashCommandBuilder()
     .setName('release-notes')
@@ -127,6 +136,31 @@ export async function handleResetMessagesAll(interaction) {
   if (!await hasCommandPermission(interaction.member, 'reset-messages-all')) return deny(interaction);
   await resetMessagesAll(interaction.guildId);
   await interaction.reply({ content: '✅ All message counts have been reset.', flags: 64 });
+}
+
+export async function handleAutoReact(interaction) {
+  const raw = interaction.options.getString('emoji');
+  const match = raw.match(/^<(a?):([^:]+):(\d+)>$/);
+  if (!match) {
+    return interaction.reply({ content: '❌ That\'s not a valid server emoji. Right-click a custom emoji and paste it here.', flags: 64 });
+  }
+  const [, a, name, id] = match;
+  const animated = a === 'a';
+  const serverEmoji = interaction.guild.emojis.cache.get(id);
+  if (!serverEmoji) {
+    return interaction.reply({ content: '❌ That emoji doesn\'t belong to this server. Pick one from here.', flags: 64 });
+  }
+  await setAutoReact(interaction.guildId, interaction.user.id, id, name, animated);
+  await interaction.reply({ content: `✅ Done! The bot will now react with ${raw} to every message you send in this server.`, flags: 64 });
+}
+
+export async function handleAutoReactClear(interaction) {
+  const existing = await getAutoReact(interaction.guildId, interaction.user.id);
+  if (!existing) {
+    return interaction.reply({ content: '❌ You don\'t have an auto-react set in this server.', flags: 64 });
+  }
+  await clearAutoReact(interaction.guildId, interaction.user.id);
+  await interaction.reply({ content: '✅ Your auto-react has been removed.', flags: 64 });
 }
 
 const RELEASE_COLORS = { major: 0x5865F2, update: 0x57F287, minor: 0xFEE75C, hotfix: 0xED4245 };

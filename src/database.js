@@ -103,6 +103,23 @@ export async function autoLinkGuilds(hubGuildId, guildIds) {
   }
 }
 
+export async function setAutoReact(guildId, userId, emojiId, emojiName, animated) {
+  await q(
+    `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated)
+     VALUES (?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE emoji_id = VALUES(emoji_id), emoji_name = VALUES(emoji_name), animated = VALUES(animated)`,
+    [guildId, userId, emojiId, emojiName, animated ? 1 : 0]
+  );
+}
+
+export async function getAutoReact(guildId, userId) {
+  return q1('SELECT * FROM auto_reacts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+}
+
+export async function clearAutoReact(guildId, userId) {
+  await q('DELETE FROM auto_reacts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+}
+
 export async function setGithubRepo(guildId, repo) {
   await getGuild(guildId);
   await q('UPDATE guilds SET github_repo = ? WHERE guild_id = ?', [repo || null, guildId]);

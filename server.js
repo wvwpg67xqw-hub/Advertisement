@@ -29,7 +29,7 @@ import {
   handlePartnershipRequest, handleMessages, handleMessageLeaderboard,
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
   handleBreakRequest, handleBreakEnd, handleManageBreak,
-  handleResetMessages, handleResetMessagesAll, handleReleaseNotes,
+  handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAutoReact, handleAutoReactClear,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
   handleSetupNetworkApply, handleNetworkApplyPost,
@@ -45,7 +45,7 @@ import {
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles, handleSetupGithub,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
 
@@ -475,6 +475,7 @@ const botHandlers = {
   'case-info': handleCaseInfo, balance: handleBalance, snipe: handleSnipe,
   'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll, 'release-notes': handleReleaseNotes,
+  ar: handleAutoReact, 'ar-clear': handleAutoReactClear,
   'resign-request': handleResignRequest, apply: handleApply, update: handleUpdate,
   'setup-network-apply': handleSetupNetworkApply,
   'network-apply-post': handleNetworkApplyPost,
@@ -1725,6 +1726,13 @@ client.on('messageCreate', async (msg) => {
 
   await incrementMessageCount(msg.guild.id, msg.author.id);
   if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
+
+  // Auto-react
+  const ar = await getAutoReact(msg.guild.id, msg.author.id).catch(() => null);
+  if (ar) {
+    const emoji = msg.guild.emojis.cache.get(ar.emoji_id);
+    if (emoji) msg.react(emoji).catch(() => {});
+  }
 
   // XP gain (60-second cooldown, 15–25 XP per message)
   const cdKey = `${msg.guild.id}-${msg.author.id}`;

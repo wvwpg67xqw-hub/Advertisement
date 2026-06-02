@@ -203,7 +203,21 @@ export async function initDatabase() {
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS github_repo VARCHAR(200)`,
   ];
 
+  const extraTables = [
+    `CREATE TABLE IF NOT EXISTS auto_reacts (
+      guild_id   VARCHAR(20),
+      user_id    VARCHAR(20),
+      emoji_id   VARCHAR(20)  NOT NULL,
+      emoji_name VARCHAR(100) NOT NULL,
+      animated   TINYINT(1)  DEFAULT 0,
+      PRIMARY KEY (guild_id, user_id)
+    )`,
+  ];
+
   for (const sql of migrations) {
+    await pool.execute(sql).catch(() => {});
+  }
+  for (const sql of extraTables) {
     await pool.execute(sql).catch(() => {});
   }
 
