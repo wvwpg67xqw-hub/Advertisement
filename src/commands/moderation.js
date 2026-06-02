@@ -105,7 +105,7 @@ export async function handleWarn(interaction) {
   const embed = buildWarnEmbed({ userId: target.id, moderatorId: interaction.user.id, caseId, reason });
   embed.setFooter({ text: `Total warnings: ${totalWarns}` });
   await interaction.reply({ embeds: [embed], flags: 64 });
-  await sendLog(interaction.guild, await getGuild(interaction.guildId), 'warn', embed);
+  await sendLog(interaction.guild, await getGuild(interaction.guildId), 'ad_warn', embed);
 
   const dmEmbed = new EmbedBuilder()
     .setColor(0xFFAA00)
@@ -219,6 +219,7 @@ export async function handleAdWarn(interaction) {
     .setDescription(`You were warned for advertising in **${interaction.guild?.name || 'a server'}**.`)
     .addFields(
       { name: '📋 Reason', value: reason, inline: false },
+      ...(deletedContent ? [{ name: '🗑️ Deleted Message', value: deletedContent.length > 1024 ? deletedContent.slice(0, 1021) + '...' : deletedContent, inline: false }] : []),
       { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
       { name: '🗂️ Case ID', value: caseId, inline: true },
       { name: '⚠️ Total Ad Warnings', value: String(totalWarns), inline: true },
