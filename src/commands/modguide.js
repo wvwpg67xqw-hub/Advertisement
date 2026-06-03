@@ -5,7 +5,10 @@ import { deny } from './shared.js';
 export const defs = [
   new SlashCommandBuilder()
     .setName('modguide')
-    .setDescription('Send the moderator guide with action guidelines'),
+    .setDescription('Send the moderator guide with action guidelines')
+    .addChannelOption(o =>
+      o.setName('channel')
+        .setDescription('Channel to post the guide in (leave blank to post here)')),
 ];
 
 // ── Guide Pages ───────────────────────────────────────────────────────────────
@@ -136,6 +139,17 @@ function buildPage(key) {
 
 export async function handleModGuide(interaction) {
   if (!await hasCommandPermission(interaction.member, 'modguide')) return deny(interaction);
+
+  const target = interaction.options.getChannel('channel');
+
+  if (target) {
+    if (!target.isTextBased()) {
+      return interaction.reply({ content: '❌ Please choose a text channel.', flags: 64 });
+    }
+    await target.send(buildPage('overview'));
+    return interaction.reply({ content: `✅ Mod guide posted in ${target}.`, flags: 64 });
+  }
+
   await interaction.reply(buildPage('overview'));
 }
 
