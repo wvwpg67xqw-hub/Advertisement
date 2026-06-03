@@ -34,6 +34,7 @@ import {
   handleResignRequest, handleApply, handleUpdate,
   handleSetupNetworkApply, handleNetworkApplyPost,
   handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
+  handleModGuide, handleModGuideButton,
 } from './src/commands/index.js';
 
 import {
@@ -484,6 +485,7 @@ const botHandlers = {
   'add-level': handleAddLevel, 'set-level': handleSetLevel,
   'toggle-command': handleToggleCommand,
   'toggle-leveling': handleToggleLeveling,
+  modguide: handleModGuide,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
@@ -1538,6 +1540,10 @@ if (id.startsWith('app_')) {
 
     if (interaction.isButton() && interaction.customId?.startsWith('req:')) {
       await handleRequestButton(interaction);
+    }
+
+    if (interaction.isButton() && interaction.customId?.startsWith('modguide:')) {
+      await handleModGuideButton(interaction);
     }
   } catch (err) {
     console.error('Interaction error:', err);
