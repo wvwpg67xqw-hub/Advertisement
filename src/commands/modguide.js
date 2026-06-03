@@ -17,26 +17,14 @@ const PAGES = {
   overview: {
     label: '📋 General Info',
     color: 0x5865F2,
-    title: '📋 Moderator Guide — General Info',
+    title: '📋 Moderator Guide',
     description: [
-      '**Your role as a moderator**',
-      '> You are here to keep the server safe and on-topic.',
-      '> You warn and mute. Bans are handled by senior staff — always escalate.',
+      'Click a button below to privately view that section.',
+      'Only you will see the content — it won\'t show in chat.',
       '',
-      '**Before you act**',
-      '> • Read the full context — never moderate on a single message alone',
-      '> • Give a verbal reminder first for minor things',
-      '> • If in doubt, ping a senior staff member — do not guess',
-      '> • Never moderate someone you have a personal issue with',
-      '',
-      '**General rules**',
-      '> • Keep all mod actions professional and unbiased',
-      '> • Always provide a clear, specific reason for every action',
-      '> • Everything is logged — act as if senior staff are watching',
-      '> • Do not discuss mod actions publicly with members',
-      '',
-      '**Escalation order**',
-      '> Verbal reminder → Warn → Mute → Escalate to senior staff',
+      '**📋 General Info** — your role, rules, and escalation order',
+      '**⚠️ Warnings** — when to warn, what counts, good reasons',
+      '**📩 Requests** — how to escalate to senior staff properly',
     ].join('\n'),
   },
 
@@ -158,5 +146,12 @@ export async function handleModGuide(interaction) {
 export async function handleModGuideButton(interaction) {
   const key = interaction.customId.slice('modguide:'.length);
   if (!PAGES[key]) return;
-  await interaction.update(buildPage(key));
+  const page = PAGES[key];
+  const embed = new EmbedBuilder()
+    .setColor(page.color)
+    .setTitle(page.title)
+    .setDescription(page.description)
+    .setFooter({ text: 'Moderator Guide • Only you can see this' })
+    .setTimestamp();
+  await interaction.reply({ embeds: [embed], flags: 64 });
 }
