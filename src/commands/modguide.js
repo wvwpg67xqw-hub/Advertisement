@@ -25,6 +25,8 @@ const PAGES = {
       '**📋 General Info** — your role, rules, and escalation order',
       '**⚠️ Warnings** — when to warn, what counts, good reasons',
       '**📩 Requests** — how to escalate to senior staff properly',
+      '**📢 Ad Warn** — ad channel violations and how to handle them',
+      '**🔵 Conduct** — general conduct rules for moderators',
     ].join('\n'),
   },
 
@@ -92,6 +94,65 @@ const PAGES = {
       '**Tip:** The more detail you give, the faster senior staff can action it.',
     ].join('\n'),
   },
+
+  adwarn: {
+    label: '📢 Ad Warn',
+    color: 0xA855F7,
+    title: '📢 Ad Warnings — When & How',
+    description: [
+      '**What is an ad warn?**',
+      '> Use `/ad-warn` when a user breaks the advertising rules in an ad channel.',
+      '> This is separate from a regular warn and tracked independently.',
+      '',
+      '**✅ Ad warn for**',
+      '> • Posting an ad that does not follow the required format',
+      '> • Bumping or reposting an ad before the cooldown has expired',
+      '> • Posting ads in non-designated channels',
+      '> • Using misleading or deceptive content in an ad',
+      '> • Advertising content that violates server rules (NSFW, scam, etc.)',
+      '',
+      '**❌ Do not ad warn for**',
+      '> • A genuine first-time formatting mistake — correct them first',
+      '> • Content issues that are already covered by a regular `/warn`',
+      '',
+      '**How to use it**',
+      '> Run `/ad-warn` and provide the **message ID or thread ID** of the ad,',
+      '> plus a clear reason. The bot will log it and notify the user.',
+      '',
+      '**Good vs bad reasons**',
+      '> ❌ `"bad ad"`',
+      '> ✅ `"Ad reposted 2 hours after previous post — cooldown is 24h — [message link]"`',
+      '',
+      '> ❌ `"wrong format"`',
+      '> ✅ `"Ad missing required description field — posted plain link with no details — [message link]"`',
+    ].join('\n'),
+  },
+
+  conduct: {
+    label: '📋 General Info',
+    color: 0x5865F2,
+    title: '📋 General Conduct',
+    description: [
+      '**Your role as a moderator**',
+      '> You are here to keep the server safe and on-topic.',
+      '> You warn and mute. Bans are handled by senior staff — always escalate.',
+      '',
+      '**Before you act**',
+      '> • Read the full context — never moderate on a single message alone',
+      '> • Give a verbal reminder first for minor things',
+      '> • If in doubt, ping a senior staff member — do not guess',
+      '> • Never moderate someone you have a personal issue with',
+      '',
+      '**General rules**',
+      '> • Keep all mod actions professional and unbiased',
+      '> • Always provide a clear, specific reason for every action',
+      '> • Everything is logged — act as if senior staff are watching',
+      '> • Do not discuss mod actions publicly with members',
+      '',
+      '**Escalation order**',
+      '> Verbal reminder → Warn → Mute → Escalate to senior staff',
+    ].join('\n'),
+  },
 };
 
 // ── Build embed + row from a page key ────────────────────────────────────────
@@ -107,9 +168,9 @@ function buildPage(key) {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('modguide:overview')
-      .setLabel('📋 General Info')
-      .setStyle(key === 'overview' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+      .setCustomId('modguide:conduct')
+      .setLabel('📋 Conduct')
+      .setStyle(key === 'conduct' ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('modguide:warnings')
       .setLabel('⚠️ Warnings')
@@ -118,6 +179,14 @@ function buildPage(key) {
       .setCustomId('modguide:requests')
       .setLabel('📩 Requests')
       .setStyle(key === 'requests' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('modguide:adwarn')
+      .setLabel('📢 Ad Warn')
+      .setStyle(key === 'adwarn' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('modguide:overview')
+      .setLabel('ℹ️ About')
+      .setStyle(key === 'overview' ? ButtonStyle.Primary : ButtonStyle.Secondary),
   );
 
   return { embeds: [embed], components: [row] };
