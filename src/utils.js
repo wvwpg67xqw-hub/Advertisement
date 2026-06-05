@@ -3,7 +3,7 @@ import { getCommandRoles, resolveNetworkRoleIds } from './database.js';
 
 // ─── Staff Hierarchy ──────────────────────────────────────────────────────────
 
-const RANK_LABELS = { 4: 'Server Owner', 3: 'Administration', 2: 'Team Lead', 1: 'Mod', 0: 'Non-Staff' };
+const RANK_LABELS = { 5: 'Owner', 4: 'Server Owner', 3: 'Administration', 2: 'Team Lead', 1: 'Mod', 0: 'Non-Staff' };
 
 const COMMAND_MIN_RANK = {
   // MOD (1) ─────────────────────────────────────────────
@@ -24,6 +24,7 @@ const COMMAND_MIN_RANK = {
   'reset-messages': 2, 'reset-messages-all': 2,
   snipe: 2,
   addbalance: 2,
+  setbalance: 3,
 
   // ADMINISTRATION (3) ──────────────────────────────────
   ban: 3, fire: 3,
@@ -45,11 +46,14 @@ const COMMAND_MIN_RANK = {
 export function getStaffRank(member, roleIds = null) {
   if (!member) return 0;
 
-  if (member.id === member.guild.ownerId) return 4;
+  if (member.id === member.guild.ownerId) return 5;
 
+  const ownerRoleId    = process.env.OWNER_ROLE_ID;
   const modRoleId      = roleIds?.modRoleId      ?? process.env.MOD_ROLE_ID;
   const teamLeadRoleId = roleIds?.teamLeadRoleId  ?? process.env.TEAM_LEAD_ROLE_ID;
   const adminRoleId    = roleIds?.adminRoleId     ?? process.env.ADMIN_ROLE_ID;
+
+  if (ownerRoleId && member.roles.cache.has(ownerRoleId)) return 5;
 
   const hierarchyEnabled = !!(modRoleId || teamLeadRoleId || adminRoleId);
 

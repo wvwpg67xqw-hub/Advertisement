@@ -45,6 +45,12 @@ export const defs = [
     .addIntegerOption(o => o.setName('amount').setDescription('Amount of coins to add').setRequired(true).setMinValue(1)),
 
   new SlashCommandBuilder()
+    .setName('setbalance')
+    .setDescription('Set a user\'s balance to an exact amount (Admin+)')
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true))
+    .addIntegerOption(o => o.setName('amount').setDescription('New balance amount').setRequired(true).setMinValue(0)),
+
+  new SlashCommandBuilder()
     .setName('release-notes')
     .setDescription('Post a release notes announcement — auto-fills version and commits from GitHub if linked')
     .addStringOption(o => o.setName('version').setDescription('Version tag (e.g. v1.2.3) — auto-detected from GitHub if blank'))
@@ -133,6 +139,31 @@ export async function handleResetMessagesAll(interaction) {
   if (!await hasCommandPermission(interaction.member, 'reset-messages-all')) return deny(interaction);
   await resetMessagesAll(interaction.guildId);
   await interaction.reply({ content: '✅ All message counts have been reset.', flags: 64 });
+}
+
+export async function handleSetBalance(interaction) {
+  const rank = getStaffRank(interaction.member);
+  if (rank < 3) return deny(interaction);
+
+  const target = interaction.options.getUser('user');
+  const amount = interaction.options.getInteger('amount');
+
+  await addBalance(interaction.guildId, target.id, amount - await getBalance(interaction.guildId, target.id));
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('💰 Balance Set')
+        .addFields(
+          { name: 'User',    value: `<@${target.id}>`,              inline: true },
+          { name: 'Balance', value: `${amount.toLocaleString()} coins`, inline: true },
+        )
+        .setFooter({ text: `Set by ${interaction.user.tag}` })
+        .setTimestamp(),
+    ],
+    flags: 64,
+  });
 }
 
 export async function handleAddBalance(interaction) {

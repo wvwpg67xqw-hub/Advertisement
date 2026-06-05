@@ -79,9 +79,6 @@ export async function handleStrike(interaction) {
   const reason = interaction.options.getString('reason');
 
   const targetMember = await safeFetchMember(interaction.guild, target.id);
-  if (!await canModerateInGuild(interaction.member, targetMember, interaction.guildId)) {
-    return interaction.reply({ content: RANK_ERR, flags: 64 });
-  }
 
   const caseId = await addStrike(interaction.guildId, target.id, interaction.user.id, reason);
   const total = await getStrikeCount(interaction.guildId, target.id);
