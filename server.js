@@ -29,7 +29,7 @@ import {
   handlePartnershipRequest, handleMessages, handleMessageLeaderboard,
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
   handleBreakRequest, handleBreakEnd, handleManageBreak,
-  handleResetMessages, handleResetMessagesAll, handleReleaseNotes,
+  handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
   handleSetupNetworkApply, handleNetworkApplyPost,
@@ -47,9 +47,9 @@ import {
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles, handleSetupGithub,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, getBalance, setBalance } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
-import { sendLog, buildStaffUpdateEmbed } from './src/utils.js';
+import { sendLog, buildStaffUpdateEmbed, getStaffRank } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -477,6 +477,7 @@ const botHandlers = {
   'case-info': handleCaseInfo, balance: handleBalance, snipe: handleSnipe,
   'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll, 'release-notes': handleReleaseNotes,
+  addbalance: handleAddBalance,
   'resign-request': handleResignRequest, apply: handleApply, update: handleUpdate,
   'setup-network-apply': handleSetupNetworkApply,
   'network-apply-post': handleNetworkApplyPost,
@@ -1750,13 +1751,28 @@ client.on('messageCreate', async (msg) => {
       return;
     }
 
+    // Rank check — admin+ (rank 3+) are free, everyone else pays 10,000 coins
+    const AR_COST = 10000;
+    const rank = getStaffRank(msg.member);
+    const isFree = rank >= 3;
+
+    if (!isFree) {
+      const bal = await getBalance(msg.guild.id, msg.author.id).catch(() => 0);
+      if (bal < AR_COST) {
+        msg.reply(`❌ You need **${AR_COST.toLocaleString()} coins** to set an auto-react. You have **${bal.toLocaleString()}**.`).then(r => setTimeout(() => r.delete().catch(() => {}), 7000));
+        return;
+      }
+    }
+
     // Custom emoji: <a?:name:id>
     const customMatch = arg.match(/^<(a?):([^:]+):(\d+)>$/);
     if (customMatch) {
       const [, a, name, id] = customMatch;
       const animated = a === 'a';
+      if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
       await setAutoReact(msg.guild.id, msg.author.id, id, name, animated).catch(() => {});
-      msg.reply(`✅ Auto-react set to ${arg}.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
+      msg.reply(`✅ Auto-react set to ${arg}.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       return;
     }
 
@@ -1764,8 +1780,10 @@ client.on('messageCreate', async (msg) => {
     try {
       const test = await msg.react(arg);
       await test.remove().catch(() => {});
+      if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
       await setAutoReact(msg.guild.id, msg.author.id, null, arg, false).catch(() => {});
-      msg.reply(`✅ Auto-react set to ${arg}.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
+      msg.reply(`✅ Auto-react set to ${arg}.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
     } catch {
       msg.reply('❌ Invalid emoji. Send a standard emoji or a custom emoji from this server.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
     }

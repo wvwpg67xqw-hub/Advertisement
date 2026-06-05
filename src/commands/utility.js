@@ -1,9 +1,9 @@
 import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
 import {
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
-  getSnipeCache, getBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact,
+  getSnipeCache, getBalance, addBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact,
 } from '../database.js';
-import { hasCommandPermission } from '../utils.js';
+import { hasCommandPermission, getStaffRank } from '../utils.js';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -37,6 +37,12 @@ export const defs = [
   new SlashCommandBuilder()
     .setName('reset-messages-all')
     .setDescription('Reset message counts for ALL users in this server'),
+
+  new SlashCommandBuilder()
+    .setName('addbalance')
+    .setDescription('Add coins to a user\'s balance (Team Lead+)')
+    .addUserOption(o => o.setName('user').setDescription('User to give coins to').setRequired(true))
+    .addIntegerOption(o => o.setName('amount').setDescription('Amount of coins to add').setRequired(true).setMinValue(1)),
 
   new SlashCommandBuilder()
     .setName('release-notes')
@@ -127,6 +133,34 @@ export async function handleResetMessagesAll(interaction) {
   if (!await hasCommandPermission(interaction.member, 'reset-messages-all')) return deny(interaction);
   await resetMessagesAll(interaction.guildId);
   await interaction.reply({ content: '✅ All message counts have been reset.', flags: 64 });
+}
+
+export async function handleAddBalance(interaction) {
+  const rank = getStaffRank(interaction.member);
+  if (rank < 2) return deny(interaction);
+
+  const target = interaction.options.getUser('user');
+  const amount = interaction.options.getInteger('amount');
+
+  const current = await getBalance(interaction.guildId, target.id);
+  const newBal = current + amount;
+  await addBalance(interaction.guildId, target.id, amount);
+
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x22C55E)
+        .setTitle('💰 Balance Updated')
+        .addFields(
+          { name: 'User',    value: `<@${target.id}>`,                   inline: true },
+          { name: 'Added',   value: `+${amount.toLocaleString()} coins`, inline: true },
+          { name: 'Balance', value: `${newBal.toLocaleString()} coins`,  inline: true },
+        )
+        .setFooter({ text: `Updated by ${interaction.user.tag}` })
+        .setTimestamp(),
+    ],
+    flags: 64,
+  });
 }
 
 export async function handleAutoReact(interaction) {

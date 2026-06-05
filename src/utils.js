@@ -23,6 +23,7 @@ const COMMAND_MIN_RANK = {
   'remove-ad-warn': 2,
   'reset-messages': 2, 'reset-messages-all': 2,
   snipe: 2,
+  addbalance: 2,
 
   // ADMINISTRATION (3) ──────────────────────────────────
   ban: 3, fire: 3,

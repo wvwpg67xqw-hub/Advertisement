@@ -382,6 +382,12 @@ export async function setBalance(guildId, userId, amount) {
   );
 }
 
+export async function addBalance(guildId, userId, amount) {
+  const current = await getBalance(guildId, userId);
+  await setBalance(guildId, userId, current + amount);
+  return current + amount;
+}
+
 // ── Breaks ────────────────────────────────────────────────────────────────────
 
 export async function startBreak(guildId, userId, username, reason, savedRoles = [], endAt = null) {
