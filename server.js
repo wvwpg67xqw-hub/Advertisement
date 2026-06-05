@@ -29,7 +29,7 @@ import {
   handlePartnershipRequest, handleMessages, handleMessageLeaderboard,
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
   handleBreakRequest, handleBreakEnd, handleManageBreak,
-  handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAutoReact, handleAutoReactClear,
+  handleResetMessages, handleResetMessagesAll, handleReleaseNotes,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
   handleSetupNetworkApply, handleNetworkApplyPost,
@@ -477,7 +477,6 @@ const botHandlers = {
   'case-info': handleCaseInfo, balance: handleBalance, snipe: handleSnipe,
   'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll, 'release-notes': handleReleaseNotes,
-  ar: handleAutoReact, 'ar-clear': handleAutoReactClear,
   'resign-request': handleResignRequest, apply: handleApply, update: handleUpdate,
   'setup-network-apply': handleSetupNetworkApply,
   'network-apply-post': handleNetworkApplyPost,
@@ -1736,11 +1735,52 @@ client.on('messageCreate', async (msg) => {
   await incrementMessageCount(msg.guild.id, msg.author.id);
   if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
 
+  // ── Prefix command: ,ar ────────────────────────────────────────────────────
+  if (msg.content.startsWith(',ar')) {
+    const arg = msg.content.slice(3).trim();
+
+    if (!arg || arg === 'clear') {
+      const existing = await getAutoReact(msg.guild.id, msg.author.id).catch(() => null);
+      if (!existing) {
+        msg.reply('❌ You don\'t have an auto-react set.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      } else {
+        await clearAutoReact(msg.guild.id, msg.author.id).catch(() => {});
+        msg.reply('✅ Auto-react removed.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      }
+      return;
+    }
+
+    // Custom emoji: <a?:name:id>
+    const customMatch = arg.match(/^<(a?):([^:]+):(\d+)>$/);
+    if (customMatch) {
+      const [, a, name, id] = customMatch;
+      const animated = a === 'a';
+      await setAutoReact(msg.guild.id, msg.author.id, id, name, animated).catch(() => {});
+      msg.reply(`✅ Auto-react set to ${arg}.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      return;
+    }
+
+    // Unicode emoji — test by attempting a react, then save if it works
+    try {
+      const test = await msg.react(arg);
+      await test.remove().catch(() => {});
+      await setAutoReact(msg.guild.id, msg.author.id, null, arg, false).catch(() => {});
+      msg.reply(`✅ Auto-react set to ${arg}.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+    } catch {
+      msg.reply('❌ Invalid emoji. Send a standard emoji or a custom emoji from this server.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+    }
+    return;
+  }
+
   // Auto-react
   const ar = await getAutoReact(msg.guild.id, msg.author.id).catch(() => null);
   if (ar) {
-    const emoji = msg.guild.emojis.cache.get(ar.emoji_id);
-    if (emoji) msg.react(emoji).catch(() => {});
+    if (ar.emoji_id) {
+      const emoji = msg.guild.emojis.cache.get(ar.emoji_id);
+      if (emoji) msg.react(emoji).catch(() => {});
+    } else if (ar.emoji_name) {
+      msg.react(ar.emoji_name).catch(() => {});
+    }
   }
 
   // XP gain (60-second cooldown, 15–25 XP per message)

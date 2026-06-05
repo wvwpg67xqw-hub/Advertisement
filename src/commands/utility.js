@@ -39,15 +39,6 @@ export const defs = [
     .setDescription('Reset message counts for ALL users in this server'),
 
   new SlashCommandBuilder()
-    .setName('ar')
-    .setDescription('Set an auto-react emoji — bot reacts to every message you send')
-    .addStringOption(o => o.setName('emoji').setDescription('A custom emoji from this server').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('ar-clear')
-    .setDescription('Remove your auto-react emoji'),
-
-  new SlashCommandBuilder()
     .setName('release-notes')
     .setDescription('Post a release notes announcement — auto-fills version and commits from GitHub if linked')
     .addStringOption(o => o.setName('version').setDescription('Version tag (e.g. v1.2.3) — auto-detected from GitHub if blank'))
