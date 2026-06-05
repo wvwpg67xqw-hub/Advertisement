@@ -35,6 +35,7 @@ import {
   handleSetupNetworkApply, handleNetworkApplyPost,
   handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
   handleModGuide, handleModGuideButton,
+  handleStatus, handleActivity,
 } from './src/commands/index.js';
 
 import {
@@ -486,6 +487,8 @@ const botHandlers = {
   'toggle-command': handleToggleCommand,
   'toggle-leveling': handleToggleLeveling,
   modguide: handleModGuide,
+  status: handleStatus,
+  activity: handleActivity,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ export { defs as staffDefs } from './staff.js';
 export { defs as networkApplyDefs } from './network-apply.js';
 export { defs as levelingDefs } from './leveling.js';
 export { defs as modGuideDefs } from './modguide.js';
+export { defs as botSettingsDefs } from './botsettings.js';
 
 import { defs as moderationDefs } from './moderation.js';
 import { defs as staffManagementDefs } from './staff-management.js';
@@ -20,6 +21,7 @@ import { defs as staffDefs } from './staff.js';
 import { defs as networkApplyDefs } from './network-apply.js';
 import { defs as levelingDefs } from './leveling.js';
 import { defs as modGuideDefs } from './modguide.js';
+import { defs as botSettingsDefs } from './botsettings.js';
 
 export const commandDefs = [
   ...moderationDefs,
@@ -32,6 +34,7 @@ export const commandDefs = [
   ...networkApplyDefs,
   ...levelingDefs,
   ...modGuideDefs,
+  ...botSettingsDefs,
 ];
 
 // ── Handlers (re-exported from each module) ───────────────────────────────────
@@ -45,3 +48,4 @@ export { handleResignRequest, handleApply, handleUpdate } from './staff.js';
 export { handleSetupNetworkApply, handleNetworkApplyPost } from './network-apply.js';
 export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel } from './leveling.js';
 export { handleModGuide, handleModGuideButton } from './modguide.js';
+export { handleStatus, handleActivity } from './botsettings.js';
