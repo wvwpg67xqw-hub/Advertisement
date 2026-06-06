@@ -437,6 +437,27 @@ app.get('/api/config', (_req, res) => {
   res.json({ mainGuildId: process.env.MAIN_GUILD_ID || null });
 });
 
+// ── Auto-reload SSE ───────────────────────────────────────────────────────────
+const sseClients = new Set();
+
+app.get('/api/sse/reload', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  res.write('event: connected\ndata: {}\n\n');
+
+  const heartbeat = setInterval(() => res.write('event: ping\ndata: {}\n\n'), 25000);
+  sseClients.add(res);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(res);
+  });
+});
+
 // ── Serve React build ─────────────────────────────────────────────────────────
 
 const clientDist = join(__dirname, 'client', 'dist');

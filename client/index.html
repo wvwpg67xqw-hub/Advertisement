@@ -11,5 +11,37 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/main.jsx"></script>
+    <script>
+      (function () {
+        var firstConnect = true;
+        var retryDelay = 1000;
+
+        function connect() {
+          var sse = new EventSource('/api/sse/reload');
+
+          sse.addEventListener('connected', function () {
+            if (firstConnect) {
+              firstConnect = false;
+              retryDelay = 1000;
+              console.log('%c[AutoReload] Connected — will auto-refresh when the server updates.', 'color:#57F287;font-weight:600');
+            } else {
+              console.log('%c[AutoReload] Server updated — reloading page...', 'color:#FEE75C;font-weight:600');
+              window.location.reload();
+            }
+          });
+
+          sse.onerror = function () {
+            sse.close();
+            console.log('%c[AutoReload] Connection lost — retrying in ' + (retryDelay / 1000) + 's...', 'color:#ED4245');
+            setTimeout(function () {
+              retryDelay = Math.min(retryDelay * 2, 15000);
+              connect();
+            }, retryDelay);
+          };
+        }
+
+        connect();
+      })();
+    </script>
   </body>
 </html>
