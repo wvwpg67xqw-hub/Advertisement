@@ -6,5 +6,13 @@
     "description": "The main staff management bot — handles moderation, breaks, requests, and more.",
     "permissions": "8",
     "createdAt": 1780724558
+  },
+  {
+    "id": 2,
+    "name": "Applications Bot",
+    "clientId": "1511590386311762022",
+    "description": "Handles staff applications and the application process.",
+    "permissions": "8",
+    "createdAt": 1780724618
   }
 ]

@@ -11,7 +11,29 @@ if (!readCol('managed_bots').length) {
       permissions: '8',
       createdAt: ts(),
     },
+    {
+      id: 2,
+      name: 'Applications Bot',
+      clientId: '1511590386311762022',
+      description: 'Handles staff applications and the application process.',
+      permissions: '8',
+      createdAt: ts(),
+    },
   ]);
+} else {
+  // Migration: ensure Applications Bot is present
+  const _bots = readCol('managed_bots');
+  if (!_bots.find(b => b.clientId === '1511590386311762022')) {
+    _bots.push({
+      id: nextId('managed_bots'),
+      name: 'Applications Bot',
+      clientId: '1511590386311762022',
+      description: 'Handles staff applications and the application process.',
+      permissions: '8',
+      createdAt: ts(),
+    });
+    writeCol('managed_bots', _bots);
+  }
 }
 
 // ── Seed default app roles ────────────────────────────────────────────────────
