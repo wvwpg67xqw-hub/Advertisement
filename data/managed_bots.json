@@ -1,0 +1,10 @@
+[
+  {
+    "id": 1,
+    "name": "Staff Portal Bot",
+    "clientId": "1508745748815282217",
+    "description": "The main staff management bot — handles moderation, breaks, requests, and more.",
+    "permissions": "8",
+    "createdAt": 1780724558
+  }
+]

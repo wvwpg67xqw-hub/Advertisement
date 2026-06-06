@@ -593,6 +593,37 @@ async function discordChannelRequest(method, channelId, body = null) {
   return true;
 }
 
+// ── Managed Bots ──────────────────────────────────────────────────────────────
+
+router.get('/bots', requireAdmin, (req, res) => {
+  res.json(db.getAllBots());
+});
+
+router.post('/bots', requireAdmin, (req, res) => {
+  const { name, clientId, description, permissions } = req.body;
+  if (!name || !clientId) return res.status(400).json({ error: 'Name and Client ID are required.' });
+  if (!/^\d{15,20}$/.test(clientId)) return res.status(400).json({ error: 'Client ID must be a valid Discord snowflake (15–20 digits).' });
+  try {
+    const bot = db.addBot(name, clientId, description || '', permissions || '8');
+    res.json(bot);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/bots/:id', requireAdmin, (req, res) => {
+  const { name, description, permissions } = req.body;
+  const bot = db.updateBot(req.params.id, { ...(name && { name }), ...(description !== undefined && { description }), ...(permissions && { permissions }) });
+  if (!bot) return res.status(404).json({ error: 'Bot not found.' });
+  res.json(bot);
+});
+
+router.delete('/bots/:id', requireAdmin, (req, res) => {
+  const bot = db.removeBot(req.params.id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found.' });
+  res.json({ success: true });
+});
+
 router.post('/channels/:channelId/lock', requireAdmin, async (req, res) => {
   try {
     await discordChannelRequest('PUT', req.params.channelId, { type: 0, deny: '2048' });

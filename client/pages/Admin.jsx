@@ -899,6 +899,240 @@ function BlacklistTab() {
   );
 }
 
+// ── Bots ──────────────────────────────────────────────────────
+
+const PERM_PRESETS = [
+  { label: 'Administrator (recommended)', value: '8' },
+  { label: 'Moderate Members + Send Messages', value: '1099511693312' },
+  { label: 'Read Only', value: '68608' },
+  { label: 'Custom…', value: 'custom' },
+];
+
+function buildOAuthUrl(clientId, permissions) {
+  return `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${permissions}&scope=bot%20applications.commands`;
+}
+
+function BotsTab() {
+  const [bots, setBots] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editBot, setEditBot] = useState(null);
+  const [form, setForm] = useState({ name: '', clientId: '', description: '', permissions: '8', customPerms: '' });
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    const res = await api('/api/admin/bots');
+    setBots(await res.json().catch(() => []));
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  function openAdd() {
+    setForm({ name: '', clientId: '', description: '', permissions: '8', customPerms: '' });
+    setErr('');
+    setEditBot(null);
+    setShowAdd(true);
+  }
+
+  function openEdit(bot) {
+    const isPreset = PERM_PRESETS.slice(0, -1).some(p => p.value === bot.permissions);
+    setForm({
+      name: bot.name,
+      clientId: bot.clientId,
+      description: bot.description,
+      permissions: isPreset ? bot.permissions : 'custom',
+      customPerms: isPreset ? '' : bot.permissions,
+    });
+    setErr('');
+    setEditBot(bot);
+    setShowAdd(true);
+  }
+
+  function resolvedPerms(f) {
+    return f.permissions === 'custom' ? f.customPerms : f.permissions;
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setErr('');
+    const perms = resolvedPerms(form);
+    if (!form.name.trim()) return setErr('Name is required.');
+    if (!editBot && !form.clientId.trim()) return setErr('Client ID is required.');
+    if (form.permissions === 'custom' && !/^\d+$/.test(perms)) return setErr('Custom permissions must be a number.');
+    setSaving(true);
+    let res;
+    if (editBot) {
+      res = await api(`/api/admin/bots/${editBot.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: form.name, description: form.description, permissions: perms }),
+      });
+    } else {
+      res = await api('/api/admin/bots', {
+        method: 'POST',
+        body: JSON.stringify({ name: form.name, clientId: form.clientId, description: form.description, permissions: perms }),
+      });
+    }
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setErr(data.error || 'Failed to save.');
+    setShowAdd(false);
+    load();
+  }
+
+  async function handleRemove(id) {
+    if (!confirm('Remove this bot from the panel?')) return;
+    setRemoving(id);
+    await api(`/api/admin/bots/${id}`, { method: 'DELETE' });
+    setRemoving(null);
+    load();
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
+          Click <strong>Add to Server</strong> to authorize a bot on any Discord server you manage.
+        </p>
+        <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add Bot</button>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+      ) : bots.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">🤖</div>
+          <div style={{ fontWeight: 600 }}>No bots added yet</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 6 }}>Click "+ Add Bot" to register your first bot.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 16 }}>
+          {bots.map(bot => (
+            <div key={bot.id} style={{
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              padding: '20px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 20,
+              flexWrap: 'wrap',
+            }}>
+              {/* Bot avatar placeholder */}
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%',
+                background: 'linear-gradient(135deg, var(--accent), var(--accent2))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 26, flexShrink: 0,
+              }}>🤖</div>
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{bot.name}</div>
+                {bot.description && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 6 }}>{bot.description}</div>
+                )}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{
+                    fontFamily: 'monospace', fontSize: 12,
+                    background: 'var(--surface)', padding: '2px 8px',
+                    borderRadius: 6, color: 'var(--text-muted)', border: '1px solid var(--border)',
+                  }}>
+                    ID: {bot.clientId}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+                    background: 'rgba(108,99,255,0.15)', color: 'var(--accent)',
+                    padding: '2px 8px', borderRadius: 999,
+                  }}>
+                    Perms: {bot.permissions === '8' ? 'Admin' : bot.permissions}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                <a
+                  href={buildOAuthUrl(bot.clientId, bot.permissions)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-primary btn-sm"
+                  style={{ textDecoration: 'none' }}
+                >
+                  ➕ Add to Server
+                </a>
+                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(bot)}>✏️ Edit</button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  disabled={removing === bot.id}
+                  onClick={() => handleRemove(bot.id)}
+                >
+                  {removing === bot.id ? <div className="spinner" style={{ width: 14, height: 14 }} /> : 'Remove'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <Modal title={editBot ? 'Edit Bot' : 'Add Bot'} onClose={() => setShowAdd(false)}>
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {err && <div className="alert alert-error">{err}</div>}
+            <div className="form-group">
+              <label className="form-label">Bot Name</label>
+              <input className="form-input" placeholder="e.g. Staff Portal Bot" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            {!editBot && (
+              <div className="form-group">
+                <label className="form-label">Client ID</label>
+                <input className="form-input" placeholder="e.g. 1508745748815282217" value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Found in your Discord Developer Portal under the bot's application.
+                </span>
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Description <span style={{ color: 'var(--text-muted)' }}>(optional)</span></label>
+              <input className="form-input" placeholder="What does this bot do?" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Permissions</label>
+              <select className="form-input" value={form.permissions} onChange={e => setForm(f => ({ ...f, permissions: e.target.value, customPerms: '' }))}>
+                {PERM_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
+            {form.permissions === 'custom' && (
+              <div className="form-group">
+                <label className="form-label">Custom Permissions Integer</label>
+                <input className="form-input" placeholder="e.g. 277025507328" value={form.customPerms} onChange={e => setForm(f => ({ ...f, customPerms: e.target.value }))} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Use the <a href="https://discordapi.com/permissions.html" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Discord Permissions Calculator</a> to get the number.
+                </span>
+              </div>
+            )}
+            {/* Preview URL */}
+            {(editBot?.clientId || form.clientId) && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OAuth2 URL Preview</div>
+                <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--accent)', wordBreak: 'break-all', lineHeight: 1.6 }}>
+                  {buildOAuthUrl(editBot?.clientId || form.clientId, resolvedPerms(form) || '8')}
+                </div>
+              </div>
+            )}
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? '...' : editBot ? 'Save Changes' : 'Add Bot'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ── Admins ────────────────────────────────────────────────────
 
 function AdminsTab() {
@@ -990,6 +1224,7 @@ export default function Admin() {
     { id: 'servers',      label: '🖥️ Servers' },
     { id: 'channels',     label: '🔒 Channels' },
     { id: 'blacklist',    label: '🚫 Blacklist' },
+    { id: 'bots',         label: '🤖 Bots' },
     { id: 'admins',       label: '👑 Admins' },
   ];
 
@@ -1016,6 +1251,7 @@ export default function Admin() {
         {tab === 'servers'      && <ServersTab />}
         {tab === 'channels'     && <ChannelsTab />}
         {tab === 'blacklist'    && <BlacklistTab />}
+        {tab === 'bots'         && <BotsTab />}
         {tab === 'admins'       && <AdminsTab />}
       </div>
     </div>

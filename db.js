@@ -1,5 +1,19 @@
 import { readCol, writeCol, nextId, ts } from './jsondb.js';
 
+// ── Seed managed bots ─────────────────────────────────────────────────────────
+if (!readCol('managed_bots').length) {
+  writeCol('managed_bots', [
+    {
+      id: 1,
+      name: 'Staff Portal Bot',
+      clientId: '1508745748815282217',
+      description: 'The main staff management bot — handles moderation, breaks, requests, and more.',
+      permissions: '8',
+      createdAt: ts(),
+    },
+  ]);
+}
+
 // ── Seed default app roles ────────────────────────────────────────────────────
 if (!readCol('app_roles').length) {
   writeCol('app_roles', [
@@ -289,6 +303,39 @@ const db = {
     if (i >= 0) { rows[i].status = status; rows[i].reviewedAt = ts(); }
     writeCol('appeals', rows);
     return rows[i] ?? null;
+  },
+
+  // ── Managed Bots ───────────────────────────────────────────────────────────
+
+  getAllBots() {
+    return readCol('managed_bots').sort((a, b) => a.createdAt - b.createdAt);
+  },
+
+  addBot(name, clientId, description, permissions) {
+    const rows = readCol('managed_bots');
+    if (rows.find(b => b.clientId === clientId)) throw new Error('A bot with this Client ID already exists');
+    const entry = { id: nextId('managed_bots'), name, clientId, description: description || '', permissions: permissions || '8', createdAt: ts() };
+    rows.push(entry);
+    writeCol('managed_bots', rows);
+    return entry;
+  },
+
+  updateBot(id, fields) {
+    const rows = readCol('managed_bots');
+    const i = rows.findIndex(b => b.id === Number(id));
+    if (i < 0) return null;
+    rows[i] = { ...rows[i], ...fields };
+    writeCol('managed_bots', rows);
+    return rows[i];
+  },
+
+  removeBot(id) {
+    const rows = readCol('managed_bots');
+    const i = rows.findIndex(b => b.id === Number(id));
+    if (i < 0) return null;
+    const [removed] = rows.splice(i, 1);
+    writeCol('managed_bots', rows);
+    return removed;
   },
 };
 
