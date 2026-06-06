@@ -1008,7 +1008,22 @@ function BotsTab() {
           <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 6 }}>Click "+ Add Bot" to register your first bot.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 16 }}>
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
+          }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
+              color: 'var(--text-muted)',
+            }}>🤖 Our Bots</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span style={{
+              fontSize: 11, color: 'var(--text-muted)',
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 999, padding: '1px 8px',
+            }}>{bots.length}</span>
+          </div>
+          <div style={{ display: 'grid', gap: 16 }}>
           {bots.map(bot => (
             <div key={bot.id} style={{
               background: 'var(--surface2)',
@@ -1074,6 +1089,7 @@ function BotsTab() {
               </div>
             </div>
           ))}
+          </div>
         </div>
       )}
 
