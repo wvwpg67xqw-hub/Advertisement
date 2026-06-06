@@ -48,7 +48,7 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, getBalance, setBalance, isDmCommandDisabled } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank } from './src/utils.js';
 
@@ -1813,14 +1813,98 @@ client.on('messageCreate', async (msg) => {
   await incrementMessageCount(msg.guild.id, msg.author.id);
   if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
 
+  // ── Prefix command: .snipe ────────────────────────────────────────────────
+  if (msg.content.trim().toLowerCase() === '.snipe') {
+    const snipe = await getSnipeCacheDb(msg.guild.id, msg.channel.id).catch(() => null);
+    if (!snipe || !snipe.content) {
+      msg.reply('📭 Nothing to snipe in this channel.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+    } else {
+      const ago = Math.floor((Date.now() / 1000) - snipe.deleted_at);
+      const embed = new EmbedBuilder()
+        .setColor(0xED4245)
+        .setAuthor({ name: snipe.author_name, iconURL: snipe.author_avatar || undefined })
+        .setDescription(snipe.content.slice(0, 4096))
+        .setFooter({ text: `Deleted ${ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.floor(ago/60)}m` : `${Math.floor(ago/3600)}h`} ago` })
+        .setTimestamp();
+      msg.channel.send({ embeds: [embed] }).catch(() => {});
+    }
+    return;
+  }
+
   // ── Prefix command: ,ar ────────────────────────────────────────────────────
   if (msg.content.startsWith(',ar')) {
     const arg = msg.content.slice(3).trim();
+    const rank = getStaffRank(msg.member);
+
+    // Helper: resolve a user mention or ID from a string
+    const mentionMatch = (str) => str.match(/^<@!?(\d+)>$/) || str.match(/^(\d+)$/);
+
+    // ── Admin sub-commands (rank 3+) ─────────────────────────────────────────
+
+    // ,ar block <@user>  — block a user's auto-react
+    if (arg.toLowerCase().startsWith('block ') && rank >= 3) {
+      const target = mentionMatch(arg.slice(6).trim());
+      if (!target) {
+        msg.reply('❌ Usage: `,ar block @user`').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        return;
+      }
+      const targetId = target[1];
+      await blockAutoReact(msg.guild.id, targetId).catch(() => {});
+      msg.reply(`✅ <@${targetId}> is now blocked from using auto-react.`).then(r => setTimeout(() => r.delete().catch(() => {}), 6000));
+      return;
+    }
+
+    // ,ar off <@user>  — remove auto-react for another user
+    if (arg.toLowerCase().startsWith('off ') && rank >= 3) {
+      const target = mentionMatch(arg.slice(4).trim());
+      if (!target) {
+        msg.reply('❌ Usage: `,ar off @user`').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        return;
+      }
+      const targetId = target[1];
+      await clearAutoReact(msg.guild.id, targetId).catch(() => {});
+      msg.reply(`✅ Auto-react removed for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      return;
+    }
+
+    // ,ar <@user> <emoji>  — set auto-react for another user (admin only)
+    const adminSetMatch = arg.match(/^(<@!?\d+>|\d+)\s+(.+)$/);
+    if (adminSetMatch && rank >= 3) {
+      const targetMatch = mentionMatch(adminSetMatch[1]);
+      const targetId = targetMatch?.[1];
+      const emoji = adminSetMatch[2].trim();
+      if (!targetId) {
+        msg.reply('❌ Usage: `,ar @user emoji`').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        return;
+      }
+      const customMatch2 = emoji.match(/^<(a?):([^:]+):(\d+)>$/);
+      if (customMatch2) {
+        const [, a, name, id] = customMatch2;
+        await setAutoReact(msg.guild.id, targetId, id, name, a === 'a').catch(() => {});
+        msg.reply(`✅ Auto-react set to ${emoji} for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      } else {
+        try {
+          const test = await msg.react(emoji);
+          await test.remove().catch(() => {});
+          await setAutoReact(msg.guild.id, targetId, null, emoji, false).catch(() => {});
+          msg.reply(`✅ Auto-react set to ${emoji} for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        } catch {
+          msg.reply('❌ Invalid emoji.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        }
+      }
+      return;
+    }
+
+    // ── Self commands ────────────────────────────────────────────────────────
 
     if (!arg || arg === 'clear') {
       const existing = await getAutoReact(msg.guild.id, msg.author.id).catch(() => null);
-      if (!existing) {
-        msg.reply('❌ You don\'t have an auto-react set.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      if (!existing || existing.emoji_name === '__blocked__') {
+        if (existing?.emoji_name === '__blocked__') {
+          msg.reply('❌ You are blocked from using auto-react.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        } else {
+          msg.reply('❌ You don\'t have an auto-react set.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        }
       } else {
         await clearAutoReact(msg.guild.id, msg.author.id).catch(() => {});
         msg.reply('✅ Auto-react removed.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
@@ -1828,9 +1912,15 @@ client.on('messageCreate', async (msg) => {
       return;
     }
 
+    // Block check — blocked users can't set an AR
+    const blocked = await isAutoReactBlocked(msg.guild.id, msg.author.id).catch(() => false);
+    if (blocked) {
+      msg.reply('❌ You are blocked from using auto-react.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      return;
+    }
+
     // Rank check — admin+ (rank 3+) are free, everyone else pays 10,000 coins
     const AR_COST = 10000;
-    const rank = getStaffRank(msg.member);
     const isFree = rank >= 3;
 
     if (!isFree) {
@@ -1867,9 +1957,9 @@ client.on('messageCreate', async (msg) => {
     return;
   }
 
-  // Auto-react
+  // Auto-react (skip blocked users)
   const ar = await getAutoReact(msg.guild.id, msg.author.id).catch(() => null);
-  if (ar) {
+  if (ar && ar.emoji_name !== '__blocked__') {
     if (ar.emoji_id) {
       const emoji = msg.guild.emojis.cache.get(ar.emoji_id);
       if (emoji) msg.react(emoji).catch(() => {});

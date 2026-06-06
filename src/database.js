@@ -121,6 +121,20 @@ export async function clearAutoReact(guildId, userId) {
   await q('DELETE FROM auto_reacts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
 }
 
+export async function blockAutoReact(guildId, userId) {
+  await q(
+    `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated)
+     VALUES (?, ?, NULL, '__blocked__', 0)
+     ON DUPLICATE KEY UPDATE emoji_id = NULL, emoji_name = '__blocked__', animated = 0`,
+    [guildId, userId]
+  );
+}
+
+export async function isAutoReactBlocked(guildId, userId) {
+  const row = await q1('SELECT emoji_name FROM auto_reacts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return row?.emoji_name === '__blocked__';
+}
+
 export async function setGithubRepo(guildId, repo) {
   await getGuild(guildId);
   await q('UPDATE guilds SET github_repo = ? WHERE guild_id = ?', [repo || null, guildId]);
