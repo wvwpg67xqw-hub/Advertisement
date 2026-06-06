@@ -1225,6 +1225,154 @@ function AdminsTab() {
   );
 }
 
+// ── Settings ──────────────────────────────────────────────────
+
+function SettingsTab() {
+  const [data, setData]         = useState({ disabled: [], all: [] });
+  const [loading, setLoading]   = useState(true);
+  const [input, setInput]       = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    const res = await api('/api/admin/dm-commands');
+    const json = await res.json().catch(() => ({ disabled: [], all: [] }));
+    setData(json);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  async function toggle(command, action) {
+    setSaving(command);
+    const res = await api('/api/admin/dm-commands/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, action }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (json.disabled) setData(d => ({ ...d, disabled: json.disabled }));
+    setSaving(null);
+    setMsg(`/${command} ${action === 'disable' ? 'disabled' : 'enabled'} in DMs`);
+    setTimeout(() => setMsg(''), 3000);
+  }
+
+  async function addManual(e) {
+    e.preventDefault();
+    const cmd = input.trim().replace(/^\//, '');
+    if (!cmd) return;
+    await toggle(cmd, 'disable');
+    setInput('');
+  }
+
+  const known    = data.all.length > 0 ? data.all : [];
+  const disabled = new Set(data.disabled);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+      {/* DM Commands Section */}
+      <div className="card" style={{ padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <span style={{ fontSize: 20 }}>💬</span>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>DM Command Access</h3>
+        </div>
+        <p style={{ margin: '0 0 20px', color: 'var(--text-muted)', fontSize: 13 }}>
+          Toggle whether users can run bot commands in Direct Messages. Disabled commands reply with an error when used in DMs.
+        </p>
+
+        {msg && (
+          <div style={{ background: 'color-mix(in srgb, var(--success) 15%, transparent)', color: 'var(--success)', border: '1px solid color-mix(in srgb, var(--success) 30%, transparent)', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>
+            ✅ {msg}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
+        ) : (
+          <>
+            {/* If bot is connected and has a command list, show toggles */}
+            {known.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+                {known.map(cmd => {
+                  const isDisabled = disabled.has(cmd);
+                  return (
+                    <div key={cmd} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: 'var(--surface2)', borderRadius: 8, padding: '10px 14px',
+                      border: `1px solid ${isDisabled ? 'color-mix(in srgb, var(--danger) 30%, transparent)' : 'var(--border)'}`,
+                    }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 13, color: isDisabled ? 'var(--danger)' : 'var(--text)' }}>
+                        /{cmd}
+                      </span>
+                      <button
+                        className={`btn btn-sm ${isDisabled ? 'btn-success' : 'btn-danger'}`}
+                        disabled={saving === cmd}
+                        onClick={() => toggle(cmd, isDisabled ? 'enable' : 'disable')}
+                        style={{ minWidth: 64 }}
+                      >
+                        {saving === cmd ? '...' : isDisabled ? 'Enable' : 'Disable'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Bot not connected — show the disabled list + manual add */
+              <>
+                {data.disabled.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>
+                      Currently Disabled in DMs
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {data.disabled.map(cmd => (
+                        <div key={cmd} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'color-mix(in srgb, var(--danger) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)', borderRadius: 6, padding: '5px 10px' }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--danger)' }}>/{cmd}</span>
+                          <button
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1, padding: 0, fontSize: 16 }}
+                            disabled={saving === cmd}
+                            onClick={() => toggle(cmd, 'enable')}
+                            title="Re-enable in DMs"
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>
+                  Disable a Command in DMs
+                </div>
+                <div style={{ background: 'color-mix(in srgb, var(--warning) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--warning) 25%, transparent)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+                  ⚠️ The bot is currently offline. You can still manage the list — changes take effect when the bot reconnects.
+                </div>
+              </>
+            )}
+
+            {/* Manual add — always visible for commands not fetched from bot */}
+            {known.length === 0 && (
+              <form onSubmit={addManual} style={{ display: 'flex', gap: 10 }}>
+                <input
+                  className="form-input"
+                  placeholder="Command name (e.g. warn)"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button type="submit" className="btn btn-danger" disabled={!input.trim()}>
+                  Disable in DMs
+                </button>
+              </form>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Appeals ───────────────────────────────────────────────────
 
 function AppealsTab() {
@@ -1392,6 +1540,7 @@ export default function Admin() {
     { id: 'bots',         label: '🤖 Bots' },
     { id: 'admins',       label: '👑 Admins' },
     { id: 'appeals',      label: '⚖️ Appeals' },
+    { id: 'settings',     label: '⚙️ Settings' },
   ];
 
   return (
@@ -1420,6 +1569,7 @@ export default function Admin() {
         {tab === 'bots'         && <BotsTab />}
         {tab === 'admins'       && <AdminsTab />}
         {tab === 'appeals'      && <AppealsTab />}
+        {tab === 'settings'     && <SettingsTab />}
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { requireAdmin } from '../auth.js';
 import discordPkg from 'discord.js';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = discordPkg;
 import { sendLog, buildStaffUpdateEmbed } from '../src/utils.js';
-import { getGuild as getBotGuild } from '../src/database.js';
+import { getGuild as getBotGuild, disableDmCommand, enableDmCommand, getDmDisabledCommands } from '../src/database.js';
 
 const router = Router();
 
@@ -689,6 +689,35 @@ router.post('/channels/:channelId/unlock', requireAdmin, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── DM Command Settings ────────────────────────────────────────────────────────
+
+router.get('/dm-commands', requireAdmin, async (req, res) => {
+  const disabled = await getDmDisabledCommands();
+  let all = [];
+  if (discordClient?.application) {
+    try {
+      const cmds = await discordClient.application.commands.fetch();
+      all = cmds.map(c => c.name).sort();
+    } catch {}
+  }
+  res.json({ disabled, all });
+});
+
+router.post('/dm-commands/toggle', requireAdmin, async (req, res) => {
+  const { command, action } = req.body;
+  if (!command || !['disable', 'enable'].includes(action)) {
+    return res.status(400).json({ error: 'command and action (disable|enable) required' });
+  }
+  const name = String(command).toLowerCase().trim();
+  if (action === 'disable') {
+    await disableDmCommand(name);
+  } else {
+    await enableDmCommand(name);
+  }
+  const disabled = await getDmDisabledCommands();
+  res.json({ success: true, disabled });
 });
 
 export default router;
