@@ -126,10 +126,14 @@ export async function setGithubRepo(guildId, repo) {
 }
 
 export async function setHubStaffRoles(guildId, modRoleId, teamLeadRoleId, adminRoleId) {
-  await getGuild(guildId);
+  const current = await getGuild(guildId);
+  // Only overwrite a field if a new value is explicitly provided — never wipe existing data
+  const mod      = modRoleId      ?? current.hub_mod_role_id      ?? null;
+  const teamLead = teamLeadRoleId ?? current.hub_team_lead_role_id ?? null;
+  const admin    = adminRoleId    ?? current.hub_admin_role_id    ?? null;
   await q(
     'UPDATE guilds SET hub_mod_role_id = ?, hub_team_lead_role_id = ?, hub_admin_role_id = ? WHERE guild_id = ?',
-    [modRoleId || null, teamLeadRoleId || null, adminRoleId || null, guildId]
+    [mod, teamLead, admin, guildId]
   );
 }
 
