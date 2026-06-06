@@ -1225,6 +1225,159 @@ function AdminsTab() {
   );
 }
 
+// ── Appeals ───────────────────────────────────────────────────
+
+function AppealsTab() {
+  const [appeals, setAppeals] = useState([]);
+  const [filter, setFilter]   = useState('pending');
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [actioning, setActioning] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    const res = await api(`/api/admin/appeals?status=${filter}`);
+    setAppeals(await res.json().catch(() => []));
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [filter]);
+
+  const fmt = ts => new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  async function action(id, type) {
+    setActioning(id);
+    await api(`/api/admin/appeals/${id}/${type}`, { method: 'POST' });
+    setActioning(null);
+    setSelected(null);
+    load();
+  }
+
+  const statusColor = { pending: 'var(--warning)', accepted: 'var(--success)', denied: 'var(--danger)' };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div className="tabs">
+          {['pending', 'accepted', 'denied'].map(s => (
+            <button key={s} className={`tab ${filter === s ? 'active' : ''}`} onClick={() => setFilter(s)}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+        <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{appeals.length} result{appeals.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+      ) : appeals.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">📭</div>
+          <div style={{ fontWeight: 600 }}>No {filter} appeals</div>
+        </div>
+      ) : (
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr><th>User</th><th>Reason (preview)</th><th>Date</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {appeals.map(a => (
+                <tr key={a.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {a.avatar && <img src={a.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />}
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{a.username}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.userId}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 260 }}>
+                    <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {a.reason}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{fmt(a.createdAt)}</td>
+                  <td>
+                    <span style={{
+                      background: `color-mix(in srgb, ${statusColor[a.status]} 15%, transparent)`,
+                      color: statusColor[a.status],
+                      padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                    }}>{a.status}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setSelected(a)}>View</button>
+                      {a.status === 'pending' && (
+                        <>
+                          <button className="btn btn-success btn-sm" disabled={actioning === a.id} onClick={() => action(a.id, 'accept')}>
+                            {actioning === a.id ? '...' : '✓ Unban'}
+                          </button>
+                          <button className="btn btn-danger btn-sm" disabled={actioning === a.id} onClick={() => action(a.id, 'deny')}>
+                            {actioning === a.id ? '...' : '✕ Deny'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selected && (
+        <Modal title={`Appeal #${selected.id} — ${selected.username}`} onClose={() => setSelected(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {selected.avatar && <img src={selected.avatar} alt="" style={{ width: 44, height: 44, borderRadius: '50%' }} />}
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>{selected.username}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{selected.userId}</div>
+              </div>
+              <span style={{
+                marginLeft: 'auto',
+                background: `color-mix(in srgb, ${statusColor[selected.status]} 15%, transparent)`,
+                color: statusColor[selected.status],
+                padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+              }}>{selected.status}</span>
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>
+                Appeal Reason
+              </div>
+              <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '12px 14px', fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                {selected.reason}
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Submitted: {fmt(selected.createdAt)}
+              {selected.reviewedAt && ` · Reviewed: ${fmt(selected.reviewedAt)}`}
+            </div>
+          </div>
+
+          {selected.status === 'pending' && (
+            <div className="modal-actions">
+              <button className="btn btn-danger" disabled={actioning === selected.id} onClick={() => action(selected.id, 'deny')}>
+                {actioning === selected.id ? '...' : '✕ Deny Appeal'}
+              </button>
+              <button className="btn btn-success" disabled={actioning === selected.id} onClick={() => action(selected.id, 'accept')}>
+                {actioning === selected.id ? '...' : '✓ Accept & Unban'}
+              </button>
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ── Main Admin Page ───────────────────────────────────────────
 
 export default function Admin() {
@@ -1238,6 +1391,7 @@ export default function Admin() {
     { id: 'blacklist',    label: '🚫 Blacklist' },
     { id: 'bots',         label: '🤖 Bots' },
     { id: 'admins',       label: '👑 Admins' },
+    { id: 'appeals',      label: '⚖️ Appeals' },
   ];
 
   return (
@@ -1265,6 +1419,7 @@ export default function Admin() {
         {tab === 'blacklist'    && <BlacklistTab />}
         {tab === 'bots'         && <BotsTab />}
         {tab === 'admins'       && <AdminsTab />}
+        {tab === 'appeals'      && <AppealsTab />}
       </div>
     </div>
   );

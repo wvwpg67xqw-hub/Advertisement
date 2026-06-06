@@ -320,6 +320,55 @@ router.delete('/blacklist/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Ban Appeals ────────────────────────────────────────────────────────────────
+
+router.get('/appeals', requireAdmin, (req, res) => {
+  res.json(db.getAppeals(req.query.status || undefined));
+});
+
+router.post('/appeals/:id/accept', requireAdmin, async (req, res) => {
+  const appeal = db.getAppeal(req.params.id);
+  if (!appeal) return res.status(404).json({ error: 'Appeal not found' });
+  if (appeal.status !== 'pending') return res.status(409).json({ error: `Appeal already ${appeal.status}` });
+
+  db.updateAppealStatus(req.params.id, 'accepted');
+  db.deleteBlacklistByUserId(appeal.userId);
+
+  if (discordClient) {
+    try {
+      const user = await discordClient.users.fetch(appeal.userId).catch(() => null);
+      if (user) {
+        await user.send({
+          content: `✅ Your ban appeal has been **accepted**. You have been unbanned from the Staff Portal and may log in again.`,
+        }).catch(() => null);
+      }
+    } catch {}
+  }
+
+  res.json({ success: true });
+});
+
+router.post('/appeals/:id/deny', requireAdmin, async (req, res) => {
+  const appeal = db.getAppeal(req.params.id);
+  if (!appeal) return res.status(404).json({ error: 'Appeal not found' });
+  if (appeal.status !== 'pending') return res.status(409).json({ error: `Appeal already ${appeal.status}` });
+
+  db.updateAppealStatus(req.params.id, 'denied');
+
+  if (discordClient) {
+    try {
+      const user = await discordClient.users.fetch(appeal.userId).catch(() => null);
+      if (user) {
+        await user.send({
+          content: `❌ Your ban appeal has been **denied**. If you believe this was a mistake, please contact an administrator.`,
+        }).catch(() => null);
+      }
+    } catch {}
+  }
+
+  res.json({ success: true });
+});
+
 // ── IP Blacklist ───────────────────────────────────────────────────────────────
 
 router.get('/ip-blacklist', requireAdmin, (req, res) => {
