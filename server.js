@@ -1298,7 +1298,7 @@ if (id.startsWith('app_')) {
       }
 
       const channel = interaction.guild?.channels?.cache.get(config.break_request_channel_id)
-        || await interaction.client.channels.fetch(config.break_request_channel_id).catch(() => null);
+        || await interaction.guild?.channels?.fetch(config.break_request_channel_id).catch(() => null);
 
       if (!channel) {
         return interaction.reply({ content: '❌ The configured break request channel could not be found.', flags: 64 });
@@ -1358,7 +1358,7 @@ if (id.startsWith('app_')) {
       }
 
       const channel = interaction.guild?.channels?.cache.get(config.resign_channel_id)
-        || await interaction.client.channels.fetch(config.resign_channel_id).catch(() => null);
+        || await interaction.guild?.channels?.fetch(config.resign_channel_id).catch(() => null);
       if (!channel) {
         return interaction.reply({ content: '❌ The configured resign channel could not be found.', flags: 64 });
       }
@@ -1416,7 +1416,7 @@ if (id.startsWith('app_')) {
       }
 
       const channel = interaction.guild?.channels?.cache.get(config.applications_channel_id)
-        || await interaction.client.channels.fetch(config.applications_channel_id).catch(() => null);
+        || await interaction.guild?.channels?.fetch(config.applications_channel_id).catch(() => null);
       if (!channel) {
         return interaction.reply({ content: '❌ The configured applications channel could not be found.', flags: 64 });
       }
