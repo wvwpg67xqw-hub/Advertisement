@@ -73,7 +73,7 @@ export const ROLE_QUESTIONS = {
   ],
 };
 
-const ROLES = [
+const FALLBACK_ROLES = [
   { key: 'Moderator',       label: 'Moderator',           emoji: '🔨', desc: 'Enforce rules, handle reports, maintain order',     color: '#60a5fa' },
   { key: 'Human Resources', label: 'Human Resources',     emoji: '🤝', desc: 'Manage staff, onboarding, and team wellbeing',      color: '#34d399' },
   { key: 'Partnership',     label: 'Partnership Manager', emoji: '🌐', desc: 'Build community partnerships and grow the network', color: '#fbbf24' },
@@ -106,28 +106,60 @@ export default function Apply() {
   const [servers, setServers]               = useState([]);
   const [serversLoading, setServersLoading] = useState(true);
   const [selectedServer, setSelectedServer] = useState(null);
+  const [roles, setRoles]                   = useState(FALLBACK_ROLES);
+  const [rolesLoading, setRolesLoading]     = useState(true);
   const [role, setRole]                     = useState(preselectedRole);
   const [answers, setAnswers]               = useState(Array(20).fill(''));
   const [error, setError]                   = useState('');
   const [submitting, setSubmitting]         = useState(false);
 
   useEffect(() => {
-    fetch('/api/bot/guilds')
-      .then(r => r.json())
+    fetch('/api/applications/servers')
+      .then(r => r.ok ? r.json() : [])
       .then(data => {
         const list = Array.isArray(data) ? data : [];
+        if (list.length === 0) {
+          return fetch('/api/bot/guilds')
+            .then(r => r.ok ? r.json() : [])
+            .then(fallback => {
+              const fl = Array.isArray(fallback) ? fallback : [];
+              setServers(fl);
+              if (preselectedGuildId) {
+                const match = fl.find(s => s.id === preselectedGuildId);
+                if (match) setSelectedServer(match);
+              }
+            });
+        }
         setServers(list);
         if (preselectedGuildId) {
-          const match = list.find(s => s.id === preselectedGuildId);
+          const match = list.find(s => s.guildId === preselectedGuildId || s.id === preselectedGuildId);
           if (match) setSelectedServer(match);
         }
-        setServersLoading(false);
       })
-      .catch(() => setServersLoading(false));
+      .catch(() => {})
+      .finally(() => setServersLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/roles')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setRoles(data.map(r => ({
+            key: r.name,
+            label: r.name,
+            emoji: r.emoji || '📋',
+            desc: r.description || '',
+            color: r.color || '#6c63ff',
+          })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRolesLoading(false));
   }, []);
 
   const questions = ROLE_QUESTIONS[role] || [];
-  const roleInfo  = ROLES.find(r => r.key === role);
+  const roleInfo  = roles.find(r => r.key === role);
 
   function pickServer(server) { setSelectedServer(server); setStep('role'); setError(''); }
   function pickRole(r)        { setRole(r); setAnswers(Array(20).fill('')); setStep('form'); setError(''); }
@@ -143,11 +175,12 @@ export default function Apply() {
     }
     setSubmitting(true);
     try {
+      const resolvedGuildId = selectedServer.guildId || selectedServer.id;
       const res = await fetch('/api/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ role, answers, guildId: selectedServer.id }),
+        body: JSON.stringify({ role, answers, guildId: resolvedGuildId }),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || 'Submission failed');
@@ -220,9 +253,15 @@ export default function Apply() {
                 <strong style={{ color: '#93c5fd' }}>{selectedServer?.name}</strong>?
               </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-                {ROLES.map(r => <RoleCard key={r.key} role={r} onClick={() => pickRole(r.key)} />)}
-              </div>
+              {rolesLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+                  <div className="spinner" style={{ borderTopColor: '#60a5fa', borderColor: 'rgba(96,165,250,0.2)' }} />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+                  {roles.map(r => <RoleCard key={r.key} role={r} onClick={() => pickRole(r.key)} />)}
+                </div>
+              )}
 
               <button type="button" onClick={() => { setStep('server'); setError(''); }} style={backBtn}>
                 ← Change server
