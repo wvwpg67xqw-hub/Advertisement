@@ -141,6 +141,17 @@ export async function setOwnerRole(guildId, ownerRoleId) {
 export async function resolveNetworkRoleIds(guildId) {
   const guild = await getGuild(guildId);
 
+  // If this server has its own roles configured, use them (per-server config)
+  if (guild.hub_owner_role_id || guild.hub_mod_role_id || guild.hub_team_lead_role_id || guild.hub_admin_role_id) {
+    return {
+      ownerRoleId:    guild.hub_owner_role_id     || null,
+      modRoleId:      guild.hub_mod_role_id       || null,
+      teamLeadRoleId: guild.hub_team_lead_role_id || null,
+      adminRoleId:    guild.hub_admin_role_id     || null,
+    };
+  }
+
+  // Fall back to hub roles only if this server has no roles configured at all
   let source = guild;
   if (!guild.is_hub) {
     const hubId = guild.hub_guild_id || (await getNetworkHub())?.guild_id;
