@@ -72,7 +72,6 @@ export const defs = [
 ];
 
 export async function handleMessages(interaction) {
-  if (!await hasCommandPermission(interaction.member, 'messages')) return deny(interaction);
   const target = interaction.options.getUser('user') || interaction.user;
   const count = await getMessageCount(interaction.guildId, target.id);
   await interaction.reply({

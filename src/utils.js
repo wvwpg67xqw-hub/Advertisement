@@ -9,7 +9,7 @@ const COMMAND_MIN_RANK = {
   // MOD (1) ─────────────────────────────────────────────
   warn: 1, warns: 1, 'warn-leaderboard': 1,
   mute: 1, unmute: 1, 'ad-warn': 1,
-  messages: 1, 'message-leaderboard': 1, 'case-info': 1, balance: 1,
+  'message-leaderboard': 1, 'case-info': 1, balance: 1,
   apply: 1, update: 1,
   'break-request': 1, 'break-end': 1, 'current-breaks': 1,
   'ban-request': 1, 'blacklist-request': 1, 'network-ban-request': 1,
