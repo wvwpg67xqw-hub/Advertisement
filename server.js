@@ -370,18 +370,19 @@ app.get('/api/bot/guilds', (req, res) => {
 // ── Public: server branding ───────────────────────────────────────────────────
 
 app.get('/api/branding', async (req, res) => {
+  const fallbackIcon = process.env.SERVER_ICON_URL || null;
   const guildId = process.env.MAIN_GUILD_ID;
-  if (!guildId) return res.json({ pfp_url: null, banner_url: null, guild_name: null });
+  if (!guildId) return res.json({ pfp_url: fallbackIcon, banner_url: null, guild_name: null });
   try {
     const config = await getBotGuild(guildId);
     const guild  = client.guilds?.cache?.get(guildId);
     res.json({
-      pfp_url:    config.pfp_url    || null,
+      pfp_url:    config.pfp_url    || fallbackIcon,
       banner_url: config.banner_url || null,
       guild_name: guild?.name       || null,
     });
   } catch {
-    res.json({ pfp_url: null, banner_url: null, guild_name: null });
+    res.json({ pfp_url: fallbackIcon, banner_url: null, guild_name: null });
   }
 });
 
