@@ -432,6 +432,11 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
 
+// ── Public config ─────────────────────────────────────────────────────────────
+app.get('/api/config', (_req, res) => {
+  res.json({ mainGuildId: process.env.MAIN_GUILD_ID || null });
+});
+
 // ── Serve React build ─────────────────────────────────────────────────────────
 
 const clientDist = join(__dirname, 'client', 'dist');

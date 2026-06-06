@@ -22,6 +22,9 @@ function CopyButton({ text }) {
 export default function Staff() {
   const { user } = useAuth();
 
+  // ── Config (main guild ID) ──
+  const [mainGuildId, setMainGuildId] = useState(null);
+
   // ── Referral link state ──
   const [referralLink, setReferralLink] = useState(null);
   const [referralLoading, setReferralLoading] = useState(true);
@@ -32,6 +35,10 @@ export default function Staff() {
   // ── Modmail state ──
   const [modmailLoading, setModmailLoading] = useState(false);
   const [modmailMsg, setModmailMsg] = useState(null);
+
+  useEffect(() => {
+    api('/api/config').then(r => r.json()).then(d => setMainGuildId(d.mainGuildId)).catch(() => {});
+  }, []);
 
   const loadReferralLink = useCallback(async () => {
     try {
@@ -69,7 +76,10 @@ export default function Staff() {
     setModmailLoading(true);
     setModmailMsg(null);
     try {
-      const res = await api('/api/staff/apply-modmail', { method: 'POST' });
+      const res = await api('/api/staff/apply-modmail', {
+        method: 'POST',
+        body: JSON.stringify({ guildId: mainGuildId }),
+      });
       const data = await res.json();
       if (!res.ok) setModmailMsg({ error: data.error || 'Failed to submit.' });
       else setModmailMsg({ success: data.message });
