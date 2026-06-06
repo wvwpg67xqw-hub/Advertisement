@@ -1852,6 +1852,17 @@ client.once('clientReady', async () => {
     }
   }
 
+  // Auto-detect main guild from MAIN_GUILD_ID env var — mark as hub if none set yet
+  const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID;
+  if (MAIN_GUILD_ID) {
+    const existingHub = await getNetworkHub().catch(() => null);
+    if (!existingHub) {
+      const { setNetworkHub: markHub } = await import('./src/database.js');
+      await markHub(MAIN_GUILD_ID, true).catch(() => {});
+      console.log(`🌐 Auto-marked guild ${MAIN_GUILD_ID} as network hub from MAIN_GUILD_ID env var`);
+    }
+  }
+
   const hub = await getNetworkHub().catch(() => null);
   if (hub) {
     const allGuildIds = [...client.guilds.cache.keys()];

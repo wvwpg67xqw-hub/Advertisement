@@ -1,6 +1,7 @@
 import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = pkg;
 import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo } from './database.js';
+import { hasCommandPermission } from './utils.js';
 
 const ALL_COMMANDS = [
   'warn',
@@ -18,7 +19,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup')
     .setDescription('Configure the bot for this server')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(o => o.setName('log-channel').setDescription('General log channel'))
     .addChannelOption(o => o.setName('warn-log').setDescription('Warning log channel'))
     .addChannelOption(o => o.setName('strike-log').setDescription('Strike log channel'))
@@ -37,7 +37,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-roles')
     .setDescription('Set which roles can use a specific command')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('command').setDescription('Command name').setRequired(true)
         .addChoices(...ALL_COMMANDS.map(c => ({ name: c, value: c })))
@@ -51,7 +50,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-roles-extra')
     .setDescription('Add extra roles to a command (appends, does not replace)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('command').setDescription('Command name').setRequired(true)
         .addChoices(...ALL_COMMANDS.map(c => ({ name: c, value: c })))
@@ -64,13 +62,11 @@ export const setupCommands = [
 
   new SlashCommandBuilder()
     .setName('setup-status')
-    .setDescription('Show the current bot configuration')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Show the current bot configuration'),
 
   new SlashCommandBuilder()
     .setName('setup-edit')
     .setDescription('Edit a single bot configuration field')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('field').setDescription('Field to edit').setRequired(true)
         .addChoices(
@@ -96,7 +92,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-roles-wizard')
     .setDescription('Interactive wizard: set allowed roles for every command')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('command').setDescription('Which command to configure').setRequired(true)
         .addChoices(...ALL_COMMANDS.map(c => ({ name: c, value: c })))
@@ -110,7 +105,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-ad-channels')
     .setDescription('Add, remove, or list ad channels (bot replies with promo links + tracks posts for cleanup on leave)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('action').setDescription('What to do').setRequired(true)
         .addChoices(
@@ -124,7 +118,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-requests')
     .setDescription('Auto-create a Requests category with ban, blacklist, network-ban, partnership, and ad-warn channels')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('category-name')
         .setDescription('Name for the category (default: 📋 Requests)')
@@ -132,13 +125,11 @@ export const setupCommands = [
 
   new SlashCommandBuilder()
     .setName('setup-network-hub')
-    .setDescription('Mark this server as the network hub (staff server). All request logs will route here.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Mark this server as the network hub (staff server). All request logs will route here.'),
 
   new SlashCommandBuilder()
     .setName('setup-staff-roles')
     .setDescription('Set which roles count as Mod, Team Lead, and Admin — replaces the need for env vars')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addRoleOption(o => o.setName('mod-role').setDescription('Role for Mods (Rank 1 — can warn, mute, etc.)'))
     .addRoleOption(o => o.setName('team-lead-role').setDescription('Role for Team Leads (Rank 2 — can strike, promote, etc.)'))
     .addRoleOption(o => o.setName('admin-role').setDescription('Role for Admins (Rank 3 — can ban, fire, setup, etc.)')),
@@ -146,7 +137,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-network-roles')
     .setDescription('Set the staff rank roles for the entire network — must be run in the hub server')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addRoleOption(o => o.setName('mod-role').setDescription('Role for Mods (Rank 1)').setRequired(true))
     .addRoleOption(o => o.setName('team-lead-role').setDescription('Role for Team Leads (Rank 2)').setRequired(true))
     .addRoleOption(o => o.setName('admin-role').setDescription('Role for Admins (Rank 3)').setRequired(true)),
@@ -154,7 +144,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-network-join')
     .setDescription('Link this server to the network hub so requests forward to the staff server')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('hub-server-id')
         .setDescription('The server ID of your staff/hub server')
@@ -163,18 +152,15 @@ export const setupCommands = [
 
   new SlashCommandBuilder()
     .setName('setup-network-reset')
-    .setDescription('Remove this server\'s network role (hub or linked member)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Remove this server\'s network role (hub or linked member)'),
 
   new SlashCommandBuilder()
     .setName('network-status')
-    .setDescription('Show the network hub and all linked servers with their bot reachability')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Show the network hub and all linked servers with their bot reachability'),
 
   new SlashCommandBuilder()
     .setName('setup-break')
     .setDescription('Configure the break system (request channel + break roles)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(o => o.setName('request-channel').setDescription('Channel where break requests are posted for approval'))
     .addRoleOption(o => o.setName('staff-break-role').setDescription('Role given to staff while on break in THIS server'))
     .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff while on break in the MAIN server')),
@@ -182,7 +168,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-resign')
     .setDescription('Configure resign system, applications, referral link and modmail test channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(o => o.setName('resign-channel').setDescription('Channel where resignation requests are posted for approval'))
     .addRoleOption(o => o.setName('verified-role').setDescription('Role kept in the main server when a member resigns (all others removed)'))
     .addChannelOption(o => o.setName('applications-channel').setDescription('Channel where staff applications are posted for review'))
@@ -192,7 +177,6 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-branding')
     .setDescription('Set a custom server profile picture and banner URL for the staff portal')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o => o.setName('pfp-url').setDescription('Full URL to the server profile picture (PNG/JPG/GIF)'))
     .addStringOption(o => o.setName('banner-url').setDescription('Full URL to the server banner image (PNG/JPG/GIF)'))
     .addStringOption(o =>
@@ -207,14 +191,12 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('toggle-command')
     .setDescription('Enable or disable a slash command in this server')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o => o.setName('command').setDescription('Command name (e.g. warn, mute, add-xp)').setRequired(true))
     .addBooleanOption(o => o.setName('enabled').setDescription('true = enable, false = disable').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('setup-roles-bulk')
     .setDescription('Set allowed roles for a whole group of commands at once')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('group').setDescription('Which group of commands to configure').setRequired(true)
         .addChoices(
@@ -234,13 +216,13 @@ export const setupCommands = [
   new SlashCommandBuilder()
     .setName('setup-github')
     .setDescription('Link a GitHub repository so /release-notes auto-fills commit history')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o => o.setName('repo').setDescription('Repository in owner/repo format (e.g. myname/mybot)').setRequired(true)),
 ];
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function handleSetup(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const fields = {};
   const logChannel = interaction.options.getChannel('log-channel');
   const warnLog = interaction.options.getChannel('warn-log');
@@ -295,6 +277,7 @@ export async function handleSetup(interaction) {
 }
 
 export async function handleSetupRoles(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const command = interaction.options.getString('command');
   const roles = [];
   for (let i = 1; i <= 5; i++) {
@@ -314,6 +297,7 @@ export async function handleSetupRoles(interaction) {
 }
 
 export async function handleSetupRolesExtra(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const command = interaction.options.getString('command');
   const { getCommandRoles } = await import('./database.js');
   const existing = await getCommandRoles(interaction.guildId, command);
@@ -336,6 +320,7 @@ export async function handleSetupRolesExtra(interaction) {
 }
 
 export async function handleSetupStatus(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const config = await getGuild(interaction.guildId);
   const ch = id => id ? `<#${id}>` : 'Not set';
   const rl = id => id ? `<@&${id}>` : 'Not set';
@@ -373,6 +358,7 @@ export async function handleSetupStatus(interaction) {
 }
 
 export async function handleSetupEdit(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const field = interaction.options.getString('field');
   const channel = interaction.options.getChannel('channel');
   const role = interaction.options.getRole('role');
@@ -402,6 +388,7 @@ export async function handleSetupEdit(interaction) {
 }
 
 export async function handleSetupRolesWizard(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   return handleSetupRoles(interaction);
 }
 
@@ -416,6 +403,7 @@ const COMMAND_GROUPS = {
 COMMAND_GROUPS.all = Object.values(COMMAND_GROUPS).flat();
 
 export async function handleSetupBreak(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const requestChannel = interaction.options.getChannel('request-channel');
   const staffBreakRole = interaction.options.getRole('staff-break-role');
   const mainBreakRole  = interaction.options.getRole('main-break-role');
@@ -469,6 +457,7 @@ export async function handleSetupBreak(interaction) {
 }
 
 export async function handleSetupResign(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const resignChannel       = interaction.options.getChannel('resign-channel');
   const verifiedRole        = interaction.options.getRole('verified-role');
   const applicationsChannel = interaction.options.getChannel('applications-channel');
@@ -529,6 +518,7 @@ export async function handleSetupResign(interaction) {
 }
 
 export async function handleSetupRolesBulk(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const group = interaction.options.getString('group');
   const roles = [];
   for (let i = 1; i <= 5; i++) {
@@ -560,7 +550,28 @@ export async function handleSetupRolesBulk(interaction) {
 }
 
 export async function handleNetworkStatus(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const config = await getGuild(interaction.guildId);
+
+  // Standalone mode — server hasn't joined a network, show per-server status
+  if (!config.is_hub && !config.hub_guild_id) {
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🖥️ Server Status — Standalone')
+      .setDescription(
+        `**${interaction.guild.name}** is running in standalone mode.\n\n` +
+        `Staff roles and channels are configured just for this server.\n` +
+        `Run \`/setup-staff-roles\` to set your rank roles, or \`/setup-network-hub\` to enable multi-server networking.`
+      )
+      .addFields(
+        { name: '🔹 Mod Role',       value: config.hub_mod_role_id       ? `<@&${config.hub_mod_role_id}>` : '`Not set`', inline: true },
+        { name: '🔸 Team Lead Role', value: config.hub_team_lead_role_id ? `<@&${config.hub_team_lead_role_id}>` : '`Not set`', inline: true },
+        { name: '🔴 Admin Role',     value: config.hub_admin_role_id     ? `<@&${config.hub_admin_role_id}>` : '`Not set`', inline: true },
+        { name: '👑 Owner Role',     value: config.hub_owner_role_id     ? `<@&${config.hub_owner_role_id}>` : '`Not set`', inline: true },
+      )
+      .setTimestamp();
+    return interaction.reply({ embeds: [embed], flags: 64 });
+  }
 
   let hubGuildId = null;
   let viewingAsHub = false;
@@ -568,13 +579,8 @@ export async function handleNetworkStatus(interaction) {
   if (config.is_hub) {
     hubGuildId = interaction.guildId;
     viewingAsHub = true;
-  } else if (config.hub_guild_id) {
-    hubGuildId = config.hub_guild_id;
   } else {
-    return interaction.reply({
-      content: '❌ This server is not part of a network. Run `/setup-network-hub` or `/setup-network-join` first.',
-      flags: 64,
-    });
+    hubGuildId = config.hub_guild_id;
   }
 
   const hubGuild = interaction.client.guilds.cache.get(hubGuildId);
@@ -608,6 +614,7 @@ export async function handleNetworkStatus(interaction) {
 }
 
 export async function handleSetupNetworkReset(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const config = await getGuild(interaction.guildId);
   const wasHub = config.is_hub;
   const wasLinked = !!config.hub_guild_id;
@@ -636,6 +643,7 @@ export async function handleSetupNetworkReset(interaction) {
 }
 
 export async function handleSetupNetworkHub(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   await interaction.deferReply();
 
   const previousHub = await getNetworkHub();
@@ -665,6 +673,7 @@ export async function handleSetupNetworkHub(interaction) {
 }
 
 export async function handleSetupStaffRoles(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const modRole      = interaction.options.getRole('mod-role');
   const teamLeadRole = interaction.options.getRole('team-lead-role');
   const adminRole    = interaction.options.getRole('admin-role');
@@ -714,6 +723,7 @@ export async function handleSetupStaffRoles(interaction) {
 }
 
 export async function handleSetupNetworkRoles(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const config = await getGuild(interaction.guildId);
   if (!config.is_hub) {
     return interaction.reply({
@@ -744,6 +754,7 @@ export async function handleSetupNetworkRoles(interaction) {
 }
 
 export async function handleSetupNetworkJoin(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const hubGuildId = interaction.options.getString('hub-server-id');
 
   const hubGuild = interaction.client.guilds.cache.get(hubGuildId);
@@ -777,6 +788,7 @@ export async function handleSetupNetworkJoin(interaction) {
 }
 
 export async function handleSetupAdChannels(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const action = interaction.options.getString('action');
   const channel = interaction.options.getChannel('channel');
   const guildId = interaction.guildId;
@@ -827,6 +839,7 @@ export async function handleSetupAdChannels(interaction) {
 }
 
 export async function handleSetupRequests(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   await interaction.deferReply();
 
   const categoryName = interaction.options.getString('category-name') || '📋 Requests';
@@ -882,6 +895,7 @@ export async function handleSetupRequests(interaction) {
 }
 
 export async function handleSetupBranding(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const pfpUrl    = interaction.options.getString('pfp-url');
   const bannerUrl = interaction.options.getString('banner-url');
   const clear     = interaction.options.getString('clear');
@@ -926,6 +940,7 @@ export async function handleSetupBranding(interaction) {
 }
 
 export async function handleToggleCommand(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const commandName = interaction.options.getString('command').toLowerCase().trim();
   const enabled = interaction.options.getBoolean('enabled');
 
@@ -951,6 +966,7 @@ export async function handleToggleCommand(interaction) {
 }
 
 export async function handleSetupGithub(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const raw = interaction.options.getString('repo').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
   if (!/^[\w.-]+\/[\w.-]+$/.test(raw)) {
     return interaction.reply({ content: '❌ Invalid format. Use `owner/repo` (e.g. `myname/mybot`).', flags: 64 });
