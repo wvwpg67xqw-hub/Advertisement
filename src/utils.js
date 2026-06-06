@@ -152,7 +152,7 @@ export async function hasCommandPermission(member, commandName) {
   if (hierarchyEnabled) {
     const roleIds  = networkEnabled ? networkRoleIds : null;
     const userRank = getStaffRank(member, roleIds);
-    if (userRank >= 5) return true;
+    if (userRank >= 3) return true; // Admin and above can use any command
     const minRank  = COMMAND_MIN_RANK[commandName] ?? 3;
     return userRank >= minRank;
   }
