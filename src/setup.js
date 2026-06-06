@@ -1,6 +1,6 @@
 import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = pkg;
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo, setAsStaffServer, unsetStaffServer, getStaffServer, disableDmCommand, enableDmCommand, getDmDisabledCommands } from './database.js';
 import { hasCommandPermission } from './utils.js';
 
 const ALL_COMMANDS = [
@@ -217,6 +217,28 @@ export const setupCommands = [
     .setName('setup-github')
     .setDescription('Link a GitHub repository so /release-notes auto-fills commit history')
     .addStringOption(o => o.setName('repo').setDescription('Repository in owner/repo format (e.g. myname/mybot)').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('setup-staff-server')
+    .setDescription('Mark this server as the network staff server (saves its ID to the database)')
+    .addBooleanOption(o =>
+      o.setName('unset').setDescription('Remove the staff-server designation from this server')
+    ),
+
+  new SlashCommandBuilder()
+    .setName('setup-dm-command')
+    .setDescription('Disable or enable a bot command in DMs globally')
+    .addStringOption(o =>
+      o.setName('action').setDescription('What to do').setRequired(true)
+        .addChoices(
+          { name: 'disable', value: 'disable' },
+          { name: 'enable', value: 'enable' },
+          { name: 'list', value: 'list' },
+        )
+    )
+    .addStringOption(o =>
+      o.setName('command').setDescription('Command name to disable/enable in DMs (not needed for list)')
+    ),
 ];
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -960,6 +982,84 @@ export async function handleToggleCommand(interaction) {
 
   if (disabled.length > 0) {
     embed.addFields({ name: 'Currently Disabled Commands', value: disabled.map(c => `\`/${c}\``).join(', ') });
+  }
+
+  await interaction.reply({ embeds: [embed], flags: 64 });
+}
+
+export async function handleSetupStaffServer(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
+
+  const unset = interaction.options.getBoolean('unset') ?? false;
+
+  if (unset) {
+    await unsetStaffServer(interaction.guildId);
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xED4245)
+          .setTitle('🏢 Staff Server Designation Removed')
+          .setDescription(`**${interaction.guild.name}** is no longer marked as the network staff server.`)
+          .setTimestamp()
+      ],
+      flags: 64,
+    });
+  }
+
+  await setAsStaffServer(interaction.guildId);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('🏢 Staff Server Set')
+    .setDescription(`**${interaction.guild.name}** is now marked as the **network staff server**.`)
+    .addFields(
+      { name: '🆔 Server ID', value: `\`${interaction.guildId}\``, inline: false },
+      { name: 'ℹ️ What this means', value: 'This server ID is saved in the database. Other servers in your network can reference it as the central staff management hub.', inline: false },
+    )
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed], flags: 64 });
+}
+
+export async function handleSetupDmCommand(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
+
+  const action = interaction.options.getString('action');
+
+  if (action === 'list') {
+    const disabled = await getDmDisabledCommands();
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🚫 DM-Disabled Commands')
+      .setDescription(
+        disabled.length
+          ? disabled.map(c => `\`/${c}\``).join(', ')
+          : '*No commands are currently disabled in DMs.*'
+      )
+      .setTimestamp();
+    return interaction.reply({ embeds: [embed], flags: 64 });
+  }
+
+  const commandName = interaction.options.getString('command')?.toLowerCase().trim();
+  if (!commandName) {
+    return interaction.reply({ content: '❌ Please provide a `command` name for disable/enable actions.', flags: 64 });
+  }
+
+  if (action === 'disable') {
+    await disableDmCommand(commandName);
+  } else {
+    await enableDmCommand(commandName);
+  }
+
+  const disabled = await getDmDisabledCommands();
+  const embed = new EmbedBuilder()
+    .setColor(action === 'disable' ? 0xED4245 : 0x57F287)
+    .setTitle(action === 'disable' ? '🚫 Command Disabled in DMs' : '✅ Command Enabled in DMs')
+    .setDescription(`\`/${commandName}\` is now **${action === 'disable' ? 'blocked' : 'allowed'}** when used in DMs.`)
+    .setTimestamp();
+
+  if (disabled.length > 0) {
+    embed.addFields({ name: 'Currently DM-Disabled', value: disabled.map(c => `\`/${c}\``).join(', ') });
   }
 
   await interaction.reply({ embeds: [embed], flags: 64 });

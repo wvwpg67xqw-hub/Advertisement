@@ -558,6 +558,47 @@ export async function getDisabledCommands(guildId) {
   return rows.map(r => r.command_name);
 }
 
+// ── DM Command Toggles (sentinel guild_id = '__DM__') ─────────────────────────
+
+const DM_SENTINEL = '__DM__';
+
+export async function disableDmCommand(commandName) {
+  await q('INSERT IGNORE INTO disabled_commands (guild_id, command_name) VALUES (?, ?)', [DM_SENTINEL, commandName]);
+}
+
+export async function enableDmCommand(commandName) {
+  await q('DELETE FROM disabled_commands WHERE guild_id = ? AND command_name = ?', [DM_SENTINEL, commandName]);
+}
+
+export async function isDmCommandDisabled(commandName) {
+  const row = await q1('SELECT 1 FROM disabled_commands WHERE guild_id = ? AND command_name = ?', [DM_SENTINEL, commandName]);
+  return !!row;
+}
+
+export async function getDmDisabledCommands() {
+  const rows = await q('SELECT command_name FROM disabled_commands WHERE guild_id = ?', [DM_SENTINEL]);
+  return rows.map(r => r.command_name);
+}
+
+// ── Staff Server ──────────────────────────────────────────────────────────────
+
+export async function setAsStaffServer(guildId) {
+  await q('UPDATE guilds SET is_staff_server = 0', []);
+  await q('INSERT INTO guilds (guild_id, is_staff_server) VALUES (?, 1) ON DUPLICATE KEY UPDATE is_staff_server = 1', [guildId]);
+}
+
+export async function unsetStaffServer(guildId) {
+  await q('UPDATE guilds SET is_staff_server = 0 WHERE guild_id = ?', [guildId]);
+}
+
+export async function getStaffServer() {
+  return q1('SELECT * FROM guilds WHERE is_staff_server = 1 LIMIT 1');
+}
+
+export async function setStaffGuildId(guildId, staffGuildId) {
+  await q('INSERT INTO guilds (guild_id, staff_guild_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE staff_guild_id = ?', [guildId, staffGuildId, staffGuildId]);
+}
+
 // ── Network Applications ──────────────────────────────────────────────────────
 
 export async function saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age) {

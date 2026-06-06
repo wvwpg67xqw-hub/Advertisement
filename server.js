@@ -45,9 +45,10 @@ import {
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
   handleSetupBreak, handleSetupRolesBulk, handleSetupResign, handleSetupBranding,
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles, handleSetupGithub,
+  handleSetupStaffServer, handleSetupDmCommand,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, getBalance, setBalance } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, getBalance, setBalance, isDmCommandDisabled } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank } from './src/utils.js';
 
@@ -488,6 +489,8 @@ const botHandlers = {
   'add-level': handleAddLevel, 'set-level': handleSetLevel,
   'toggle-command': handleToggleCommand,
   'toggle-leveling': handleToggleLeveling,
+  'setup-staff-server': handleSetupStaffServer,
+  'setup-dm-command': handleSetupDmCommand,
   modguide: handleModGuide,
   status: handleStatus,
   activity: handleActivity,
@@ -1536,6 +1539,9 @@ if (id.startsWith('app_')) {
       if (handler) {
         if (interaction.guildId && await isCommandDisabled(interaction.guildId, name)) {
           return interaction.reply({ content: '❌ This command has been disabled in this server.', flags: 64 });
+        }
+        if (!interaction.guildId && await isDmCommandDisabled(name)) {
+          return interaction.reply({ content: '❌ This command is not available in DMs.', flags: 64 });
         }
         await handler(interaction);
       } else if (setupCommands.some(c => c.name === name)) {
