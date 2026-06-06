@@ -1,5 +1,5 @@
 import pkg from 'discord.js';
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = pkg;
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, ButtonBuilder, ActionRowBuilder, ButtonStyle } = pkg;
 import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo, setAsStaffServer, unsetStaffServer, getStaffServer, disableDmCommand, enableDmCommand, getDmDisabledCommands } from './database.js';
 import { hasCommandPermission } from './utils.js';
 
@@ -217,6 +217,10 @@ export const setupCommands = [
     .setName('setup-github')
     .setDescription('Link a GitHub repository so /release-notes auto-fills commit history')
     .addStringOption(o => o.setName('repo').setDescription('Repository in owner/repo format (e.g. myname/mybot)').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('setup-wizard')
+    .setDescription('Interactive setup wizard — see what\'s configured and what still needs attention'),
 
   new SlashCommandBuilder()
     .setName('setup-staff-server')
@@ -985,6 +989,143 @@ export async function handleToggleCommand(interaction) {
   }
 
   await interaction.reply({ embeds: [embed], flags: 64 });
+}
+
+// ─── Setup Wizard ─────────────────────────────────────────────────────────────
+
+function wizardProgressBar(pct) {
+  const filled = Math.round(pct / 10);
+  return '█'.repeat(filled) + '░'.repeat(10 - filled);
+}
+
+export function buildWizardEmbed(config, guildName) {
+  const sections = [
+    {
+      name: '👑 Staff Ranks',
+      items: [
+        { label: 'Mod Role',       value: config.hub_mod_role_id,       type: 'role' },
+        { label: 'Team Lead Role', value: config.hub_team_lead_role_id, type: 'role' },
+        { label: 'Admin Role',     value: config.hub_admin_role_id,     type: 'role' },
+        { label: 'Owner Role',     value: config.hub_owner_role_id,     type: 'role' },
+      ],
+      cmd: '`/setup-staff-roles`',
+    },
+    {
+      name: '📋 Log Channels',
+      items: [
+        { label: 'General Log',    value: config.log_channel_id,          type: 'channel' },
+        { label: 'Warn Log',       value: config.warn_log_channel_id,     type: 'channel' },
+        { label: 'Strike Log',     value: config.strike_log_channel_id,   type: 'channel' },
+        { label: 'Request Log',    value: config.request_log_channel_id,  type: 'channel' },
+        { label: 'Staff Updates',  value: config.staff_updates_channel_id, type: 'channel' },
+      ],
+      cmd: '`/setup`',
+    },
+    {
+      name: '🔨 Moderation Roles',
+      items: [
+        { label: 'Jail Role',  value: config.jail_role_id,  type: 'role' },
+        { label: 'Muted Role', value: config.muted_role_id, type: 'role' },
+      ],
+      cmd: '`/setup jail-role:@Role muted-role:@Role`',
+    },
+    {
+      name: '☕ Break System',
+      items: [
+        { label: 'Break Request Channel', value: config.break_request_channel_id, type: 'channel' },
+        { label: 'Break Role',            value: config.break_role_id,            type: 'role' },
+      ],
+      cmd: '`/setup-break`',
+    },
+    {
+      name: '🚪 Resign & Applications',
+      items: [
+        { label: 'Resign Channel',       value: config.resign_channel_id,       type: 'channel' },
+        { label: 'Applications Channel', value: config.applications_channel_id, type: 'channel' },
+      ],
+      cmd: '`/setup-resign`',
+    },
+    {
+      name: '📨 Request Channels',
+      items: [
+        { label: 'Ban Requests',         value: config.ban_request_channel_id,         type: 'channel' },
+        { label: 'Blacklist Requests',   value: config.blacklist_request_channel_id,   type: 'channel' },
+        { label: 'Network Ban Requests', value: config.network_ban_request_channel_id, type: 'channel' },
+        { label: 'Partnership Requests', value: config.partnership_request_channel_id, type: 'channel' },
+      ],
+      cmd: '`/setup-requests`',
+    },
+  ];
+
+  let doneCount = 0;
+  const fields = [];
+
+  for (const section of sections) {
+    const setItems  = section.items.filter(i => i.value);
+    const total     = section.items.length;
+    const allSet    = setItems.length === total;
+    const noneSet   = setItems.length === 0;
+    if (allSet) doneCount++;
+
+    const icon   = allSet ? '✅' : noneSet ? '❌' : '⚠️';
+    const status = allSet ? 'All set' : `${setItems.length}/${total} configured`;
+
+    const lines = section.items.map(item => {
+      if (item.value) {
+        const fmt = item.type === 'role' ? `<@&${item.value}>` : `<#${item.value}>`;
+        return `✅ ${item.label}: ${fmt}`;
+      }
+      return `❌ ${item.label}: *not set*`;
+    });
+
+    let body = lines.join('\n');
+    if (!allSet) body += `\n> **→ Run:** ${section.cmd}`;
+
+    fields.push({ name: `${icon} ${section.name} — ${status}`, value: body, inline: false });
+  }
+
+  const pct = Math.round((doneCount / sections.length) * 100);
+  const bar = wizardProgressBar(pct);
+
+  const networkLine = config.is_hub
+    ? '🌐 Hub server — multi-server networking active'
+    : config.hub_guild_id
+      ? `🔗 Linked to hub \`${config.hub_guild_id}\``
+      : 'ℹ️ Standalone — run `/setup-network-hub` to enable networking';
+
+  const embed = new EmbedBuilder()
+    .setColor(pct === 100 ? 0x57F287 : pct >= 50 ? 0xFFA500 : 0xED4245)
+    .setTitle(`⚙️ Setup Wizard — ${guildName}`)
+    .setDescription(
+      `**Progress:** ${bar} **${pct}%** *(${doneCount}/${sections.length} sections complete)*\n` +
+      `**Network:** ${networkLine}`
+    )
+    .addFields(...fields)
+    .setFooter({ text: 'Run any setup command, then click Refresh to update this status.' })
+    .setTimestamp();
+
+  return embed;
+}
+
+function buildWizardComponents(guildId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`wizard:refresh:${guildId}`)
+      .setLabel('🔄 Refresh Status')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`wizard:help:${guildId}`)
+      .setLabel('📖 All Setup Commands')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+export async function handleSetupWizard(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
+  const config = await getGuild(interaction.guildId);
+  const embed  = buildWizardEmbed(config, interaction.guild.name);
+  const row    = buildWizardComponents(interaction.guildId);
+  await interaction.reply({ embeds: [embed], components: [row], flags: 64 });
 }
 
 export async function handleSetupStaffServer(interaction) {

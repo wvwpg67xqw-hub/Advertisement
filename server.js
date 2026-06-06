@@ -45,7 +45,7 @@ import {
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
   handleSetupBreak, handleSetupRolesBulk, handleSetupResign, handleSetupBranding,
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles, handleSetupGithub,
-  handleSetupStaffServer, handleSetupDmCommand,
+  handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, getBalance, setBalance, isDmCommandDisabled } from './src/database.js';
@@ -491,6 +491,7 @@ const botHandlers = {
   'toggle-leveling': handleToggleLeveling,
   'setup-staff-server': handleSetupStaffServer,
   'setup-dm-command': handleSetupDmCommand,
+  'setup-wizard': handleSetupWizard,
   modguide: handleModGuide,
   status: handleStatus,
   activity: handleActivity,
@@ -560,6 +561,47 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton()) {
       const id = interaction.customId;
+
+      // ── Setup Wizard buttons ───────────────────────────────────────────────
+      if (id.startsWith('wizard:')) {
+        const [, action, guildId] = id.split(':');
+
+        if (action === 'refresh') {
+          await interaction.deferUpdate();
+          const { getGuild: wGuild } = await import('./src/database.js');
+          const config = await wGuild(guildId);
+          const embed  = buildWizardEmbed(config, interaction.guild?.name || guildId);
+          const { ButtonBuilder: WBB, ActionRowBuilder: WARB, ButtonStyle: WBS } = discordPkg;
+          const row = new WARB().addComponents(
+            new WBB().setCustomId(`wizard:refresh:${guildId}`).setLabel('🔄 Refresh Status').setStyle(WBS.Primary),
+            new WBB().setCustomId(`wizard:help:${guildId}`).setLabel('📖 All Setup Commands').setStyle(WBS.Secondary),
+          );
+          return interaction.editReply({ embeds: [embed], components: [row] });
+        }
+
+        if (action === 'help') {
+          const { EmbedBuilder: HEB } = discordPkg;
+          const helpEmbed = new HEB()
+            .setColor(0x5865F2)
+            .setTitle('📖 All Setup Commands')
+            .setDescription('Run these commands in your server to configure each section.')
+            .addFields(
+              { name: '👑 Staff Ranks',         value: '`/setup-staff-roles` — Set Mod / Team Lead / Admin / Owner roles', inline: false },
+              { name: '📋 Log Channels',         value: '`/setup` — Set log channels, jail role, muted role, break role', inline: false },
+              { name: '🔨 Moderation',           value: '`/setup` — Add `jail-role` and `muted-role` options', inline: false },
+              { name: '☕ Break System',          value: '`/setup-break` — Set break request channel and break role', inline: false },
+              { name: '🚪 Resign & Applications',value: '`/setup-resign` — Set resign channel and applications channel', inline: false },
+              { name: '📨 Request Channels',     value: '`/setup-requests` — Set ban / blacklist / partnership / network-ban channels', inline: false },
+              { name: '🌐 Network',              value: '`/setup-network-hub` — Mark as hub\n`/setup-network-join` — Join a hub\n`/setup-staff-server` — Mark as staff server', inline: false },
+              { name: '🎨 Branding',             value: '`/setup-branding` — Set bot avatar & banner for this server', inline: false },
+              { name: '🔒 Permissions',          value: '`/setup-roles` — Set which roles can use each command\n`/setup-roles-bulk` — Set roles for a whole command group at once', inline: false },
+              { name: '⚙️ Other',               value: '`/setup-status` — Raw config dump\n`/network-status` — Network overview\n`/setup-dm-command` — Disable commands in DMs', inline: false },
+            )
+            .setFooter({ text: 'Run /setup-wizard again or click Refresh to see updated progress.' })
+            .setTimestamp();
+          return interaction.reply({ embeds: [helpEmbed], flags: 64 });
+        }
+      }
 
       // ── Owner command panel buttons (works in DMs) ─────────────────────────
       if (
