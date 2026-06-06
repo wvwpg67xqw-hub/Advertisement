@@ -992,10 +992,20 @@ function BotsTab() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
-          Click <strong>Add to Server</strong> to authorize a bot on any Discord server you manage.
-        </p>
+      {/* ── Our Bots section header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
+          color: 'var(--text-muted)',
+        }}>🤖 Our Bots</span>
+        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        {!loading && (
+          <span style={{
+            fontSize: 11, color: 'var(--text-muted)',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 999, padding: '1px 8px',
+          }}>{bots.length}</span>
+        )}
         <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add Bot</button>
       </div>
 
@@ -1009,20 +1019,6 @@ function BotsTab() {
         </div>
       ) : (
         <div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
-          }}>
-            <span style={{
-              fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
-              color: 'var(--text-muted)',
-            }}>🤖 Our Bots</span>
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            <span style={{
-              fontSize: 11, color: 'var(--text-muted)',
-              background: 'var(--surface2)', border: '1px solid var(--border)',
-              borderRadius: 999, padding: '1px 8px',
-            }}>{bots.length}</span>
-          </div>
           <div style={{ display: 'grid', gap: 16 }}>
           {bots.map(bot => (
             <div key={bot.id} style={{
