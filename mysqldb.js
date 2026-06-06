@@ -201,6 +201,7 @@ export async function initDatabase() {
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS blacklist_request_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS ban_request_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS github_repo VARCHAR(200)`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS hub_owner_role_id VARCHAR(20)`,
   ];
 
   const extraTables = [

@@ -34,6 +34,7 @@ const COMMAND_MIN_RANK = {
   'setup-ad-channels': 3, 'setup-requests': 3, 'setup-network-hub': 3,
   'setup-network-join': 3, 'setup-network-reset': 3, 'setup-break': 3,
   'setup-resign': 3, 'setup-branding': 3,
+  'setup-owner-role': 3,
 };
 
 /**
@@ -48,10 +49,10 @@ export function getStaffRank(member, roleIds = null) {
 
   if (member.id === member.guild.ownerId) return 5;
 
-  const ownerRoleId    = process.env.OWNER_ROLE_ID;
+  const ownerRoleId    = roleIds?.ownerRoleId    ?? process.env.OWNER_ROLE_ID;
   const modRoleId      = roleIds?.modRoleId      ?? process.env.MOD_ROLE_ID;
-  const teamLeadRoleId = roleIds?.teamLeadRoleId  ?? process.env.TEAM_LEAD_ROLE_ID;
-  const adminRoleId    = roleIds?.adminRoleId     ?? process.env.ADMIN_ROLE_ID;
+  const teamLeadRoleId = roleIds?.teamLeadRoleId ?? process.env.TEAM_LEAD_ROLE_ID;
+  const adminRoleId    = roleIds?.adminRoleId    ?? process.env.ADMIN_ROLE_ID;
 
   if (ownerRoleId && member.roles.cache.has(ownerRoleId)) return 5;
 
@@ -144,13 +145,14 @@ export async function hasCommandPermission(member, commandName) {
   if (!member) return false;
 
   const networkRoleIds = await resolveNetworkRoleIds(member.guild.id);
-  const networkEnabled = !!(networkRoleIds.modRoleId || networkRoleIds.teamLeadRoleId || networkRoleIds.adminRoleId);
-  const envEnabled     = !!(process.env.MOD_ROLE_ID || process.env.TEAM_LEAD_ROLE_ID || process.env.ADMIN_ROLE_ID);
+  const networkEnabled = !!(networkRoleIds.ownerRoleId || networkRoleIds.modRoleId || networkRoleIds.teamLeadRoleId || networkRoleIds.adminRoleId);
+  const envEnabled     = !!(process.env.OWNER_ROLE_ID || process.env.MOD_ROLE_ID || process.env.TEAM_LEAD_ROLE_ID || process.env.ADMIN_ROLE_ID);
   const hierarchyEnabled = networkEnabled || envEnabled;
 
   if (hierarchyEnabled) {
     const roleIds  = networkEnabled ? networkRoleIds : null;
     const userRank = getStaffRank(member, roleIds);
+    if (userRank >= 5) return true;
     const minRank  = COMMAND_MIN_RANK[commandName] ?? 3;
     return userRank >= minRank;
   }

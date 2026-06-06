@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
 import {
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
-  getSnipeCache, getBalance, addBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact,
+  getSnipeCache, getBalance, addBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact, setOwnerRole,
 } from '../database.js';
 import { hasCommandPermission, getStaffRank } from '../utils.js';
 
@@ -49,6 +49,11 @@ export const defs = [
     .setDescription('Set a user\'s balance to an exact amount (Admin+)')
     .addUserOption(o => o.setName('user').setDescription('User').setRequired(true))
     .addIntegerOption(o => o.setName('amount').setDescription('New balance amount').setRequired(true).setMinValue(0)),
+
+  new SlashCommandBuilder()
+    .setName('setup-owner-role')
+    .setDescription('Set the Owner role that has access to all commands (Admin+)')
+    .addRoleOption(o => o.setName('role').setDescription('The Owner role').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('release-notes')
@@ -139,6 +144,23 @@ export async function handleResetMessagesAll(interaction) {
   if (!await hasCommandPermission(interaction.member, 'reset-messages-all')) return deny(interaction);
   await resetMessagesAll(interaction.guildId);
   await interaction.reply({ content: '✅ All message counts have been reset.', flags: 64 });
+}
+
+export async function handleSetupOwnerRole(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup-owner-role')) return deny(interaction);
+  const role = interaction.options.getRole('role');
+  await setOwnerRole(interaction.guildId, role.id);
+  await interaction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('⚙️ Owner Role Set')
+        .setDescription(`<@&${role.id}> is now the Owner role.\nMembers with this role have access to all bot commands.`)
+        .setFooter({ text: `Set by ${interaction.user.tag}` })
+        .setTimestamp(),
+    ],
+    flags: 64,
+  });
 }
 
 export async function handleSetBalance(interaction) {
