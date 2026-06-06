@@ -1,6 +1,6 @@
-import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from './shared.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from './shared.js';
 import {
-  startBreak, endBreak, extendBreak, getCurrentBreaks, isOnBreak, getGuild,
+  extendBreak, getCurrentBreaks, isOnBreak,
 } from '../database.js';
 import { safeFetchMember, formatDuration, hasCommandPermission, canModerateInGuild } from '../utils.js';
 import { deny } from './shared.js';
@@ -15,10 +15,6 @@ export const defs = [
   new SlashCommandBuilder()
     .setName('break-request')
     .setDescription('Submit a break request — a form will open asking for duration and reason'),
-
-  new SlashCommandBuilder()
-    .setName('break-end')
-    .setDescription('End your current break'),
 
   new SlashCommandBuilder()
     .setName('manage-break')
@@ -51,7 +47,7 @@ export async function handleCurrentBreaks(interaction) {
 export async function handleBreakRequest(interaction) {
   if (!await hasCommandPermission(interaction.member, 'break-request')) return deny(interaction);
   if (await isOnBreak(interaction.guildId, interaction.user.id)) {
-    return interaction.reply({ content: '❌ You are already on break. Use `/break-end` to end it first.', flags: 64 });
+    return interaction.reply({ content: '❌ You are already on break. Your break will end automatically when your approved duration expires.', flags: 64 });
   }
   const modal = new ModalBuilder()
     .setCustomId(`break_request_modal_${interaction.guildId}`)
@@ -67,34 +63,6 @@ export async function handleBreakRequest(interaction) {
     ),
   );
   await interaction.showModal(modal);
-}
-
-export async function handleBreakEnd(interaction) {
-  if (!await hasCommandPermission(interaction.member, 'break-end')) return deny(interaction);
-  const row = await endBreak(interaction.guildId, interaction.user.id);
-  if (!row) return interaction.reply({ content: '❌ You are not currently on break.', flags: 64 });
-  const config = await getGuild(interaction.guildId);
-  const member = await safeFetchMember(interaction.guild, interaction.user.id);
-  if (member) {
-    if (config.break_role_id) await member.roles.remove(config.break_role_id).catch(() => null);
-    for (const roleId of (row.saved_roles || [])) await member.roles.add(roleId).catch(() => null);
-  }
-  const mainGuildId = process.env.MAIN_GUILD_ID;
-  if (mainGuildId && config.main_break_role_id) {
-    try {
-      const mainGuild = interaction.client.guilds.cache.get(mainGuildId);
-      if (mainGuild) {
-        const mainMember = await mainGuild.members.fetch(interaction.user.id).catch(() => null);
-        if (mainMember) await mainMember.roles.remove(config.main_break_role_id).catch(() => null);
-      }
-    } catch {}
-  }
-  const duration = Math.floor(Date.now() / 1000) - row.started_at;
-  await interaction.reply({
-    embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('✅ Break Ended')
-      .setDescription(`**${interaction.user.tag}** is back from break.\nDuration: **${formatDuration(duration)}**`)
-      .setTimestamp()]
-  });
 }
 
 export async function handleManageBreak(interaction) {

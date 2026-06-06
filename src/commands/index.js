@@ -43,7 +43,7 @@ export { handlePromote, handleDemoteUser, handleStrike, handleStrikeRemove } fro
 export { handleBanRequest, handleBlacklistRequest, handleNetworkBanRequest, handlePartnershipRequest, handleRequestButton } from './requests.js';
 export { handleNetworkBan, handleNetworkUnban } from './network.js';
 export { handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance, handleSnipe, handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole } from './utility.js';
-export { handleCurrentBreaks, handleBreakRequest, handleBreakEnd, handleManageBreak } from './breaks.js';
+export { handleCurrentBreaks, handleBreakRequest, handleManageBreak } from './breaks.js';
 export { handleResignRequest, handleApply, handleUpdate } from './staff.js';
 export { handleSetupNetworkApply, handleNetworkApplyPost } from './network-apply.js';
 export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel } from './leveling.js';

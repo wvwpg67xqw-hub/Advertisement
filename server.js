@@ -28,7 +28,7 @@ import {
   handleBanRequest, handleBlacklistRequest, handleNetworkBanRequest,
   handlePartnershipRequest, handleMessages, handleMessageLeaderboard,
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
-  handleBreakRequest, handleBreakEnd, handleManageBreak,
+  handleBreakRequest, handleManageBreak,
   handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleApply, handleUpdate,
@@ -476,7 +476,7 @@ const botHandlers = {
   'network-ban-request': handleNetworkBanRequest, 'partnership-request': handlePartnershipRequest,
   messages: handleMessages, 'message-leaderboard': handleMessageLeaderboard,
   'case-info': handleCaseInfo, balance: handleBalance, snipe: handleSnipe,
-  'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'break-end': handleBreakEnd, 'manage-break': handleManageBreak,
+  'current-breaks': handleCurrentBreaks, 'break-request': handleBreakRequest, 'manage-break': handleManageBreak,
   'reset-messages': handleResetMessages, 'reset-messages-all': handleResetMessagesAll, 'release-notes': handleReleaseNotes,
   addbalance: handleAddBalance,
   setbalance: handleSetBalance,
@@ -740,7 +740,7 @@ client.on('interactionCreate', async (interaction) => {
               embeds: [new EB2()
                 .setColor(0x22c55e)
                 .setTitle('☕ Break Approved')
-                .setDescription(`Your break request has been approved by **${interaction.user.tag}**.\n\n**Duration:** ${days} day${days !== 1 ? 's' : ''}\n**Ends:** <t:${endAt}:F>\n\nYour roles have been saved. Use \`/break-end\` to return early, or they will be restored automatically when your break ends.`)
+                .setDescription(`Your break has been approved! 🎉\n\n**Duration:** ${days} day${days !== 1 ? 's' : ''}\n**Ends:** <t:${endAt}:F>\n\nYour roles have been saved and will be **automatically restored** when your break ends. Enjoy your time off!`)
                 .setTimestamp()
               ]
             }).catch(() => null);
@@ -1292,7 +1292,7 @@ if (id.startsWith('app_')) {
       const { getGuild: getBGM, isOnBreak: iobM } = await import('./src/database.js');
 
       if (await iobM(guildId, interaction.user.id)) {
-        return interaction.reply({ content: '❌ You are already on break. Use `/break-end` to end it first.', flags: 64 });
+        return interaction.reply({ content: '❌ You are already on break. Your break will end automatically when your approved duration expires.', flags: 64 });
       }
 
       const config = await getBGM(guildId);
