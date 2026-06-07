@@ -114,6 +114,7 @@ async function submitAppeal() {
 
 export function ipBlacklistMiddleware(req, res, next) {
   const ip = getClientIp(req);
+  if (db.isIpWhitelisted(ip)) return next();
   if (!db.isIpBlacklisted(ip)) return next();
 
   console.warn(`🚫 Blocked IP: ${ip} → ${req.method} ${req.path}`);
@@ -136,6 +137,7 @@ export async function checkVpn(ip) {
   if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip.startsWith('::') || ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.')) {
     return false;
   }
+  if (db.isIpWhitelisted(ip)) return false;
   if (process.env.DISABLE_VPN_CHECK === 'true') return false;
 
   const cached = vpnCache.get(ip);
@@ -211,6 +213,11 @@ export async function sendBreachAlert({ type, ip, detail, userId, username }) {
       .setCustomId(`sec_ipbl_${ip}`)
       .setLabel('IP Blacklist')
       .setStyle(ButtonStyle.Danger)
+      .setDisabled(!ip || ip === 'unknown'),
+    new ButtonBuilder()
+      .setCustomId(`sec_ipwl_${ip}`)
+      .setLabel('Whitelist IP')
+      .setStyle(ButtonStyle.Success)
       .setDisabled(!ip || ip === 'unknown'),
     new ButtonBuilder()
       .setCustomId('sec_dismiss')

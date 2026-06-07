@@ -741,6 +741,18 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
+      // ── Security: IP Whitelist ─────────────────────────────────────────────
+      if (id.startsWith('sec_ipwl_')) {
+        const ip = id.slice(9);
+        try {
+          db.addIpWhitelist(ip, 'Whitelisted via security alert DM', interaction.user.id);
+          db.removeIpBlacklistByIp(ip);
+          return interaction.reply({ content: `✅ IP \`${ip}\` whitelisted and unblocked.`, ephemeral: true });
+        } catch {
+          return interaction.reply({ content: `⚠️ IP is already whitelisted.`, ephemeral: true });
+        }
+      }
+
       if (id === 'sec_dismiss') {
         return interaction.reply({ content: '✅ Dismissed.', ephemeral: true });
       }

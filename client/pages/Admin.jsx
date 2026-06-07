@@ -1049,6 +1049,101 @@ function IpAppealsTab() {
   );
 }
 
+function IpWhitelistTab() {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ ip: '', reason: '' });
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [revealed, setRevealed] = useState({});
+
+  const load = async () => { setLoading(true); const res = await api('/api/admin/ip-whitelist'); setList(await res.json().catch(() => [])); setLoading(false); };
+  useEffect(() => { load(); }, []);
+
+  async function handleAdd(e) {
+    e.preventDefault(); setErr('');
+    if (!form.ip || !form.reason) return setErr('IP address and reason are required');
+    setSaving(true);
+    const res = await api('/api/admin/ip-whitelist', { method: 'POST', body: JSON.stringify(form) });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error); setSaving(false); return; }
+    setShowAdd(false); setForm({ ip: '', reason: '' }); load(); setSaving(false);
+  }
+
+  async function handleRemove(id) {
+    if (!confirm('Remove this IP from the whitelist?')) return;
+    await api(`/api/admin/ip-whitelist/${id}`, { method: 'DELETE' }); load();
+  }
+
+  const fmt = ts => new Date(ts * 1000).toLocaleDateString();
+  const blurIp = (ip) => {
+    const parts = ip.split('.');
+    if (parts.length === 4) return `${parts[0]}.${parts[1]}.***.***`;
+    return ip.slice(0, 6) + '****' + ip.slice(-4);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{list.length} whitelisted IP{list.length !== 1 ? 's' : ''} — these bypass all blocks, VPN checks, and security alerts</span>
+        <button className="btn btn-success btn-sm" onClick={() => setShowAdd(true)}>+ Whitelist IP</button>
+      </div>
+      {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+        : list.length === 0 ? <div className="empty-state"><div className="empty-state-icon">🔓</div><div style={{ fontWeight: 600 }}>No whitelisted IPs</div></div>
+        : (
+          <div className="table-container">
+            <table>
+              <thead><tr><th>IP Address</th><th>Reason</th><th>Added By</th><th>Date</th><th></th></tr></thead>
+              <tbody>
+                {list.map(entry => (
+                  <tr key={entry.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          filter: revealed[entry.id] ? 'none' : 'blur(5px)',
+                          userSelect: revealed[entry.id] ? 'text' : 'none',
+                          transition: 'filter 0.2s',
+                          cursor: 'pointer',
+                        }}>
+                          {revealed[entry.id] ? entry.ip : blurIp(entry.ip)}
+                        </span>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: 11, padding: '2px 8px' }}
+                          onClick={() => setRevealed(r => ({ ...r, [entry.id]: !r[entry.id] }))}
+                        >
+                          {revealed[entry.id] ? '🙈 Hide' : '👁 Reveal'}
+                        </button>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 13 }}>{entry.reason}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{entry.addedBy || '—'}</td>
+                    <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{fmt(entry.createdAt)}</td>
+                    <td><button className="btn btn-danger btn-sm" onClick={() => handleRemove(entry.id)}>Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      {showAdd && (
+        <Modal title="Whitelist an IP Address" onClose={() => setShowAdd(false)}>
+          <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {err && <div className="alert alert-error">{err}</div>}
+            <div className="form-group"><label className="form-label">IP Address</label><input className="form-input" placeholder="e.g. 203.0.113.42" value={form.ip} onChange={e => setForm(f => ({ ...f, ip: e.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">Reason</label><textarea className="form-input" placeholder="Why is this IP trusted?" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} /></div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button type="submit" className="btn btn-success" disabled={saving}>{saving ? '...' : 'Whitelist IP'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 function BlacklistTab() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1759,8 +1854,9 @@ export default function Admin() {
     { id: 'servers',      label: '🖥️ Servers' },
     { id: 'channels',     label: '🔒 Channels' },
     { id: 'blacklist',    label: '🚫 Blacklist' },
-    { id: 'ip-blacklist', label: '🌐 IP Blocks' },
-    { id: 'ip-appeals',   label: '🔓 IP Appeals' },
+    { id: 'ip-blacklist',  label: '🌐 IP Blocks' },
+    { id: 'ip-whitelist',  label: '✅ IP Whitelist' },
+    { id: 'ip-appeals',    label: '🔓 IP Appeals' },
     { id: 'bots',         label: '🤖 Bots' },
     { id: 'admins',       label: '👑 Admins' },
     { id: 'appeals',      label: '⚖️ Appeals' },
@@ -1790,8 +1886,9 @@ export default function Admin() {
         {tab === 'servers'      && <ServersTab />}
         {tab === 'channels'     && <ChannelsTab />}
         {tab === 'blacklist'    && <BlacklistTab />}
-        {tab === 'ip-blacklist' && <IpBlacklistTab />}
-        {tab === 'ip-appeals'   && <IpAppealsTab />}
+        {tab === 'ip-blacklist'  && <IpBlacklistTab />}
+        {tab === 'ip-whitelist'  && <IpWhitelistTab />}
+        {tab === 'ip-appeals'    && <IpAppealsTab />}
         {tab === 'bots'         && <BotsTab />}
         {tab === 'admins'       && <AdminsTab />}
         {tab === 'appeals'      && <AppealsTab />}

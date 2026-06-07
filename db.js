@@ -363,6 +363,40 @@ const db = {
     return rows[i] ?? null;
   },
 
+  // ── IP Whitelist ───────────────────────────────────────────────────────────
+
+  getIpWhitelist() {
+    return readCol('ip_whitelist').sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  addIpWhitelist(ip, reason, addedBy) {
+    const rows = readCol('ip_whitelist');
+    if (rows.find(w => w.ip === ip)) throw new Error('IP already whitelisted');
+    const entry = { id: nextId('ip_whitelist'), ip, reason: reason || 'No reason given', addedBy: addedBy || 'system', createdAt: ts() };
+    rows.push(entry);
+    writeCol('ip_whitelist', rows);
+    return entry;
+  },
+
+  removeIpWhitelist(id) {
+    const rows = readCol('ip_whitelist');
+    const next = rows.filter(w => w.id !== Number(id));
+    writeCol('ip_whitelist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  removeIpWhitelistByIp(ip) {
+    const rows = readCol('ip_whitelist');
+    const next = rows.filter(w => w.ip !== ip);
+    writeCol('ip_whitelist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  isIpWhitelisted(ip) {
+    if (!ip || ip === 'unknown') return false;
+    return !!readCol('ip_whitelist').find(w => w.ip === ip);
+  },
+
   // ── Managed Bots ───────────────────────────────────────────────────────────
 
   getAllBots() {

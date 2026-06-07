@@ -397,6 +397,35 @@ router.delete('/ip-blacklist/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ── IP Whitelist ──────────────────────────────────────────────────────────────
+
+router.get('/ip-whitelist', requireAdmin, (req, res) => {
+  res.json(db.getIpWhitelist());
+});
+
+router.post('/ip-whitelist', requireAdmin, (req, res) => {
+  const { ip, reason } = req.body;
+  if (!ip) return res.status(400).json({ error: 'IP address required' });
+  const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const ipv6 = /^[0-9a-fA-F:]{2,39}$/;
+  if (!ipv4.test(ip) && !ipv6.test(ip)) {
+    return res.status(400).json({ error: 'Invalid IP address format' });
+  }
+  try {
+    db.addIpWhitelist(String(ip).slice(0, 45), String(reason || 'Manual').slice(0, 500), req.session.user?.userId);
+    db.removeIpBlacklistByIp(ip);
+    res.json({ success: true });
+  } catch {
+    res.status(409).json({ error: 'IP already whitelisted' });
+  }
+});
+
+router.delete('/ip-whitelist/:id', requireAdmin, (req, res) => {
+  const result = db.removeIpWhitelist(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  res.json({ success: true });
+});
+
 // ── IP Appeals ────────────────────────────────────────────────────────────────
 
 router.get('/ip-appeals', requireAdmin, (req, res) => {
