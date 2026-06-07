@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { execSync } from 'child_process';
 import db from '../db.js';
 import { requireAdmin } from '../auth.js';
 import discordPkg from 'discord.js';
@@ -769,6 +770,20 @@ router.post('/dm-commands/toggle', requireAdmin, async (req, res) => {
   }
   const disabled = await getDmDisabledCommands();
   res.json({ success: true, disabled });
+});
+
+// ── Build Client ──────────────────────────────────────────────────────────────
+
+router.post('/build-client', requireAdmin, (req, res) => {
+  try {
+    const output = execSync('cd client && npm install && npm run build', {
+      timeout: 120000,
+      encoding: 'utf8',
+    });
+    res.json({ success: true, output });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, output: err.stdout || '' });
+  }
 });
 
 export default router;

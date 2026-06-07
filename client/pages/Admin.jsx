@@ -1843,6 +1843,53 @@ function AppealsTab() {
   );
 }
 
+// ── Build Client Button ───────────────────────────────────────
+
+function BuildButton() {
+  const [status, setStatus] = useState('idle'); // idle | building | done | error
+  const [msg, setMsg] = useState('');
+
+  async function handleBuild() {
+    setStatus('building');
+    setMsg('');
+    try {
+      const res = await api('/api/admin/build-client', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setStatus('done');
+        setMsg('Build succeeded!');
+      } else {
+        setStatus('error');
+        setMsg(data.error || 'Build failed.');
+      }
+    } catch {
+      setStatus('error');
+      setMsg('Request failed.');
+    }
+    setTimeout(() => setStatus('idle'), 5000);
+  }
+
+  const colors = { done: 'var(--success)', error: 'var(--danger)', building: 'var(--text-muted)', idle: 'var(--text-muted)' };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={handleBuild}
+        disabled={status === 'building'}
+        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+      >
+        {status === 'building'
+          ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} /> Building…</>
+          : status === 'done' ? '✅ Build done'
+          : status === 'error' ? '❌ Build failed'
+          : '🔨 Build Client'}
+      </button>
+      {msg && <span style={{ fontSize: 12, color: colors[status] }}>{msg}</span>}
+    </div>
+  );
+}
+
 // ── Main Admin Page ───────────────────────────────────────────
 
 export default function Admin() {
@@ -1865,9 +1912,12 @@ export default function Admin() {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">⚙️ Admin Dashboard</h1>
-        <p className="page-subtitle">Manage applications, roles, channels, blacklist, and admin access.</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 className="page-title">⚙️ Admin Dashboard</h1>
+          <p className="page-subtitle">Manage applications, roles, channels, blacklist, and admin access.</p>
+        </div>
+        <BuildButton />
       </div>
 
       <div style={{ overflowX: 'auto', marginBottom: 24 }}>
