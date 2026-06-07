@@ -177,6 +177,8 @@ async function updateDiscordApplicationMessage(app, decision, reviewerDisplay) {
   }
 }
 
+const APPEALS_CHANNEL_ID = '1513005786060554293';
+
 async function sendAppealAlert({ appealId, userId, username, avatar, reason, banReason }) {
   const embed = new EmbedBuilder()
     .setTitle(`📬 Ban Appeal #${appealId} — ${username}`)
@@ -202,10 +204,17 @@ async function sendAppealAlert({ appealId, userId, username, avatar, reason, ban
       .setStyle(ButtonStyle.Danger),
   );
 
-  await sendDM(OWNER_ID, {
-    embeds: [embed.toJSON()],
-    components: [row.toJSON()],
-  });
+  try {
+    const channel = await client.channels.fetch(APPEALS_CHANNEL_ID).catch(() => null);
+    if (channel) {
+      await channel.send({ embeds: [embed], components: [row] });
+    } else {
+      await sendDM(OWNER_ID, { embeds: [embed.toJSON()], components: [row.toJSON()] });
+    }
+  } catch (err) {
+    console.error('sendAppealAlert error:', err.message);
+    await sendDM(OWNER_ID, { embeds: [embed.toJSON()], components: [row.toJSON()] }).catch(() => {});
+  }
 }
 
 // ── Discord OAuth ─────────────────────────────────────────────────────────────
@@ -423,7 +432,7 @@ app.post('/api/appeals', requireBlacklisted, rateLimit('appeals', 2, 24 * 60 * 6
 
 // ── IP Appeal (public — accessible even to blocked IPs) ───────────────────────
 
-app.post('/api/ip-appeal', rateLimit('ip-appeal', 3, 24 * 60 * 60 * 1000), (req, res) => {
+app.post('/api/ip-appeal', rateLimit('ip-appeal', 3, 24 * 60 * 60 * 1000), async (req, res) => {
   const { reason } = req.body || {};
   if (!reason?.trim()) return res.status(400).json({ error: 'Appeal reason required' });
   const ip = (
@@ -437,6 +446,39 @@ app.post('/api/ip-appeal', rateLimit('ip-appeal', 3, 24 * 60 * 60 * 1000), (req,
   try {
     const entry = db.insertIpAppeal(ip, reason.trim());
     res.json({ success: true, id: entry.id });
+
+    // Send notification to appeals channel
+    try {
+      const channel = await client.channels.fetch(APPEALS_CHANNEL_ID).catch(() => null);
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle(`🌐 IP Ban Appeal #${entry.id}`)
+          .setColor(0xf59e0b)
+          .addFields(
+            { name: '🖥️ IP Address',   value: `\`${ip}\``,              inline: true  },
+            { name: '🔢 Appeal #',      value: String(entry.id),         inline: true  },
+            { name: '📝 Appeal Reason', value: reason.trim().slice(0, 1024), inline: false },
+            { name: '🕒 Time',          value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+          )
+          .setTimestamp()
+          .setFooter({ text: 'Staff Portal · IP Ban Appeals' });
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`ipappeal_accept_${entry.id}`)
+            .setLabel('✅ Accept — Unban IP')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`ipappeal_deny_${entry.id}`)
+            .setLabel('❌ Deny Appeal')
+            .setStyle(ButtonStyle.Danger),
+        );
+
+        await channel.send({ embeds: [embed], components: [row] });
+      }
+    } catch (err) {
+      console.error('IP appeal channel notification error:', err.message);
+    }
   } catch (err) {
     res.status(409).json({ error: err.message });
   }
@@ -776,6 +818,27 @@ client.on('interactionCreate', async (interaction) => {
         if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Already ${appeal.status}.`, ephemeral: true });
         db.updateAppealStatus(appealId, 'denied');
         return interaction.reply({ content: `❌ Appeal #${appealId} denied. **${appeal.username}** stays banned.`, ephemeral: true });
+      }
+
+      // ── IP Appeal: Accept ──────────────────────────────────────────────────
+      if (id.startsWith('ipappeal_accept_')) {
+        const appealId = Number(id.slice(16));
+        const appeal = db.getIpAppeal(appealId);
+        if (!appeal) return interaction.reply({ content: '❌ IP Appeal not found.', ephemeral: true });
+        if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Already ${appeal.status}.`, ephemeral: true });
+        db.updateIpAppealStatus(appealId, 'accepted');
+        db.removeIpBlacklistByIp(appeal.ip);
+        return interaction.reply({ content: `✅ IP Appeal #${appealId} accepted. IP \`${appeal.ip}\` has been unbanned.`, ephemeral: true });
+      }
+
+      // ── IP Appeal: Deny ────────────────────────────────────────────────────
+      if (id.startsWith('ipappeal_deny_')) {
+        const appealId = Number(id.slice(14));
+        const appeal = db.getIpAppeal(appealId);
+        if (!appeal) return interaction.reply({ content: '❌ IP Appeal not found.', ephemeral: true });
+        if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Already ${appeal.status}.`, ephemeral: true });
+        db.updateIpAppealStatus(appealId, 'denied');
+        return interaction.reply({ content: `❌ IP Appeal #${appealId} denied. IP \`${appeal.ip}\` stays banned.`, ephemeral: true });
       }
 
       // ── Break Request: Approve ─────────────────────────────────────────────
