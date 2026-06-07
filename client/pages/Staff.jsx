@@ -63,7 +63,7 @@ export default function Staff() {
     try {
       const res = await api('/api/staff/referral-link', {
         method: 'POST',
-        body: JSON.stringify({ link: newLink.trim() }),
+        body: JSON.stringify({ link: newLink.trim(), guildId: mainGuildId }),
       });
       const data = await res.json();
       if (!res.ok) setLinkMsg({ error: data.error || 'Failed to save.' });
@@ -73,6 +73,10 @@ export default function Staff() {
   }
 
   async function applyModmail() {
+    if (!mainGuildId) {
+      setModmailMsg({ error: 'Server config not loaded yet. Please wait a moment and try again.' });
+      return;
+    }
     setModmailLoading(true);
     setModmailMsg(null);
     try {
