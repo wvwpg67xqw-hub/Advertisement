@@ -109,7 +109,7 @@ router.post(
   rateLimit('applications', 5, 60 * 60 * 1000),
   async (req, res) => {
     try {
-      const { role, answers, guildId } = req.body;
+      const { role, answers, guildId, referredBy } = req.body;
       const { userId, username, avatar } = req.session.user;
 
       if (!role) return res.status(400).json({ error: 'Role is required' });
@@ -157,11 +157,14 @@ router.post(
         // is in is valid; it will just use the default log channel.
       }
 
+      const safeRef = referredBy && /^\d{17,20}$/.test(String(referredBy)) ? String(referredBy) : null;
+
       const result = db.insertApplication({
         userId, username, avatar,
         role: validRole.name,
         answers: cleanAnswers,
         guildId: resolvedGuildId || null,
+        referredBy: safeRef,
       });
 
       const applicationId = result.lastInsertRowid;
@@ -184,6 +187,7 @@ router.post(
           { name: '🎂 Age', value: cleanAnswers[0] || 'N/A', inline: true },
           { name: '🌍 Timezone', value: cleanAnswers[1] || 'N/A', inline: true },
           { name: '⏰ Hours/week', value: cleanAnswers[2] || 'N/A', inline: true },
+          ...(safeRef ? [{ name: '🔗 Referred By', value: `<@${safeRef}>`, inline: true }] : []),
           {
             name: `📝 ${questions[3] || 'Q4'}`,
             value: (cleanAnswers[3] || 'N/A').slice(0, 300) + (cleanAnswers[3]?.length > 300 ? '…' : ''),

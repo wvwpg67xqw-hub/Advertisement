@@ -16,12 +16,19 @@ const MAIN_GUILD_ID = (req) => (req?.query?.guildId) || process.env.MAIN_GUILD_I
 // ── GET referral link ──────────────────────────────────────────────────────────
 
 router.get('/referral-link', requireAuth, async (req, res) => {
-  const autoLink = `${req.protocol}://${req.get('host')}/apply`;
+  const userId   = req.session?.user?.userId;
+  const baseUrl  = `${req.protocol}://${req.get('host')}`;
+  const autoLink = userId ? `${baseUrl}/apply?ref=${userId}` : `${baseUrl}/apply`;
+
   const guildId = MAIN_GUILD_ID(req);
   if (!guildId) return res.json({ link: autoLink, auto: true });
   const config = await getGuild(guildId);
   const customLink = config.referral_link || null;
-  res.json({ link: customLink || autoLink, auto: !customLink });
+  // Append personal ref code to the stored custom link too, if it doesn't already have one
+  const finalLink = customLink
+    ? (userId && !customLink.includes('ref=') ? `${customLink}${customLink.includes('?') ? '&' : '?'}ref=${userId}` : customLink)
+    : autoLink;
+  res.json({ link: finalLink, auto: !customLink });
 });
 
 // ── SET referral link (admin only) ────────────────────────────────────────────

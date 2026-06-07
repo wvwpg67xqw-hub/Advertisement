@@ -143,7 +143,7 @@ const db = {
     ) ?? null;
   },
 
-  insertApplication({ userId, username, avatar, role, answers, guildId }) {
+  insertApplication({ userId, username, avatar, role, answers, guildId, referredBy }) {
     const rows = readCol('applications');
     const id = nextId('applications');
     const age = Array.isArray(answers) ? (answers[0] || '') : '';
@@ -151,6 +151,7 @@ const db = {
     rows.push({
       id, userId, username, avatar: avatar ?? null, role,
       guildId: guildId || null,
+      referredBy: referredBy || null,
       age, timezone,
       answers: Array.isArray(answers) ? JSON.stringify(answers) : null,
       discord_message_id: null,

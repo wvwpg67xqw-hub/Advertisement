@@ -176,11 +176,12 @@ export default function Apply() {
     setSubmitting(true);
     try {
       const resolvedGuildId = selectedServer.guildId || selectedServer.id;
+      const refCode = searchParams.get('ref') || null;
       const res = await fetch('/api/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ role, answers, guildId: resolvedGuildId }),
+        body: JSON.stringify({ role, answers, guildId: resolvedGuildId, referredBy: refCode }),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || 'Submission failed');
