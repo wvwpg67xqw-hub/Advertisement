@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, deny } from './shared.js';
 import {
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
   getSnipeCache, getBalance, addBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact, setOwnerRole,
@@ -68,6 +68,16 @@ export const defs = [
       { name: '🔧 Minor Fix', value: 'minor' },
       { name: '🔥 Hotfix', value: 'hotfix' },
     ))
+    .addChannelOption(o => o.setName('channel').setDescription('Channel to post in (defaults to current channel)')),
+
+  new SlashCommandBuilder()
+    .setName('panel')
+    .setDescription('Post an embed panel with a link button')
+    .addStringOption(o => o.setName('link').setDescription('URL the button should open').setRequired(true))
+    .addStringOption(o => o.setName('title').setDescription('Embed title').setRequired(true))
+    .addStringOption(o => o.setName('description').setDescription('Embed description text'))
+    .addStringOption(o => o.setName('button-label').setDescription('Label shown on the button (default: Click Here)'))
+    .addStringOption(o => o.setName('color').setDescription('Embed colour as a hex code, e.g. #5865F2').setRequired(false))
     .addChannelOption(o => o.setName('channel').setDescription('Channel to post in (defaults to current channel)')),
 ];
 
@@ -344,5 +354,49 @@ export async function handleReleaseNotes(interaction) {
     await interaction.editReply({ content: `✅ Release notes posted in ${targetChannel}.` });
   } catch {
     await interaction.editReply({ content: '❌ Could not post in that channel. Check my permissions.' });
+  }
+}
+
+export async function handlePanel(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'panel')) return deny(interaction);
+
+  const link        = interaction.options.getString('link');
+  const title       = interaction.options.getString('title');
+  const description = interaction.options.getString('description') || null;
+  const label       = interaction.options.getString('button-label') || 'Click Here';
+  const colorHex    = interaction.options.getString('color') || '#5865F2';
+  const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+
+  // Validate URL
+  try { new URL(link); } catch {
+    return interaction.reply({ content: '❌ Invalid URL. Make sure it starts with `https://`.', flags: 64 });
+  }
+
+  // Validate hex colour
+  const hexMatch = colorHex.replace('#', '');
+  const color = parseInt(hexMatch, 16);
+  if (isNaN(color) || hexMatch.length !== 6) {
+    return interaction.reply({ content: '❌ Invalid colour. Use a 6-digit hex code like `#5865F2`.', flags: 64 });
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setColor(color)
+    .setTimestamp();
+
+  if (description) embed.setDescription(description);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel(label)
+      .setURL(link)
+      .setStyle(ButtonStyle.Link),
+  );
+
+  try {
+    await targetChannel.send({ embeds: [embed], components: [row] });
+    await interaction.reply({ content: `✅ Panel posted in ${targetChannel}.`, flags: 64 });
+  } catch {
+    await interaction.reply({ content: '❌ Could not post in that channel. Check my permissions.', flags: 64 });
   }
 }

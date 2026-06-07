@@ -45,7 +45,7 @@ export { handleWarn, handleWarns, handleWarnLeaderboard, handleAdWarn, handleRem
 export { handlePromote, handleDemoteUser, handleStrike, handleStrikeRemove } from './staff-management.js';
 export { handleBanRequest, handleBlacklistRequest, handleNetworkBanRequest, handlePartnershipRequest, handleRequestButton } from './requests.js';
 export { handleNetworkBan, handleNetworkUnban } from './network.js';
-export { handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance, handleSnipe, handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole } from './utility.js';
+export { handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance, handleSnipe, handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel } from './utility.js';
 export { handleCurrentBreaks, handleBreakRequest, handleManageBreak } from './breaks.js';
 export { handleResignRequest, handleApply, handleUpdate } from './staff.js';
 export { handleSetupNetworkApply, handleNetworkApplyPost } from './network-apply.js';
