@@ -39,9 +39,11 @@ function Navbar({ user, onLogout }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {user ? (
           <>
-            <Link to="/staff" style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 500 }}>
-              Staff Panel
-            </Link>
+            {(user.isStaff || user.isAdmin) && (
+              <Link to="/staff" style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 500 }}>
+                Staff Panel
+              </Link>
+            )}
             {user.isAdmin && (
               <Link to="/admin" style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 500 }}>
                 Admin Panel
@@ -68,12 +70,13 @@ function Navbar({ user, onLogout }) {
   );
 }
 
-function ProtectedRoute({ children, adminOnly = false }) {
+function ProtectedRoute({ children, adminOnly = false, staffOnly = false }) {
   const { user, loading } = useAuth();
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" replace />;
   if (user.isBlacklisted) return <Navigate to="/appeal" replace />;
   if (adminOnly && !user.isAdmin) return <Navigate to="/" replace />;
+  if (staffOnly && !user.isStaff && !user.isAdmin) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -116,7 +119,7 @@ export default function App() {
             <ProtectedRoute adminOnly><Admin /></ProtectedRoute>
           } />
           <Route path="/staff" element={
-            <ProtectedRoute><Staff /></ProtectedRoute>
+            <ProtectedRoute staffOnly><Staff /></ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />} />
         </Routes>

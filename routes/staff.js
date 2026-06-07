@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireStaff } from '../auth.js';
 import { getGuild, setGuildConfig } from '../src/database.js';
 import discordPkg from 'discord.js';
 const { EmbedBuilder } = discordPkg;
@@ -15,7 +15,7 @@ const MAIN_GUILD_ID = (req) => (req?.query?.guildId) || process.env.MAIN_GUILD_I
 
 // ── GET referral link ──────────────────────────────────────────────────────────
 
-router.get('/referral-link', requireAuth, async (req, res) => {
+router.get('/referral-link', requireStaff, async (req, res) => {
   const userId   = req.session?.user?.userId;
   const baseUrl  = `${req.protocol}://${req.get('host')}`;
   const autoLink = userId ? `${baseUrl}/apply?ref=${userId}` : `${baseUrl}/apply`;
@@ -53,7 +53,7 @@ router.post('/referral-link', requireAuth, (req, res) => {
 
 // ── Apply for modmail test ─────────────────────────────────────────────────────
 
-router.post('/apply-modmail', requireAuth, async (req, res) => {
+router.post('/apply-modmail', requireStaff, async (req, res) => {
   const user = req.session.user;
   if (!user) return res.status(401).json({ error: 'Not authenticated' });
 

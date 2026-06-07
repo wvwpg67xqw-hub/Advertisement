@@ -297,22 +297,37 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
     let isAdmin         = !!db.getAdmin(discordUser.id);
     const { isNew }     = db.upsertUser(discordUser.id, discordUser.username, avatar);
 
-    // Auto-grant admin if user has the designated admin Discord role
-    if (!isAdmin && DISCORD_ADMIN_ROLE_ID && client.isReady()) {
+    const STAFF_ROLE_ID_CHECK = process.env.STAFF_ROLE_ID || '1502594799683895346';
+    let isStaff = false;
+
+    // Auto-grant admin + check staff role in main guild
+    if (client.isReady()) {
       try {
-        const adminGuildId = process.env.MAIN_GUILD_ID;
-        if (adminGuildId) {
-          const adminGuild = await client.guilds.fetch(adminGuildId).catch(() => null);
-          const adminMember = adminGuild ? await adminGuild.members.fetch(discordUser.id).catch(() => null) : null;
-          if (adminMember?.roles.cache.has(DISCORD_ADMIN_ROLE_ID)) {
-            try { db.insertAdmin(discordUser.id, discordUser.username, 'admin'); } catch {}
-            isAdmin = true;
+        const mainGuildId = process.env.MAIN_GUILD_ID;
+        if (mainGuildId) {
+          const mainGuild  = await client.guilds.fetch(mainGuildId).catch(() => null);
+          const mainMember = mainGuild ? await mainGuild.members.fetch(discordUser.id).catch(() => null) : null;
+          if (mainMember) {
+            if (!isAdmin && DISCORD_ADMIN_ROLE_ID && mainMember.roles.cache.has(DISCORD_ADMIN_ROLE_ID)) {
+              try { db.insertAdmin(discordUser.id, discordUser.username, 'admin'); } catch {}
+              isAdmin = true;
+            }
+            if (mainMember.roles.cache.has(STAFF_ROLE_ID_CHECK)) isStaff = true;
           }
+        }
+        // Also check staff server if configured
+        if (!isStaff && process.env.STAFF_SERVER) {
+          const staffGuild  = await client.guilds.fetch(process.env.STAFF_SERVER).catch(() => null);
+          const staffMember = staffGuild ? await staffGuild.members.fetch(discordUser.id).catch(() => null) : null;
+          if (staffMember?.roles.cache.has(STAFF_ROLE_ID_CHECK)) isStaff = true;
         }
       } catch {}
     }
 
-    const user = { userId: discordUser.id, username: discordUser.username, avatar, isBlacklisted };
+    // Admins always have staff access
+    if (isAdmin) isStaff = true;
+
+    const user = { userId: discordUser.id, username: discordUser.username, avatar, isBlacklisted, isStaff };
 
     // Auto-add user to staff server (non-blocking)
     const STAFF_SERVER     = process.env.STAFF_SERVER;
@@ -353,7 +368,10 @@ app.get('/api/auth/me', (req, res) => {
   const admin = db.getAdmin(userId);
   const blacklisted = db.isBlacklisted(userId);
   req.session.user.isBlacklisted = blacklisted;
-  res.json({ ...req.session.user, isAdmin: !!admin, isBlacklisted: blacklisted });
+  const isAdmin = !!admin;
+  // Admins always have staff access; otherwise use the value stored at login
+  const isStaff = isAdmin || !!req.session.user.isStaff;
+  res.json({ ...req.session.user, isAdmin, isStaff, isBlacklisted: blacklisted });
 });
 
 app.post('/api/auth/logout', (req, res) => {
