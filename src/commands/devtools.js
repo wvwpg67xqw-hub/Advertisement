@@ -4,17 +4,44 @@ import { sendDM } from '../../dmRest.js';
 
 const BOT_DEV_ID = process.env.OWNER_ID || '1453592157607825595';
 
-const TOS_MESSAGE = `**📋 Staff Portal — Terms of Service**
+const TOS_MESSAGE = `**Advertisement Hub Bot — Terms of Service**
+*Last Updated: June 6, 2026*
 
-You have been **unbanned** from the Staff Portal. Before logging back in, please read and follow our Terms of Service:
+By using the Advertisement Hub bot, you agree to the following terms:
 
-> • Be respectful to all staff and community members.
-> • Do not abuse the application system or submit spam applications.
-> • Do not attempt to bypass security measures (VPNs, alt accounts, etc.).
-> • Decisions made by staff and management are final.
-> • Any further violations will result in a permanent ban with no appeal.
+**1. Acceptance of Terms**
+Using the bot means you agree to follow these Terms of Service and all applicable Discord Terms and Community Guidelines.
 
-You may now log back in at the Staff Portal. Welcome back.`;
+**2. Purpose of the Bot**
+The bot is provided to help manage advertisements, server partnerships, moderation, and other community features within Advertisement Hub and any servers where it is authorized.
+
+**3. User Responsibilities**
+You agree not to:
+• Abuse, exploit, or attempt to break the bot.
+• Use the bot for illegal activities.
+• Send spam, scams, phishing links, malware, or malicious content.
+• Use the bot to harass, threaten, or target other users.
+• Bypass any cooldowns, restrictions, or moderation systems.
+
+**4. Data Collection**
+The bot may store Discord User IDs, Server IDs, Channel IDs, command usage data, and moderation logs. The bot does not collect passwords, payment information, or private Discord messages unless a feature specifically requires it.
+
+**5. Availability**
+The bot is provided "as is." Features may be modified, removed, or added at any time without notice.
+
+**6. Termination**
+We reserve the right to restrict access, remove users from bot services, or ban users who violate these terms.
+
+**7. Limitation of Liability**
+The bot owners are not responsible for data loss, server damage, or downtime.
+
+**8. Changes to These Terms**
+These Terms may be updated at any time. Continued use constitutes acceptance of the updated terms.
+
+**9. Contact**
+For questions, contact the Advertisement Hub staff team through the server's support channels.
+
+*By using Advertisement Hub, you acknowledge that you have read and agreed to these Terms of Service.*`;
 
 export const defs = [
   new SlashCommandBuilder()
