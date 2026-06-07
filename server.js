@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { execSync } from 'child_process';
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
@@ -504,6 +505,21 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), guilds: client.guilds?.cache?.size ?? 0 });
 });
 
+// ── Public build endpoint (used by the fallback page before React is built) ───
+
+app.post('/api/build', (req, res) => {
+  const BUILD_TOKEN = process.env.BUILD_TOKEN || process.env.SESSION_SECRET;
+  if (!BUILD_TOKEN) return res.status(503).json({ success: false, error: 'No BUILD_TOKEN or SESSION_SECRET configured.' });
+  const { token } = req.body || {};
+  if (!token || token !== BUILD_TOKEN) return res.status(401).json({ success: false, error: 'Invalid token.' });
+  try {
+    const output = execSync('cd client && npm install && npm run build', { timeout: 120000, encoding: 'utf8' });
+    res.json({ success: true, output });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, output: err.stdout || '' });
+  }
+});
+
 // ── API Routes ────────────────────────────────────────────────────────────────
 
 app.use('/api/applications', applicationRoutes);
@@ -548,7 +564,80 @@ if (existsSync(clientDist)) {
     res.sendFile(join(clientDist, 'index.html'));
   });
 } else {
-  app.get('/', (_req, res) => res.send(`<html><body style="background:#0b0b10;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column"><h1>⚙️ Discord Staff Portal</h1><p>Build client: <code>npm run build</code></p></body></html>`));
+  // Fallback page shown when client/dist is missing — lets admins trigger a build
+  app.get('/', (_req, res) => res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>⚙️ Discord Staff Portal</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0b0b10; color: #e8e8f0; font-family: system-ui, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .card { background: #13131c; border: 1px solid #2a2a3d; border-radius: 12px; padding: 36px; width: 100%; max-width: 420px; margin: 20px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  p { color: #8888aa; font-size: 14px; margin-bottom: 24px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: #8888aa; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  input { width: 100%; background: #1c1c2a; border: 1px solid #2a2a3d; border-radius: 8px; color: #e8e8f0; padding: 10px 14px; font-size: 14px; outline: none; font-family: inherit; margin-bottom: 16px; }
+  input:focus { border-color: #6c63ff; }
+  button { width: 100%; background: #6c63ff; color: #fff; border: none; border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .2s; }
+  button:hover:not(:disabled) { background: #5a52e0; }
+  button:disabled { opacity: .6; cursor: not-allowed; }
+  #status { margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-size: 13px; display: none; }
+  .ok  { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: #86efac; }
+  .err { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+  pre { white-space: pre-wrap; word-break: break-all; margin-top: 8px; font-size: 11px; max-height: 200px; overflow-y: auto; opacity: .8; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>⚙️ Discord Staff Portal</h1>
+  <p>The frontend hasn't been built yet. Enter your build token and click the button to compile it now.</p>
+  <label for="tok">Build Token</label>
+  <input id="tok" type="password" placeholder="Your SESSION_SECRET or BUILD_TOKEN" />
+  <button id="btn" onclick="runBuild()">🔨 Build Client</button>
+  <div id="status"></div>
+</div>
+<script>
+async function runBuild() {
+  const btn = document.getElementById('btn');
+  const status = document.getElementById('status');
+  const token = document.getElementById('tok').value.trim();
+  if (!token) { showStatus('err', 'Please enter your build token.'); return; }
+  btn.disabled = true;
+  btn.textContent = '⏳ Building… this may take a minute';
+  status.style.display = 'none';
+  try {
+    const res = await fetch('/api/build', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showStatus('ok', '✅ Build succeeded! Reloading…' + (data.output ? '<pre>' + escHtml(data.output.slice(-800)) + '</pre>' : ''));
+      setTimeout(() => location.reload(), 2000);
+    } else {
+      showStatus('err', '❌ Build failed: ' + escHtml(data.error || 'unknown error') + (data.output ? '<pre>' + escHtml(data.output.slice(-800)) + '</pre>' : ''));
+      btn.disabled = false;
+      btn.textContent = '🔨 Build Client';
+    }
+  } catch (e) {
+    showStatus('err', '❌ Request failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '🔨 Build Client';
+  }
+}
+function showStatus(cls, html) {
+  const el = document.getElementById('status');
+  el.className = cls;
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>`));
 }
 
 // ── Start HTTP server ─────────────────────────────────────────────────────────
