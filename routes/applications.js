@@ -3,6 +3,7 @@ import db from '../db.js';
 import { requireAuth, isBlacklisted } from '../auth.js';
 import client from '../botClient.js';
 import { rateLimit, getClientIp } from '../security.js';
+import { detectAI, progressBar } from '../src/aiDetector.js';
 
 import discordPkg from 'discord.js';
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = discordPkg;
@@ -242,6 +243,46 @@ router.post(
             }
 
             db.updateApplicationDiscordIds(applicationId, msg.id, thread.id);
+
+            // ── AI Detection (staff-only, posted in thread) ───────────────
+            (async () => {
+              try {
+                // Analyse only the essay-style answers (Q4 onwards, index 3+)
+                const essayText = cleanAnswers.slice(3).filter(Boolean).join('\n\n');
+                const result = await detectAI(essayText);
+
+                if (result.skipped) {
+                  const skipEmbed = new EmbedBuilder()
+                    .setTitle('🤖 AI Detection — Skipped')
+                    .setDescription(result.error || 'Not enough text to analyse.')
+                    .setColor(0x99aab5)
+                    .setFooter({ text: 'Staff-only · Not visible to applicant' });
+                  await thread.send({ embeds: [skipEmbed] }).catch(() => null);
+                  return;
+                }
+
+                const color = result.aiScore >= 75 ? 0xed4245
+                  : result.aiScore >= 45 ? 0xfee75c
+                  : 0x57f287;
+
+                const detectionEmbed = new EmbedBuilder()
+                  .setTitle('🤖 AI Detection Report')
+                  .setColor(color)
+                  .addFields(
+                    { name: '🧠 Verdict', value: `**${result.label}**`, inline: false },
+                    { name: '🤖 AI Score',    value: `\`${progressBar(result.aiScore)}\``,    inline: false },
+                    { name: '👤 Human Score', value: `\`${progressBar(result.humanScore)}\``, inline: false },
+                  )
+                  .setFooter({ text: 'Staff-only · Not visible to applicant · Essay answers only (Q4+)' })
+                  .setTimestamp();
+
+                await thread.send({ embeds: [detectionEmbed] }).catch(() => null);
+              } catch (aiErr) {
+                console.error('AI detection error:', aiErr.message);
+              }
+            })();
+            // ─────────────────────────────────────────────────────────────
+
           } else {
             db.updateApplicationDiscordIds(applicationId, msg.id, null);
           }
