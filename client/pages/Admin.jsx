@@ -827,6 +827,228 @@ function ChannelsTab() {
 
 // ── Blacklist ─────────────────────────────────────────────────
 
+function IpBlacklistTab() {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ ip: '', reason: '' });
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [revealed, setRevealed] = useState({});
+
+  const load = async () => { setLoading(true); const res = await api('/api/admin/ip-blacklist'); setList(await res.json().catch(() => [])); setLoading(false); };
+  useEffect(() => { load(); }, []);
+
+  async function handleAdd(e) {
+    e.preventDefault(); setErr('');
+    if (!form.ip || !form.reason) return setErr('IP address and reason are required');
+    setSaving(true);
+    const res = await api('/api/admin/ip-blacklist', { method: 'POST', body: JSON.stringify(form) });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error); setSaving(false); return; }
+    setShowAdd(false); setForm({ ip: '', reason: '' }); load(); setSaving(false);
+  }
+
+  async function handleRemove(id) {
+    if (!confirm('Unblock this IP address?')) return;
+    await api(`/api/admin/ip-blacklist/${id}`, { method: 'DELETE' }); load();
+  }
+
+  const fmt = ts => new Date(ts * 1000).toLocaleDateString();
+  const blurIp = (ip) => {
+    const parts = ip.split('.');
+    if (parts.length === 4) return `${parts[0]}.${parts[1]}.***.***`;
+    return ip.slice(0, 6) + '****' + ip.slice(-4);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{list.length} blocked IP{list.length !== 1 ? 's' : ''}</span>
+        <button className="btn btn-danger btn-sm" onClick={() => setShowAdd(true)}>+ Block IP</button>
+      </div>
+      {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+        : list.length === 0 ? <div className="empty-state"><div className="empty-state-icon">✅</div><div style={{ fontWeight: 600 }}>No blocked IPs</div></div>
+        : (
+          <div className="table-container">
+            <table>
+              <thead><tr><th>IP Address</th><th>Reason</th><th>Blocked By</th><th>Date</th><th></th></tr></thead>
+              <tbody>
+                {list.map(entry => (
+                  <tr key={entry.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          filter: revealed[entry.id] ? 'none' : 'blur(5px)',
+                          userSelect: revealed[entry.id] ? 'text' : 'none',
+                          transition: 'filter 0.2s',
+                          cursor: 'pointer',
+                        }}>
+                          {revealed[entry.id] ? entry.ip : blurIp(entry.ip)}
+                        </span>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: 11, padding: '2px 8px' }}
+                          onClick={() => setRevealed(r => ({ ...r, [entry.id]: !r[entry.id] }))}
+                        >
+                          {revealed[entry.id] ? '🙈 Hide' : '👁 Reveal'}
+                        </button>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 13 }}>{entry.reason}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{entry.addedBy || '—'}</td>
+                    <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{fmt(entry.createdAt)}</td>
+                    <td><button className="btn btn-success btn-sm" onClick={() => handleRemove(entry.id)}>Unblock</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      {showAdd && (
+        <Modal title="Block an IP Address" onClose={() => setShowAdd(false)}>
+          <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {err && <div className="alert alert-error">{err}</div>}
+            <div className="form-group"><label className="form-label">IP Address</label><input className="form-input" placeholder="e.g. 192.168.1.1" value={form.ip} onChange={e => setForm(f => ({ ...f, ip: e.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">Reason</label><textarea className="form-input" placeholder="Reason for blocking..." value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} /></div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button type="submit" className="btn btn-danger" disabled={saving}>{saving ? '...' : 'Block IP'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function IpAppealsTab() {
+  const [appeals, setAppeals] = useState([]);
+  const [filter, setFilter] = useState('pending');
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [actioning, setActioning] = useState(null);
+  const [revealed, setRevealed] = useState({});
+
+  const load = async () => {
+    setLoading(true);
+    const res = await api(`/api/admin/ip-appeals?status=${filter}`);
+    setAppeals(await res.json().catch(() => []));
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [filter]);
+
+  const fmt = ts => new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const blurIp = (ip) => {
+    const parts = ip.split('.');
+    if (parts.length === 4) return `${parts[0]}.${parts[1]}.***.***`;
+    return ip.slice(0, 6) + '****' + ip.slice(-4);
+  };
+
+  async function action(id, type) {
+    setActioning(id);
+    await api(`/api/admin/ip-appeals/${id}/${type}`, { method: 'POST' });
+    setActioning(null);
+    setSelected(null);
+    load();
+  }
+
+  const statusColor = { pending: 'var(--warning)', accepted: 'var(--success)', denied: 'var(--danger)' };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div className="tabs">
+          {['pending', 'accepted', 'denied'].map(s => (
+            <button key={s} className={`tab ${filter === s ? 'active' : ''}`} onClick={() => setFilter(s)}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+        <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{appeals.length} result{appeals.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+      ) : appeals.length === 0 ? (
+        <div className="empty-state"><div className="empty-state-icon">📭</div><div style={{ fontWeight: 600 }}>No {filter} IP appeals</div></div>
+      ) : (
+        <div className="table-container">
+          <table>
+            <thead><tr><th>IP Address</th><th>Reason (preview)</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {appeals.map(a => (
+                <tr key={a.id}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ filter: revealed[a.id] ? 'none' : 'blur(5px)', userSelect: revealed[a.id] ? 'text' : 'none', transition: 'filter 0.2s', cursor: 'pointer' }}>
+                        {revealed[a.id] ? a.ip : blurIp(a.ip)}
+                      </span>
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setRevealed(r => ({ ...r, [a.id]: !r[a.id] }))}>
+                        {revealed[a.id] ? '🙈' : '👁'}
+                      </button>
+                    </div>
+                  </td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 240 }}>
+                    <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.reason}</span>
+                  </td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{fmt(a.createdAt)}</td>
+                  <td>
+                    <span style={{ background: `color-mix(in srgb, ${statusColor[a.status]} 15%, transparent)`, color: statusColor[a.status], padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>{a.status}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setSelected(a)}>View</button>
+                      {a.status === 'pending' && (
+                        <>
+                          <button className="btn btn-success btn-sm" disabled={actioning === a.id} onClick={() => action(a.id, 'accept')}>{actioning === a.id ? '...' : '✓ Unblock'}</button>
+                          <button className="btn btn-danger btn-sm" disabled={actioning === a.id} onClick={() => action(a.id, 'deny')}>{actioning === a.id ? '...' : '✕ Deny'}</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selected && (
+        <Modal title={`IP Appeal #${selected.id}`} onClose={() => setSelected(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>IP Address</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ filter: revealed[selected.id] ? 'none' : 'blur(5px)', transition: 'filter 0.2s' }}>
+                  {revealed[selected.id] ? selected.ip : blurIp(selected.ip)}
+                </span>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setRevealed(r => ({ ...r, [selected.id]: !r[selected.id] }))}>
+                  {revealed[selected.id] ? '🙈 Hide' : '👁 Reveal'}
+                </button>
+              </div>
+            </div>
+            <div style={{ height: 1, background: 'var(--border)' }} />
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>Appeal Reason</div>
+              <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '12px 14px', fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{selected.reason}</div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Submitted: {fmt(selected.createdAt)}{selected.reviewedAt && ` · Reviewed: ${fmt(selected.reviewedAt)}`}
+            </div>
+          </div>
+          {selected.status === 'pending' && (
+            <div className="modal-actions">
+              <button className="btn btn-danger" disabled={actioning === selected.id} onClick={() => action(selected.id, 'deny')}>{actioning === selected.id ? '...' : '✕ Deny'}</button>
+              <button className="btn btn-success" disabled={actioning === selected.id} onClick={() => action(selected.id, 'accept')}>{actioning === selected.id ? '...' : '✓ Unblock IP'}</button>
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 function BlacklistTab() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1537,6 +1759,8 @@ export default function Admin() {
     { id: 'servers',      label: '🖥️ Servers' },
     { id: 'channels',     label: '🔒 Channels' },
     { id: 'blacklist',    label: '🚫 Blacklist' },
+    { id: 'ip-blacklist', label: '🌐 IP Blocks' },
+    { id: 'ip-appeals',   label: '🔓 IP Appeals' },
     { id: 'bots',         label: '🤖 Bots' },
     { id: 'admins',       label: '👑 Admins' },
     { id: 'appeals',      label: '⚖️ Appeals' },
@@ -1566,6 +1790,8 @@ export default function Admin() {
         {tab === 'servers'      && <ServersTab />}
         {tab === 'channels'     && <ChannelsTab />}
         {tab === 'blacklist'    && <BlacklistTab />}
+        {tab === 'ip-blacklist' && <IpBlacklistTab />}
+        {tab === 'ip-appeals'   && <IpAppealsTab />}
         {tab === 'bots'         && <BotsTab />}
         {tab === 'admins'       && <AdminsTab />}
         {tab === 'appeals'      && <AppealsTab />}

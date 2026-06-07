@@ -52,13 +52,80 @@ export function rateLimit(key, maxRequests, windowMs) {
 
 // ── IP Blacklist Middleware ────────────────────────────────────────────────────
 
+const BLOCKED_PAGE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Access Denied — Staff Portal</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0d0f13;color:#e2e8f0;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:40px 36px;max-width:480px;width:100%;text-align:center}
+  .icon{font-size:48px;margin-bottom:16px}
+  h1{font-size:22px;font-weight:700;margin-bottom:8px;color:#f0f6fc}
+  .sub{font-size:14px;color:#8b949e;margin-bottom:28px;line-height:1.6}
+  .divider{height:1px;background:#30363d;margin:24px 0}
+  label{display:block;text-align:left;font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  textarea{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e2e8f0;font-size:14px;padding:12px;resize:vertical;min-height:120px;font-family:inherit;outline:none}
+  textarea:focus{border-color:#58a6ff}
+  button{width:100%;background:#58a6ff;color:#0d1117;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px}
+  button:hover{background:#79c0ff}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .msg{margin-top:14px;font-size:13px;padding:10px 14px;border-radius:8px;display:none}
+  .msg.ok{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.3);display:block}
+  .msg.err{background:rgba(248,81,73,.15);color:#f85149;border:1px solid rgba(248,81,73,.3);display:block}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">🚫</div>
+  <h1>Your IP Has Been Blocked</h1>
+  <p class="sub">Your IP address has been flagged and access to this portal has been restricted. If you believe this is a mistake, you can submit an appeal below.</p>
+  <div class="divider"></div>
+  <div id="form-wrap">
+    <label for="reason">Why should your IP be unblocked?</label>
+    <textarea id="reason" placeholder="Explain why your IP should be removed from the blocklist..." maxlength="2000"></textarea>
+    <button id="submit-btn" onclick="submitAppeal()">Submit Appeal</button>
+  </div>
+  <div id="msg" class="msg"></div>
+</div>
+<script>
+async function submitAppeal() {
+  const reason = document.getElementById('reason').value.trim();
+  const btn = document.getElementById('submit-btn');
+  const msg = document.getElementById('msg');
+  msg.className = 'msg'; msg.textContent = '';
+  if (!reason) { msg.className = 'msg err'; msg.textContent = 'Please explain why your IP should be unblocked.'; return; }
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    const r = await fetch('/api/ip-appeal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+    const d = await r.json();
+    if (r.ok) {
+      document.getElementById('form-wrap').style.display = 'none';
+      msg.className = 'msg ok'; msg.textContent = '✅ Appeal submitted! An admin will review it shortly.';
+    } else {
+      msg.className = 'msg err'; msg.textContent = d.error || 'Failed to submit. Try again.';
+      btn.disabled = false; btn.textContent = 'Submit Appeal';
+    }
+  } catch { msg.className = 'msg err'; msg.textContent = 'Network error. Try again.'; btn.disabled = false; btn.textContent = 'Submit Appeal'; }
+}
+</script>
+</body></html>`;
+
 export function ipBlacklistMiddleware(req, res, next) {
   const ip = getClientIp(req);
-  if (db.isIpBlacklisted(ip)) {
-    console.warn(`🚫 Blocked IP: ${ip} → ${req.method} ${req.path}`);
-    return res.status(403).json({ error: 'Access denied.' });
-  }
-  next();
+  if (!db.isIpBlacklisted(ip)) return next();
+
+  console.warn(`🚫 Blocked IP: ${ip} → ${req.method} ${req.path}`);
+
+  // Always allow the appeal submission through
+  if (req.method === 'POST' && req.path === '/api/ip-appeal') return next();
+
+  // API routes → JSON 403
+  if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'Access denied.', blocked: true });
+
+  // Web routes → serve the appeal page
+  res.status(403).send(BLOCKED_PAGE);
 }
 
 // ── VPN / Proxy Detection ──────────────────────────────────────────────────────

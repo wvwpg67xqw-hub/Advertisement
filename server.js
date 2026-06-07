@@ -421,6 +421,27 @@ app.post('/api/appeals', requireBlacklisted, rateLimit('appeals', 2, 24 * 60 * 6
   res.json({ success: true, appealId });
 });
 
+// ── IP Appeal (public — accessible even to blocked IPs) ───────────────────────
+
+app.post('/api/ip-appeal', rateLimit('ip-appeal', 3, 24 * 60 * 60 * 1000), (req, res) => {
+  const { reason } = req.body || {};
+  if (!reason?.trim()) return res.status(400).json({ error: 'Appeal reason required' });
+  const ip = (
+    req.headers['cf-connecting-ip'] ||
+    req.headers['x-real-ip'] ||
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+    req.socket?.remoteAddress ||
+    req.ip ||
+    'unknown'
+  ).replace(/^::ffff:/, '');
+  try {
+    const entry = db.insertIpAppeal(ip, reason.trim());
+    res.json({ success: true, id: entry.id });
+  } catch (err) {
+    res.status(409).json({ error: err.message });
+  }
+});
+
 // ── Health check ──────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {

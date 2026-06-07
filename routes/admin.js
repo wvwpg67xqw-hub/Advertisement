@@ -397,6 +397,28 @@ router.delete('/ip-blacklist/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ── IP Appeals ────────────────────────────────────────────────────────────────
+
+router.get('/ip-appeals', requireAdmin, (req, res) => {
+  const { status } = req.query;
+  res.json(db.getIpAppeals(status || null));
+});
+
+router.post('/ip-appeals/:id/accept', requireAdmin, (req, res) => {
+  const appeal = db.getIpAppeal(req.params.id);
+  if (!appeal) return res.status(404).json({ error: 'Appeal not found' });
+  db.updateIpAppealStatus(appeal.id, 'accepted');
+  db.removeIpBlacklistByIp(appeal.ip);
+  res.json({ success: true });
+});
+
+router.post('/ip-appeals/:id/deny', requireAdmin, (req, res) => {
+  const appeal = db.getIpAppeal(req.params.id);
+  if (!appeal) return res.status(404).json({ error: 'Appeal not found' });
+  db.updateIpAppealStatus(appeal.id, 'denied');
+  res.json({ success: true });
+});
+
 // ── Admins ────────────────────────────────────────────────────────────────────
 
 router.get('/admins', requireAdmin, (req, res) => {

@@ -288,6 +288,13 @@ const db = {
     return { changes: rows.length - next.length };
   },
 
+  removeIpBlacklistByIp(ip) {
+    const rows = readCol('ip_blacklist');
+    const next = rows.filter(b => b.ip !== ip);
+    writeCol('ip_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
   isIpBlacklisted(ip) {
     if (!ip || ip === 'unknown') return false;
     return !!readCol('ip_blacklist').find(b => b.ip === ip);
@@ -324,6 +331,35 @@ const db = {
     const i = rows.findIndex(a => a.id === Number(id));
     if (i >= 0) { rows[i].status = status; rows[i].reviewedAt = ts(); }
     writeCol('appeals', rows);
+    return rows[i] ?? null;
+  },
+
+  // ── IP Appeals ─────────────────────────────────────────────────────────────
+
+  insertIpAppeal(ip, reason) {
+    const rows = readCol('ip_appeals');
+    if (rows.find(a => a.ip === ip && a.status === 'pending')) throw new Error('A pending appeal for this IP already exists');
+    const entry = { id: nextId('ip_appeals'), ip, reason: String(reason).slice(0, 2000), status: 'pending', createdAt: ts() };
+    rows.push(entry);
+    writeCol('ip_appeals', rows);
+    return entry;
+  },
+
+  getIpAppeal(id) {
+    return readCol('ip_appeals').find(a => a.id === Number(id)) ?? null;
+  },
+
+  getIpAppeals(status) {
+    let rows = readCol('ip_appeals');
+    if (status && ['pending', 'accepted', 'denied'].includes(status)) rows = rows.filter(a => a.status === status);
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  updateIpAppealStatus(id, status) {
+    const rows = readCol('ip_appeals');
+    const i = rows.findIndex(a => a.id === Number(id));
+    if (i >= 0) { rows[i].status = status; rows[i].reviewedAt = ts(); }
+    writeCol('ip_appeals', rows);
     return rows[i] ?? null;
   },
 
