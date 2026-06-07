@@ -36,6 +36,7 @@ import {
   handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
   handleModGuide, handleModGuideButton,
   handleStatus, handleActivity,
+  handleUnblockAll,
 } from './src/commands/index.js';
 
 import {
@@ -594,6 +595,7 @@ const botHandlers = {
   modguide: handleModGuide,
   status: handleStatus,
   activity: handleActivity,
+  'unblock-all': handleUnblockAll,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────

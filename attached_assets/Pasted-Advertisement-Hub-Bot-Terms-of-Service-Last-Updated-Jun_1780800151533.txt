@@ -1,0 +1,72 @@
+Advertisement Hub Bot Terms of Service
+
+Last Updated: June 6, 2026
+
+By using the Advertisement Hub bot, you agree to the following terms:
+
+1. Acceptance of Terms
+
+Using the bot means you agree to follow these Terms of Service and all applicable Discord Terms and Community Guidelines.
+
+2. Purpose of the Bot
+
+The bot is provided to help manage advertisements, server partnerships, moderation, and other community features within Advertisement Hub and any servers where it is authorized.
+
+3. User Responsibilities
+
+You agree not to:
+
+* Abuse, exploit, or attempt to break the bot.
+* Use the bot for illegal activities.
+* Send spam, scams, phishing links, malware, or malicious content.
+* Use the bot to harass, threaten, or target other users.
+* Bypass any cooldowns, restrictions, or moderation systems.
+
+4. Data Collection
+
+The bot may store:
+
+* Discord User IDs
+* Server IDs
+* Channel IDs
+* Command usage data
+* Moderation logs
+
+The bot does not collect passwords, payment information, or private Discord messages unless a feature specifically requires it.
+
+5. Availability
+
+The bot is provided “as is.” We do not guarantee:
+
+* 100% uptime
+* Error-free operation
+* Continuous availability of features
+
+Features may be modified, removed, or added at any time without notice.
+
+6. Termination
+
+We reserve the right to:
+
+* Restrict access to the bot
+* Remove users from bot services
+* Ban users who violate these terms
+
+7. Limitation of Liability
+
+The bot owners are not responsible for:
+
+* Data loss
+* Server damage caused by improper configuration
+* Actions taken by server administrators using the bot
+* Downtime or service interruptions
+
+8. Changes to These Terms
+
+These Terms of Service may be updated at any time. Continued use of the bot after changes are made constitutes acceptance of the updated terms.
+
+9. Contact
+
+For questions regarding these Terms of Service, contact the Advertisement Hub staff team through the server’s support channels.
+
+By using the Advertisement Hub bot, you acknowledge that you have read and agreed to these Terms of Service.

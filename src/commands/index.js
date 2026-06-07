@@ -10,6 +10,7 @@ export { defs as networkApplyDefs } from './network-apply.js';
 export { defs as levelingDefs } from './leveling.js';
 export { defs as modGuideDefs } from './modguide.js';
 export { defs as botSettingsDefs } from './botsettings.js';
+export { defs as devtoolsDefs } from './devtools.js';
 
 import { defs as moderationDefs } from './moderation.js';
 import { defs as staffManagementDefs } from './staff-management.js';
@@ -22,6 +23,7 @@ import { defs as networkApplyDefs } from './network-apply.js';
 import { defs as levelingDefs } from './leveling.js';
 import { defs as modGuideDefs } from './modguide.js';
 import { defs as botSettingsDefs } from './botsettings.js';
+import { defs as devtoolsDefs } from './devtools.js';
 
 export const commandDefs = [
   ...moderationDefs,
@@ -35,6 +37,7 @@ export const commandDefs = [
   ...levelingDefs,
   ...modGuideDefs,
   ...botSettingsDefs,
+  ...devtoolsDefs,
 ];
 
 // ── Handlers (re-exported from each module) ───────────────────────────────────
@@ -49,3 +52,4 @@ export { handleSetupNetworkApply, handleNetworkApplyPost } from './network-apply
 export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel } from './leveling.js';
 export { handleModGuide, handleModGuideButton } from './modguide.js';
 export { handleStatus, handleActivity } from './botsettings.js';
+export { handleUnblockAll } from './devtools.js';
