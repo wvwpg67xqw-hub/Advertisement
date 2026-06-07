@@ -16,10 +16,12 @@ const MAIN_GUILD_ID = (req) => (req?.query?.guildId) || process.env.MAIN_GUILD_I
 // ── GET referral link ──────────────────────────────────────────────────────────
 
 router.get('/referral-link', requireAuth, async (req, res) => {
+  const autoLink = `${req.protocol}://${req.get('host')}/apply`;
   const guildId = MAIN_GUILD_ID(req);
-  if (!guildId) return res.json({ link: null });
+  if (!guildId) return res.json({ link: autoLink, auto: true });
   const config = await getGuild(guildId);
-  res.json({ link: config.referral_link || null });
+  const customLink = config.referral_link || null;
+  res.json({ link: customLink || autoLink, auto: !customLink });
 });
 
 // ── SET referral link (admin only) ────────────────────────────────────────────
@@ -34,8 +36,11 @@ router.post('/referral-link', requireAuth, (req, res) => {
   import('../db.js').then(async ({ default: db }) => {
     const admin = db.getAdmin(req.session.user?.userId);
     if (!admin) return res.status(403).json({ error: 'Admin access required' });
-    await setGuildConfig(guildId, { referral_link: link.trim() });
-    res.json({ success: true, link: link.trim() });
+
+    // '__auto__' sentinel clears the custom link so auto-generation takes over
+    const finalLink = link.trim() === '__auto__' ? '' : link.trim();
+    await setGuildConfig(guildId, { referral_link: finalLink });
+    res.json({ success: true, auto: finalLink === '' });
   }).catch(() => res.status(500).json({ error: 'Server error' }));
 });
 

@@ -27,6 +27,7 @@ export default function Staff() {
 
   // ── Referral link state ──
   const [referralLink, setReferralLink] = useState(null);
+  const [referralAuto, setReferralAuto] = useState(true);
   const [referralLoading, setReferralLoading] = useState(true);
   const [newLink, setNewLink] = useState('');
   const [savingLink, setSavingLink] = useState(false);
@@ -45,6 +46,7 @@ export default function Staff() {
       const res = await api('/api/staff/referral-link');
       const data = await res.json();
       setReferralLink(data.link);
+      setReferralAuto(data.auto ?? true);
     } catch {}
     setReferralLoading(false);
   }, []);
@@ -127,16 +129,30 @@ export default function Staff() {
 
       {/* ── Referral Link ── */}
       <div style={cardStyle}>
-        <div style={sectionTitle}>🔗 Referral Link</div>
+        <div style={sectionTitle}>
+          🔗 Application Referral Link
+          {!referralLoading && referralAuto && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+              background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)',
+            }}>✨ Auto-generated</span>
+          )}
+          {!referralLoading && !referralAuto && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+              background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.3)',
+            }}>Custom</span>
+          )}
+        </div>
         <div style={sectionSub}>
-          The current referral/invite link for your community. Auto-refreshes every 30 seconds.
+          Share this link so people can apply to join the staff team. It always points to the application page.
         </div>
 
         {referralLoading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: 13 }}>
             <div className="spinner" style={{ width: 16, height: 16 }} /> Loading...
           </div>
-        ) : referralLink ? (
+        ) : (
           <div style={{
             background: 'var(--surface2)',
             border: '1px solid var(--border)',
@@ -158,29 +174,46 @@ export default function Staff() {
             </a>
             <CopyButton text={referralLink} />
           </div>
-        ) : (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>
-            No referral link set yet. Admins can set one below.
-          </div>
         )}
 
         {user?.isAdmin && (
-          <form onSubmit={saveLink} style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-            <input
-              className="form-input"
-              style={{ flex: 1, fontSize: 13 }}
-              placeholder="Paste new referral link..."
-              value={newLink}
-              onChange={e => setNewLink(e.target.value)}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary btn-sm"
-              disabled={savingLink || !newLink.trim()}
-            >
-              {savingLink ? 'Saving…' : 'Update'}
-            </button>
-          </form>
+          <>
+            <form onSubmit={saveLink} style={{ marginTop: 14, display: 'flex', gap: 10 }}>
+              <input
+                className="form-input"
+                style={{ flex: 1, fontSize: 13 }}
+                placeholder="Override with a custom link (optional)…"
+                value={newLink}
+                onChange={e => setNewLink(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={savingLink || !newLink.trim()}
+              >
+                {savingLink ? 'Saving…' : 'Set Custom'}
+              </button>
+            </form>
+            {!referralAuto && (
+              <button
+                style={{
+                  marginTop: 8, fontSize: 12, color: 'var(--text-muted)', background: 'none',
+                  border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline',
+                }}
+                onClick={async () => {
+                  setLinkMsg(null);
+                  await api('/api/staff/referral-link', {
+                    method: 'POST',
+                    body: JSON.stringify({ link: '__auto__', guildId: mainGuildId }),
+                  });
+                  await loadReferralLink();
+                  setLinkMsg({ success: 'Reverted to auto-generated link.' });
+                }}
+              >
+                ↩ Revert to auto-generated
+              </button>
+            )}
+          </>
         )}
 
         {linkMsg && (
