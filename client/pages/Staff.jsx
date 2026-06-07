@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../App.jsx';
+import { QRCodeCanvas } from 'qrcode.react';
 
 const api = (path, opts = {}) =>
   fetch(path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -32,6 +33,8 @@ export default function Staff() {
   const [newLink, setNewLink] = useState('');
   const [savingLink, setSavingLink] = useState(false);
   const [linkMsg, setLinkMsg] = useState(null);
+  const [qrCopied, setQrCopied] = useState(false);
+  const qrRef = useRef(null);
 
   // ── Modmail state ──
   const [modmailLoading, setModmailLoading] = useState(false);
@@ -72,6 +75,25 @@ export default function Staff() {
       else { setReferralLink(data.link); setNewLink(''); setLinkMsg({ success: 'Referral link updated.' }); }
     } catch { setLinkMsg({ error: 'Network error.' }); }
     setSavingLink(false);
+  }
+
+  async function copyQr() {
+    const canvas = qrRef.current?.querySelector('canvas');
+    if (!canvas) return;
+    try {
+      canvas.toBlob(async (blob) => {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setQrCopied(true);
+        setTimeout(() => setQrCopied(false), 2000);
+      });
+    } catch {
+      // fallback: download
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'referral-qr.png';
+      a.click();
+    }
   }
 
   async function applyModmail() {
@@ -153,26 +175,70 @@ export default function Staff() {
             <div className="spinner" style={{ width: 16, height: 16 }} /> Loading...
           </div>
         ) : (
-          <div style={{
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: 10,
-            padding: '12px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}>
-            <a
-              href={referralLink}
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontWeight: 600, wordBreak: 'break-all', fontSize: 14 }}
-            >
-              {referralLink}
-            </a>
-            <CopyButton text={referralLink} />
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {/* QR Code */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div
+                ref={qrRef}
+                style={{
+                  background: '#fff',
+                  borderRadius: 12,
+                  padding: 10,
+                  display: 'inline-block',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+                }}
+              >
+                <QRCodeCanvas
+                  value={referralLink || ''}
+                  size={140}
+                  bgColor="#ffffff"
+                  fgColor="#0f172a"
+                  level="M"
+                  includeMargin={false}
+                />
+              </div>
+              <button
+                onClick={copyQr}
+                style={{
+                  fontSize: 12, fontWeight: 600, padding: '5px 14px', borderRadius: 8,
+                  background: qrCopied ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.07)',
+                  border: `1px solid ${qrCopied ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                  color: qrCopied ? '#4ade80' : 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}
+              >
+                {qrCopied ? '✅ Copied!' : '📋 Copy QR'}
+              </button>
+            </div>
+
+            {/* Link + copy */}
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginBottom: 8,
+              }}>
+                <a
+                  href={referralLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontWeight: 600, wordBreak: 'break-all', fontSize: 13 }}
+                >
+                  {referralLink}
+                </a>
+                <CopyButton text={referralLink} />
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                Share this link or QR code. Anyone who applies through it will be tracked back to you.
+              </p>
+            </div>
           </div>
         )}
 
