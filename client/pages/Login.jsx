@@ -17,6 +17,7 @@ const errorMessages = {
   bots_not_allowed:  'Bot accounts cannot log in to the Staff Portal.',
   vpn_not_allowed:   'VPN and proxy connections are not allowed. Please disable your VPN and try again.',
   access_denied:     'Access denied.',
+  tos_pending:       null,
 };
 
 export default function Login() {
@@ -25,6 +26,27 @@ export default function Login() {
   const loggedOut = searchParams.get('loggedout') === '1';
   const { guild_name, pfp_url } = useBranding();
   const [hovering, setHovering] = useState(false);
+
+  if (error === 'tos_pending') {
+    return (
+      <>
+        <PageBackground />
+        <div style={styles.outer}>
+          <div style={styles.card}>
+            <div style={styles.iconCircle}>📋</div>
+            <h1 style={styles.title}>Terms of Service Required</h1>
+            <p style={styles.subtitle}>
+              You must accept the Terms of Service before logging in.<br /><br />
+              Check your <strong style={{ color: 'rgba(255,255,255,0.85)' }}>Discord DMs</strong> from the bot and click <strong style={{ color: '#4ade80' }}>✅ I Agree</strong> on the message we sent you.
+            </p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+              Once you click the button in Discord, you can log in here.
+            </p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   if (error === 'blacklisted') {
     return (

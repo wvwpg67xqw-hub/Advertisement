@@ -63,34 +63,46 @@ export async function handleUnblockAll(interaction) {
     return interaction.editReply({ content: '✅ No one is currently blacklisted (users or IPs).' });
   }
 
-  let unbannedUsers = 0;
-  let unbannedIps   = 0;
-  let dmSent        = 0;
-  let dmFailed      = 0;
+  let pendingTos  = 0;
+  let unbannedIps = 0;
+  let dmSent      = 0;
+  let dmFailed    = 0;
 
-  // ── Clear user blacklist + DM each user the ToS ──────────────────────────
+  // ── Move each user from blacklist → pending ToS, then DM them ────────────
   for (const entry of userBlacklist) {
     try {
       db.deleteBlacklistByUserId(entry.userId);
-      unbannedUsers++;
+      db.addPendingTos(entry.userId, entry.username);
+      pendingTos++;
     } catch {}
 
     try {
       const tosEmbed = new EmbedBuilder()
-        .setTitle('🔓 You have been unbanned from the Staff Portal')
-        .setDescription(TOS_MESSAGE)
-        .setColor(0x22c55e)
+        .setTitle('📋 Advertisement Hub — Terms of Service')
+        .setDescription(
+          TOS_MESSAGE +
+          '\n\n**Click ✅ I Agree below to accept these terms and regain access to the Staff Portal.**'
+        )
+        .setColor(0xf59e0b)
         .setTimestamp()
-        .setFooter({ text: 'Staff Portal · Terms of Service' });
+        .setFooter({ text: 'Staff Portal · You must accept to continue' });
 
-      const ok = await sendDM(entry.userId, { embeds: [tosEmbed.toJSON()] });
+      const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = (await import('discord.js'));
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`tos_agree_${entry.userId}`)
+          .setLabel('✅ I Agree')
+          .setStyle(ButtonStyle.Success),
+      );
+
+      const ok = await sendDM(entry.userId, { embeds: [tosEmbed.toJSON()], components: [row.toJSON()] });
       if (ok) dmSent++; else dmFailed++;
     } catch {
       dmFailed++;
     }
   }
 
-  // ── Clear IP blacklist (no DM possible — IPs have no Discord account) ────
+  // ── Clear IP blacklist immediately (IPs can't click buttons) ─────────────
   for (const entry of ipBlacklist) {
     try {
       db.removeIpBlacklist(entry.id);
@@ -99,13 +111,14 @@ export async function handleUnblockAll(interaction) {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle('✅ Unblock All Complete')
+    .setTitle('✅ Unblock All Initiated')
     .setColor(0x22c55e)
+    .setDescription('Users have been sent the ToS and must click **✅ I Agree** before they can log in.')
     .addFields(
-      { name: '👤 Users Unbanned', value: String(unbannedUsers), inline: true },
-      { name: '🌐 IPs Unbanned',   value: String(unbannedIps),   inline: true },
-      { name: '📬 DMs Sent',       value: String(dmSent),        inline: true },
-      { name: '⚠️ DMs Failed',    value: String(dmFailed),      inline: true },
+      { name: '⏳ Awaiting ToS',  value: String(pendingTos),  inline: true },
+      { name: '🌐 IPs Unbanned',  value: String(unbannedIps), inline: true },
+      { name: '📬 DMs Sent',      value: String(dmSent),      inline: true },
+      { name: '⚠️ DMs Failed',   value: String(dmFailed),    inline: true },
     )
     .setTimestamp()
     .setFooter({ text: 'Staff Portal · Dev Tools' });

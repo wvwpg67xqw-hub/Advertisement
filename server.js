@@ -288,6 +288,10 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(discordUser.id) % 6n)}.png`;
 
+    if (db.isPendingTos(discordUser.id)) {
+      return res.redirect('/?error=tos_pending');
+    }
+
     const isBlacklisted = db.isBlacklisted(discordUser.id);
     let isAdmin         = !!db.getAdmin(discordUser.id);
     const { isNew }     = db.upsertUser(discordUser.id, discordUser.username, avatar);
@@ -829,6 +833,20 @@ client.on('interactionCreate', async (interaction) => {
         if (appeal.status !== 'pending') return interaction.reply({ content: `⚠️ Already ${appeal.status}.`, ephemeral: true });
         db.updateAppealStatus(appealId, 'denied');
         return interaction.reply({ content: `❌ Appeal #${appealId} denied. **${appeal.username}** stays banned.`, ephemeral: true });
+      }
+
+      // ── ToS Agree button ──────────────────────────────────────────────────
+      if (id.startsWith('tos_agree_')) {
+        const userId = id.slice(10);
+        if (interaction.user.id !== userId) {
+          return interaction.reply({ content: '❌ This button is not for you.', flags: 64 });
+        }
+        db.removePendingTos(userId);
+        return interaction.update({
+          content: '✅ You have accepted the Terms of Service and can now log back into the Staff Portal.',
+          embeds: [],
+          components: [],
+        });
       }
 
       // ── IP Appeal: Accept ──────────────────────────────────────────────────

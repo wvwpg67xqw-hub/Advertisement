@@ -231,6 +231,27 @@ const db = {
     return { changes: rows.length - next.length };
   },
 
+  // ── Pending ToS ────────────────────────────────────────────────────────────
+  addPendingTos(userId, username) {
+    const rows = readCol('pending_tos');
+    if (rows.find(r => r.userId === userId)) return;
+    rows.push({ userId, username, createdAt: ts() });
+    writeCol('pending_tos', rows);
+  },
+
+  removePendingTos(userId) {
+    const rows = readCol('pending_tos').filter(r => r.userId !== userId);
+    writeCol('pending_tos', rows);
+  },
+
+  isPendingTos(userId) {
+    return !!readCol('pending_tos').find(r => r.userId === userId);
+  },
+
+  getPendingTos() {
+    return readCol('pending_tos');
+  },
+
   // ── User Blacklist ─────────────────────────────────────────────────────────
   getBlacklist() {
     return readCol('web_blacklist').sort((a, b) => b.createdAt - a.createdAt);
