@@ -417,9 +417,11 @@ app.post('/api/appeals', requireBlacklisted, rateLimit('appeals', 2, 24 * 60 * 6
 
   const { userId, username, avatar } = req.session.user;
 
+  const allUserAppeals = db.getAppeals().filter(a => a.userId === userId);
+  if (allUserAppeals.length >= 2) return res.status(403).json({ error: 'You have reached the maximum of 2 appeals.' });
+
   const existing = db.getUserAppeal(userId);
   if (existing?.status === 'pending') return res.status(409).json({ error: 'You already have a pending appeal.' });
-  if (existing?.status === 'denied')  return res.status(403).json({ error: 'Your appeal was already denied.' });
 
   const banEntry = db.getBlacklistEntry(userId);
   const { id: appealId } = db.insertAppeal({ userId, username, avatar, reason: reason.trim() });
@@ -444,6 +446,9 @@ app.post('/api/ip-appeal', rateLimit('ip-appeal', 3, 24 * 60 * 60 * 1000), async
     'unknown'
   ).replace(/^::ffff:/, '');
   try {
+    const allIpAppeals = db.getIpAppeals().filter(a => a.ip === ip);
+    if (allIpAppeals.length >= 2) return res.status(403).json({ error: 'This IP has reached the maximum of 2 appeals.' });
+
     const entry = db.insertIpAppeal(ip, reason.trim());
     res.json({ success: true, id: entry.id });
 
