@@ -56,19 +56,23 @@ export async function handleUnblockAll(interaction) {
 
   await interaction.deferReply({ flags: 64 });
 
-  const blacklist = db.getBlacklist();
-  if (blacklist.length === 0) {
-    return interaction.editReply({ content: '✅ No one is currently blacklisted.' });
+  const userBlacklist = db.getBlacklist();
+  const ipBlacklist   = db.getIpBlacklist();
+
+  if (userBlacklist.length === 0 && ipBlacklist.length === 0) {
+    return interaction.editReply({ content: '✅ No one is currently blacklisted (users or IPs).' });
   }
 
-  let unbanned = 0;
-  let dmSent = 0;
-  let dmFailed = 0;
+  let unbannedUsers = 0;
+  let unbannedIps   = 0;
+  let dmSent        = 0;
+  let dmFailed      = 0;
 
-  for (const entry of blacklist) {
+  // ── Clear user blacklist + DM each user the ToS ──────────────────────────
+  for (const entry of userBlacklist) {
     try {
       db.deleteBlacklistByUserId(entry.userId);
-      unbanned++;
+      unbannedUsers++;
     } catch {}
 
     try {
@@ -86,13 +90,22 @@ export async function handleUnblockAll(interaction) {
     }
   }
 
+  // ── Clear IP blacklist (no DM possible — IPs have no Discord account) ────
+  for (const entry of ipBlacklist) {
+    try {
+      db.removeIpBlacklist(entry.id);
+      unbannedIps++;
+    } catch {}
+  }
+
   const embed = new EmbedBuilder()
     .setTitle('✅ Unblock All Complete')
     .setColor(0x22c55e)
     .addFields(
-      { name: '🔓 Unbanned',      value: String(unbanned),  inline: true },
-      { name: '📬 DMs Sent',      value: String(dmSent),    inline: true },
-      { name: '⚠️ DMs Failed',   value: String(dmFailed),  inline: true },
+      { name: '👤 Users Unbanned', value: String(unbannedUsers), inline: true },
+      { name: '🌐 IPs Unbanned',   value: String(unbannedIps),   inline: true },
+      { name: '📬 DMs Sent',       value: String(dmSent),        inline: true },
+      { name: '⚠️ DMs Failed',    value: String(dmFailed),      inline: true },
     )
     .setTimestamp()
     .setFooter({ text: 'Staff Portal · Dev Tools' });
