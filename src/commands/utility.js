@@ -74,7 +74,7 @@ export const defs = [
     .setName('panel')
     .setDescription('Post an embed panel with a link button')
     .addStringOption(o => o.setName('link').setDescription('URL the button should open').setRequired(true))
-    .addStringOption(o => o.setName('title').setDescription('Embed title').setRequired(true))
+    .addStringOption(o => o.setName('title').setDescription('Embed title (auto-generated from the link if omitted)'))
     .addStringOption(o => o.setName('description').setDescription('Embed description text'))
     .addStringOption(o => o.setName('button-label').setDescription('Label shown on the button (default: Click Here)'))
     .addStringOption(o => o.setName('color').setDescription('Embed colour as a hex code, e.g. #5865F2').setRequired(false))
@@ -361,16 +361,19 @@ export async function handlePanel(interaction) {
   if (!await hasCommandPermission(interaction.member, 'panel')) return deny(interaction);
 
   const link        = interaction.options.getString('link');
-  const title       = interaction.options.getString('title');
   const description = interaction.options.getString('description') || null;
   const label       = interaction.options.getString('button-label') || 'Click Here';
   const colorHex    = interaction.options.getString('color') || '#5865F2';
   const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
 
-  // Validate URL
-  try { new URL(link); } catch {
+  // Validate URL and auto-generate title from hostname
+  let parsedUrl;
+  try { parsedUrl = new URL(link); } catch {
     return interaction.reply({ content: '❌ Invalid URL. Make sure it starts with `https://`.', flags: 64 });
   }
+  const title = interaction.options.getString('title') ||
+    parsedUrl.hostname.replace(/^www\./, '').split('.').slice(0, -1).join('.') ||
+    parsedUrl.hostname;
 
   // Validate hex colour
   const hexMatch = colorHex.replace('#', '');
