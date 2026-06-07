@@ -451,11 +451,15 @@ app.post('/api/ip-appeal', rateLimit('ip-appeal', 3, 24 * 60 * 60 * 1000), async
     try {
       const channel = await client.channels.fetch(APPEALS_CHANNEL_ID).catch(() => null);
       if (channel) {
+        const blurredIp = ip.includes(':')
+          ? ip.replace(/:[^:]+:[^:]+:[^:]+:[^:]+$/, ':****:****:****:****')
+          : ip.split('.').map((o, i) => i < 2 ? o : '***').join('.');
+
         const embed = new EmbedBuilder()
           .setTitle(`🌐 IP Ban Appeal #${entry.id}`)
           .setColor(0xf59e0b)
           .addFields(
-            { name: '🖥️ IP Address',   value: `\`${ip}\``,              inline: true  },
+            { name: '🖥️ IP Address',   value: `\`${blurredIp}\``,       inline: true  },
             { name: '🔢 Appeal #',      value: String(entry.id),         inline: true  },
             { name: '📝 Appeal Reason', value: reason.trim().slice(0, 1024), inline: false },
             { name: '🕒 Time',          value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
