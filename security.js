@@ -169,7 +169,25 @@ export function isDiscordBot(discordUser) {
 
 // ── Breach Alert → Owner DM (via REST, no gateway needed) ─────────────────────
 
+function isPrivateIp(ip) {
+  if (!ip || ip === 'unknown') return true;
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip.startsWith('::') ||
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+  );
+}
+
 export async function sendBreachAlert({ type, ip, detail, userId, username }) {
+  // Never alert on private/internal IPs — prevents proxy spam
+  if (isPrivateIp(ip)) {
+    console.warn(`[Security] Skipping alert for private IP ${ip}: ${type} — ${detail}`);
+    return;
+  }
+
   const ownerId = process.env.OWNER_ID || '1453592157607825595';
 
   const embed = new EmbedBuilder()
