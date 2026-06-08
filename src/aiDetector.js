@@ -1,19 +1,24 @@
 /**
- * AI Content Detector — uses the free Hugging Face Inference API.
- * Primary model : openai-community/roberta-base-openai-detector
- * Fallback model: Hello-SimpleAI/chatgpt-detector-roberta
- * Requires HUGGINGFACE_TOKEN env var (free HF account token).
+ * AI Content Detector
  *
- * Only used internally by staff — never exposed to applicants.
+ * Strategy (in order):
+ *  1. HuggingFace openai-community/roberta-base-openai-detector  (most accurate)
+ *  2. HuggingFace Hello-SimpleAI/chatgpt-detector-roberta        (fallback API)
+ *  3. Local heuristic analyser                                    (always works, no network)
+ *
+ * Always returns a result — never skips.
+ * Requires HUGGINGFACE_TOKEN for steps 1–2 (optional; step 3 never needs it).
  */
 
-const HF_BASE = 'https://api-inference.huggingface.co/models';
-const MODELS = [
+const HF_BASE    = 'https://api-inference.huggingface.co/models';
+const HF_MODELS  = [
   `${HF_BASE}/openai-community/roberta-base-openai-detector`,
   `${HF_BASE}/Hello-SimpleAI/chatgpt-detector-roberta`,
 ];
-const MIN_CHARS = 80;
+const MIN_CHARS  = 80;
 const TIMEOUT_MS = 25_000;
+
+// ─── HuggingFace call ────────────────────────────────────────────────────────
 
 async function callHF(url, token, inputs) {
   const controller = new AbortController();
@@ -37,60 +42,141 @@ async function callHF(url, token, inputs) {
   }
 }
 
-/**
- * Detect AI content in a block of text.
- * @param {string} text
- * @returns {{ aiScore: number, humanScore: number, label: string, skipped: boolean, error: string|null }}
- */
-export async function detectAI(text) {
-  const token = process.env.HUGGINGFACE_TOKEN;
-  if (!token) {
-    return { aiScore: 0, humanScore: 0, label: 'Unknown', skipped: true, error: 'HUGGINGFACE_TOKEN not set' };
+// ─── Local heuristic fallback ────────────────────────────────────────────────
+// Scores a piece of text for AI-likeness using writing-pattern signals.
+// Returns 0–100 (higher = more likely AI).
+
+const AI_PHRASES = [
+  /\bin conclusion\b/i,
+  /\bfurthermore\b/i,
+  /\bmoreover\b/i,
+  /\badditionally\b/i,
+  /\bin summary\b/i,
+  /\bto summarize\b/i,
+  /\bit is (important|worth noting|essential)\b/i,
+  /\bI (am passionate|am excited|am eager|am committed|am dedicated) (about|to)\b/i,
+  /\bI would like to\b/i,
+  /\bI believe that\b/i,
+  /\bone must\b/i,
+  /\beffective(ly)?\b/i,
+  /\bensure\b/i,
+  /\bultimately\b/i,
+  /\boverall\b/i,
+  /\bthis (role|position|opportunity)\b/i,
+  /\bI am (a|an) (dedicated|hardworking|motivated|passionate)\b/i,
+  /\bcollaborate\b/i,
+  /\bfoster\b/i,
+  /\bstrive\b/i,
+  /\bleverage\b/i,
+  /\bsynergy\b/i,
+  /\bproactive(ly)?\b/i,
+];
+
+function heuristicScore(text) {
+  const words = text.trim().split(/\s+/);
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+
+  // 1. AI-phrase hits (up to 40 pts)
+  const phraseHits = AI_PHRASES.filter(re => re.test(text)).length;
+  const phraseScore = Math.min(phraseHits * 5, 40);
+
+  // 2. Low contraction ratio (AI rarely uses contractions) — up to 20 pts
+  const contractions = (text.match(/\b(don't|can't|won't|I'm|I've|I'll|I'd|it's|that's|there's|they're|we're|you're|he's|she's|isn't|wasn't|weren't|hasn't|haven't|didn't|wouldn't|couldn't|shouldn't)\b/gi) || []).length;
+  const contractionRatio = contractions / Math.max(words.length, 1);
+  const contractionScore = contractionRatio < 0.01 ? 20 : contractionRatio < 0.03 ? 10 : 0;
+
+  // 3. Very uniform sentence length (AI tends to write equally-long sentences) — up to 20 pts
+  let uniformScore = 0;
+  if (sentences.length >= 3) {
+    const lens = sentences.map(s => s.trim().split(/\s+/).length);
+    const avg  = lens.reduce((a, b) => a + b, 0) / lens.length;
+    const variance = lens.reduce((a, b) => a + (b - avg) ** 2, 0) / lens.length;
+    if (variance < 5)  uniformScore = 20;
+    else if (variance < 15) uniformScore = 10;
   }
 
+  // 4. Long average sentence (AI writes longer sentences) — up to 10 pts
+  const avgWords = words.length / Math.max(sentences.length, 1);
+  const lengthScore = avgWords > 30 ? 10 : avgWords > 22 ? 5 : 0;
+
+  // 5. Very high lexical diversity (AI uses many varied words) — up to 10 pts
+  const unique = new Set(words.map(w => w.toLowerCase().replace(/[^a-z]/g, ''))).size;
+  const diversity = unique / Math.max(words.length, 1);
+  const diversityScore = diversity > 0.75 ? 10 : diversity > 0.65 ? 5 : 0;
+
+  const total = Math.min(phraseScore + contractionScore + uniformScore + lengthScore + diversityScore, 100);
+  return total;
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Detect AI content in a block of text.
+ * ALWAYS returns a result — never returns { skipped: true }.
+ *
+ * @param {string} text
+ * @returns {{ aiScore: number, humanScore: number, label: string, skipped: boolean, source: string, error: string|null }}
+ */
+export async function detectAI(text) {
+  const token   = process.env.HUGGINGFACE_TOKEN;
   const trimmed = text.trim();
+
   if (trimmed.length < MIN_CHARS) {
-    return { aiScore: 0, humanScore: 0, label: 'Unknown', skipped: true, error: 'Not enough text to analyse' };
+    // Too short for ML — use heuristic directly
+    const aiScore    = heuristicScore(trimmed);
+    const humanScore = 100 - aiScore;
+    return {
+      aiScore, humanScore,
+      label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
+      skipped: false,
+      source:  'Heuristic (text too short for ML)',
+      error:   null,
+    };
   }
 
   const input = trimmed.slice(0, 512);
-  let lastError = 'Unknown error';
 
-  for (const modelUrl of MODELS) {
-    try {
-      const res = await callHF(modelUrl, token, input);
+  // ── Try HuggingFace models ────────────────────────────────────────────────
+  if (token) {
+    for (const modelUrl of HF_MODELS) {
+      try {
+        const res = await callHF(modelUrl, token, input);
+        if (!res.ok) continue;
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        lastError = `HF API ${res.status}: ${body.slice(0, 120)}`;
-        continue;
+        const data    = await res.json();
+        const results = Array.isArray(data[0]) ? data[0] : data;
+        if (!Array.isArray(results)) continue;
+
+        const aiEntry    = results.find(r => r.label === 'ChatGPT' || r.label === 'Fake'  || r.label?.toLowerCase().includes('ai'));
+        const humanEntry = results.find(r => r.label === 'Human'   || r.label === 'Real'  || r.label?.toLowerCase().includes('human'));
+
+        const aiScore    = aiEntry    ? Math.round(aiEntry.score    * 100) : 0;
+        const humanScore = humanEntry ? Math.round(humanEntry.score * 100) : 0;
+        const modelName  = modelUrl.split('/').slice(-2).join('/');
+
+        return {
+          aiScore, humanScore,
+          label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
+          skipped: false,
+          source:  `ML · ${modelName}`,
+          error:   null,
+        };
+      } catch {
+        // try next model
       }
-
-      const data = await res.json();
-
-      // Both models return [[{label, score}, ...]] or [{label, score}, ...]
-      const results = Array.isArray(data[0]) ? data[0] : data;
-      if (!Array.isArray(results)) { lastError = 'Unexpected response shape'; continue; }
-
-      // openai detector uses "Real"/"Fake"; chatgpt detector uses "Human"/"ChatGPT"
-      const aiEntry    = results.find(r => r.label === 'ChatGPT' || r.label === 'Fake'  || r.label?.toLowerCase().includes('ai'));
-      const humanEntry = results.find(r => r.label === 'Human'   || r.label === 'Real'  || r.label?.toLowerCase().includes('human'));
-
-      const aiScore    = aiEntry    ? Math.round(aiEntry.score    * 100) : 0;
-      const humanScore = humanEntry ? Math.round(humanEntry.score * 100) : 0;
-
-      let label;
-      if (aiScore >= 75)      label = 'Likely AI';
-      else if (aiScore >= 45) label = 'Uncertain';
-      else                    label = 'Likely Human';
-
-      return { aiScore, humanScore, label, skipped: false, error: null };
-    } catch (err) {
-      lastError = err.name === 'AbortError' ? 'Request timed out (25 s)' : err.message;
     }
   }
 
-  return { aiScore: 0, humanScore: 0, label: 'Unknown', skipped: true, error: lastError };
+  // ── Local heuristic — always works ───────────────────────────────────────
+  const aiScore    = heuristicScore(input);
+  const humanScore = 100 - aiScore;
+  return {
+    aiScore, humanScore,
+    label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
+    skipped: false,
+    source:  token ? 'Heuristic (API unavailable)' : 'Heuristic (no token)',
+    error:   null,
+  };
 }
 
 /**
