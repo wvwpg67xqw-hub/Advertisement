@@ -205,6 +205,76 @@ router.post('/applications/:id/deny', requireAdmin, async (req, res) => {
 
 import { ROLE_QUESTIONS } from './applications.js';
 
+const FAKE_FIRST = ['Alex','Jordan','Morgan','Taylor','Casey','Riley','Skyler','Quinn','Avery','Blake','Drew','Jamie'];
+const FAKE_LAST  = ['Smith','Williams','Johnson','Brown','Davis','Miller','Wilson','Moore','Taylor','Anderson'];
+const FAKE_TIMEZONES = ['UTC-8 (PST)','UTC-7 (MST)','UTC-6 (CST)','UTC-5 (EST)','UTC+0 (GMT)','UTC+1 (CET)','UTC+5:30 (IST)','UTC+8 (SGT)','UTC+10 (AEST)'];
+
+function makeFakeUser() {
+  const DISCORD_EPOCH = 1420070400000n;
+  const ts = BigInt(Date.now()) - DISCORD_EPOCH;
+  const snowflake = (ts << 22n) | BigInt(Math.floor(Math.random() * 0xFFFFF));
+  const first = FAKE_FIRST[Math.floor(Math.random() * FAKE_FIRST.length)];
+  const last  = FAKE_LAST [Math.floor(Math.random() * FAKE_LAST.length)];
+  const tag   = Math.floor(Math.random() * 9000) + 1000;
+  const userId   = snowflake.toString();
+  const username = `${first}${last}${tag}`;
+  const avatar   = `https://cdn.discordapp.com/embed/avatars/${Math.floor(Math.random() * 6)}.png`;
+  return { userId, username, avatar };
+}
+
+async function generateAiAnswers(questions, role) {
+  const token = process.env.HUGGINGFACE_TOKEN;
+
+  const shortAnswer = (q) => {
+    const lq = q.toLowerCase();
+    if (lq.includes('how old') || lq.includes('age'))
+      return String(Math.floor(Math.random() * 6) + 18);
+    if (lq.includes('timezone'))
+      return FAKE_TIMEZONES[Math.floor(Math.random() * FAKE_TIMEZONES.length)];
+    if (lq.includes('hours per week') || lq.includes('how many hours'))
+      return ['10–15 hours', '15–20 hours', '20–25 hours'][Math.floor(Math.random() * 3)];
+    return null;
+  };
+
+  const answers = questions.map(q => shortAnswer(q));
+  const essayIdx = answers.map((a, i) => a === null ? i : null).filter(i => i !== null);
+
+  if (essayIdx.length === 0 || !token) {
+    return answers.map((a, i) => a ?? `[TEST] Sample answer for: "${questions[i].slice(0, 60)}"`);
+  }
+
+  const numbered = essayIdx.map((qi, n) => `${n + 1}. ${questions[qi]}`).join('\n');
+  const prompt =
+    `<|system|>You are writing a realistic Discord staff application for the role of ${role}. ` +
+    `Answer each question in 2–3 natural sentences as a real person would. Be genuine and specific. ` +
+    `Do not repeat the question. Number each answer.</s>\n` +
+    `<|user|>${numbered}</s>\n<|assistant|>1.`;
+
+  try {
+    const hfRes = await fetch('https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: { max_new_tokens: 1800, return_full_text: false, temperature: 0.75, do_sample: true },
+      }),
+    });
+
+    if (hfRes.ok) {
+      const data = await hfRes.json();
+      const raw = (Array.isArray(data) ? data[0]?.generated_text : data?.generated_text) ?? '';
+      const parts = ('1.' + raw).split(/\n?\d+\.\s+/).filter(Boolean);
+      essayIdx.forEach((qi, pi) => {
+        answers[qi] = parts[pi]?.trim() || null;
+      });
+    }
+  } catch (e) {
+    console.error('[test-app] HF generation error:', e.message);
+  }
+
+  return answers.map((a, i) => a ?? `[TEST] Sample answer for: "${questions[i].slice(0, 60)}"`);
+}
+
 router.post('/test-application', requireAdmin, async (req, res) => {
   try {
     const { role } = req.body;
@@ -216,19 +286,16 @@ router.post('/test-application', requireAdmin, async (req, res) => {
     const questions = ROLE_QUESTIONS[validRole.name] || [];
     if (questions.length === 0) return res.status(400).json({ error: 'No questions for this role' });
 
+    const fakeUser = makeFakeUser();
     const adminUser = req.session.user;
 
-    // Build dummy answers
-    const testAnswers = questions.map((q, i) => {
-      if (i === 0) return '22';
-      if (i === 1) return 'UTC+0 (GMT)';
-      return `[TEST] Sample answer for: "${q.slice(0, 60)}"`;
-    });
+    // AI-generated answers (falls back gracefully if HF is unavailable)
+    const testAnswers = await generateAiAnswers(questions, validRole.name);
 
     const result = db.insertApplication({
-      userId: adminUser.userId,
-      username: `[TEST] ${adminUser.username}`,
-      avatar: adminUser.avatar,
+      userId: fakeUser.userId,
+      username: `[TEST] ${fakeUser.username}`,
+      avatar: fakeUser.avatar,
       role: validRole.name,
       answers: testAnswers,
     });
@@ -240,17 +307,17 @@ router.post('/test-application', requireAdmin, async (req, res) => {
         const previewEmbed = new EmbedBuilder()
           .setTitle('📋 [TEST] Staff Application')
           .setColor(0x5865f2)
-          .setThumbnail(adminUser.avatar || null)
+          .setThumbnail(fakeUser.avatar)
           .addFields(
-            { name: '👤 Applicant', value: `**[TEST] ${adminUser.username}**\n\`${adminUser.userId}\``, inline: true },
+            { name: '👤 Applicant', value: `**[TEST] ${fakeUser.username}**\n\`${fakeUser.userId}\``, inline: true },
             { name: '📌 Role', value: `${validRole.emoji || ''} ${validRole.name}`, inline: true },
             { name: '\u200b', value: '\u200b', inline: true },
             { name: '🎂 Age', value: testAnswers[0], inline: true },
             { name: '🌍 Timezone', value: testAnswers[1], inline: true },
             { name: '⏰ Hours/week', value: testAnswers[2], inline: true },
-            { name: `📝 ${(questions[3] || 'Q4').slice(0, 100)}`, value: testAnswers[3].slice(0, 300), inline: false },
+            { name: `📝 ${(questions[3] || 'Q4').slice(0, 100)}`, value: testAnswers[3]?.slice(0, 300) || '—', inline: false },
           )
-          .setFooter({ text: `TEST Application #${applicationId} · Full answers in thread below` })
+          .setFooter({ text: `TEST Application #${applicationId} · Reviewed by ${adminUser.username} · Full answers in thread` })
           .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
@@ -262,7 +329,7 @@ router.post('/test-application', requireAdmin, async (req, res) => {
         if (channel) {
           const msg = await channel.send({ embeds: [previewEmbed], components: [row] });
           const thread = await msg.startThread({
-            name: `[TEST] ${adminUser.username} — ${validRole.name} #${applicationId}`,
+            name: `[TEST] ${fakeUser.username} — ${validRole.name} #${applicationId}`,
             autoArchiveDuration: 60,
           }).catch(() => null);
 
@@ -271,12 +338,14 @@ router.post('/test-application', requireAdmin, async (req, res) => {
               const start = chunk * 10;
               const fields = questions.slice(start, start + 10).map((q, i) => ({
                 name: `Q${start + i + 1}. ${q.slice(0, 250)}`,
-                value: testAnswers[start + i].slice(0, 1024),
+                value: testAnswers[start + i]?.slice(0, 1024) || '—',
               }));
               if (fields.length === 0) continue;
               const chunkEmbed = new EmbedBuilder()
                 .setColor(0x5865f2)
-                .setTitle(chunk === 0 ? `📋 [TEST] Full Application — ${adminUser.username} (Q1–10)` : 'Questions 11–20')
+                .setTitle(chunk === 0
+                  ? `📋 [TEST] Full Application — ${fakeUser.username} (Q1–10)`
+                  : `📋 [TEST] ${fakeUser.username} (Q11–20)`)
                 .addFields(fields);
               await thread.send({ embeds: [chunkEmbed] }).catch(() => null);
             }
@@ -285,12 +354,40 @@ router.post('/test-application', requireAdmin, async (req, res) => {
             db.updateApplicationDiscordIds(applicationId, msg.id, null);
           }
         }
+
+        // Preview the staff updates hire notification immediately
+        const guildId = process.env.MAIN_GUILD_ID;
+        if (guildId) {
+          try {
+            const guild = discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null);
+            if (guild) {
+              const botConfig = await getBotGuild(guildId);
+              const TASK_CHANNEL_MAP = [
+                { keywords: ['mod', 'moderator'],                           id: '1502489464851796099' },
+                { keywords: ['hr', 'human resources', 'human res'],         id: '1502489463001972799' },
+                { keywords: ['partner', 'management', 'manager', 'admin', 'lead', 'head'], id: '1502489591725166673' },
+              ];
+              const roleLower = validRole.name.toLowerCase();
+              const taskChannelId = TASK_CHANNEL_MAP.find(e => e.keywords.some(k => roleLower.includes(k)))?.id || '1502489464851796099';
+              const hireEmbed = buildStaffUpdateEmbed('hired', {
+                userId: fakeUser.userId,
+                moderatorId: adminUser.userId,
+                role: validRole.name,
+                taskChannelId,
+              });
+              hireEmbed.setFooter({ text: '🧪 TEST — this is a preview of the staff updates notification' });
+              await sendLog(guild, botConfig, 'staff_updates', hireEmbed, null, `*(Test hire — fake user \`${fakeUser.username}\` · ID \`${fakeUser.userId}\`)*`);
+            }
+          } catch (suErr) {
+            console.error('[test-app] Staff updates preview error:', suErr.message);
+          }
+        }
       } catch (discordErr) {
         console.error('Test application Discord send error:', discordErr.message);
       }
     }
 
-    res.json({ success: true, applicationId, message: `Test application #${applicationId} sent to Discord.` });
+    res.json({ success: true, applicationId, fakeUser: { username: fakeUser.username, userId: fakeUser.userId }, message: `Test application #${applicationId} sent to Discord with AI-generated answers.` });
   } catch (err) {
     console.error('Test application error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
