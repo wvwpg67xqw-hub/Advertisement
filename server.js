@@ -296,6 +296,7 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
     const isBlacklisted = db.isBlacklisted(discordUser.id);
     let isAdmin         = !!db.getAdmin(discordUser.id);
     const { isNew }     = db.upsertUser(discordUser.id, discordUser.username, avatar);
+    db.saveUserToken(discordUser.id, access_token);
 
     const STAFF_ROLE_ID_CHECK = process.env.STAFF_ROLE_ID || '1502594799683895346';
     let isStaff = false;
@@ -1239,11 +1240,11 @@ if (id.startsWith('app_')) {
     db.updateApplicationStatus(Number(appId), 'accepted');
 
     try {
-      const guild = await client.guilds.fetch(guildId);
+      if (!guildId) throw new Error('MAIN_GUILD_ID is not configured');
+      const guild = await client.guilds.fetch(guildId).catch(() => null);
+      if (!guild) throw new Error(`Could not fetch guild ${guildId}`);
 
-      const member = await guild.members
-        .fetch(application.userId)
-        .catch(() => null);
+      const member = await guild.members.fetch(application.userId).catch(() => null);
 
       if (member) {
         const roles = roleMap[application.role];
@@ -1252,12 +1253,27 @@ if (id.startsWith('app_')) {
         if (roles?.team) toAdd.push(roles.team);
         await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
+        // Auto-add to staff server using stored OAuth token
+        const STAFF_SERVER      = process.env.STAFF_SERVER;
+        const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
+        const userToken         = db.getUserToken(application.userId);
+        if (STAFF_SERVER && DISCORD_BOT_TOKEN && userToken) {
+          fetch(`https://discord.com/api/v10/guilds/${STAFF_SERVER}/members/${application.userId}`, {
+            method: 'PUT',
+            headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: userToken }),
+          }).then(r => {
+            if (r.status === 201) console.log(`[accept] Added ${application.userId} to staff server.`);
+            else if (r.status === 204) console.log(`[accept] ${application.userId} already in staff server.`);
+            else r.text().then(t => console.error(`[accept] Staff server join failed: ${r.status} ${t}`));
+          }).catch(e => console.error('[accept] Staff server join error:', e.message));
+        }
+
         await member.send({
           embeds: [new EmbedBuilder()
             .setTitle('🎉 Application Accepted!')
             .setColor(0x22c55e)
-            .setDescription(`Congratulations! Your application for **${application.role}** has been accepted.\n\nPlease join the staff server using the link below and introduce yourself.`)
-            .addFields({ name: '📨 Staff Server', value: '[Click here to join](https://discord.gg/AZhhKXs7wA)', inline: false })
+            .setDescription(`Congratulations! Your application for **${application.role}** has been accepted.\n\nYou have been automatically added to the staff server. Welcome to the team!`)
             .setFooter({ text: 'Welcome to the team!' })
             .setTimestamp()],
         }).catch(() => null);
@@ -1302,7 +1318,9 @@ if (id.startsWith('app_')) {
     db.updateApplicationStatus(Number(appId), 'denied');
 
     try {
-      const guild = await client.guilds.fetch(guildId);
+      if (!guildId) throw new Error('MAIN_GUILD_ID is not configured');
+      const guild = await client.guilds.fetch(guildId).catch(() => null);
+      if (!guild) throw new Error(`Could not fetch guild ${guildId}`);
       const member = await guild.members.fetch(application.userId).catch(() => null);
       if (member) {
         await member.send({ content: `❌ Your application for **${application.role}** was denied.` }).catch(() => null);

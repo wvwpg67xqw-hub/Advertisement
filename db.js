@@ -70,6 +70,16 @@ const db = {
     return { isNew };
   },
 
+  saveUserToken(userId, accessToken) {
+    const rows = readCol('users');
+    const i = rows.findIndex(u => u.userId === userId);
+    if (i >= 0) { rows[i].accessToken = accessToken; writeCol('users', rows); }
+  },
+
+  getUserToken(userId) {
+    return readCol('users').find(u => u.userId === userId)?.accessToken ?? null;
+  },
+
   // ── Admins ─────────────────────────────────────────────────────────────────
   seedAdmin(userId, username, role) {
     const rows = readCol('admins');
