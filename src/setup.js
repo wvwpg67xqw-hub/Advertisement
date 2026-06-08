@@ -751,12 +751,6 @@ export async function handleSetupStaffRoles(interaction) {
 export async function handleSetupNetworkRoles(interaction) {
   if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
   const config = await getGuild(interaction.guildId);
-  if (!config.is_hub) {
-    return interaction.reply({
-      content: '❌ This command can only be used in the **network hub** server. Run `/setup-network-hub` in the hub server first.',
-      flags: 64,
-    });
-  }
 
   const modRole      = interaction.options.getRole('mod-role');
   const teamLeadRole = interaction.options.getRole('team-lead-role');
@@ -787,14 +781,6 @@ export async function handleSetupNetworkJoin(interaction) {
   if (!hubGuild) {
     return interaction.reply({
       content: `❌ The bot is not in server \`${hubGuildId}\`, or that ID is wrong. Make sure the bot has been added to your staff server first.`,
-      flags: 64,
-    });
-  }
-
-  const hubConfig = await getGuild(hubGuildId);
-  if (!hubConfig.is_hub) {
-    return interaction.reply({
-      content: `❌ Server \`${hubGuildId}\` (**${hubGuild.name}**) has not been set up as a network hub. Run \`/setup-network-hub\` in that server first.`,
       flags: 64,
     });
   }
