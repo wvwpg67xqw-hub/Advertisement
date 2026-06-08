@@ -241,6 +241,35 @@ const db = {
     return rows[i];
   },
 
+  // Upsert from Discord guild data — insert if new, refresh name/icon if existing
+  syncApplyServer({ guildId, name, icon_url }) {
+    const rows = readCol('apply_servers');
+    const i = rows.findIndex(s => s.guildId === guildId);
+    if (i >= 0) {
+      rows[i].name     = name || rows[i].name;
+      rows[i].short_name = rows[i].short_name || name || rows[i].short_name;
+      rows[i].icon_url = icon_url ?? rows[i].icon_url;
+      writeCol('apply_servers', rows);
+      return { created: false };
+    }
+    rows.push({
+      id: nextId('apply_servers'),
+      guildId, name, short_name: name,
+      description: '', icon_url: icon_url || null,
+      log_channel_id: null, apply_channel_id: null,
+      staff_role_id: null, role_ids: null,
+      active: 1, sort_order: rows.length, createdAt: ts(),
+    });
+    writeCol('apply_servers', rows);
+    return { created: true };
+  },
+
+  setApplyServerActive(guildId, active) {
+    const rows = readCol('apply_servers');
+    const i = rows.findIndex(s => s.guildId === guildId);
+    if (i >= 0) { rows[i].active = active ? 1 : 0; writeCol('apply_servers', rows); }
+  },
+
   deleteApplyServer(id) {
     const rows = readCol('apply_servers');
     const next = rows.filter(s => s.id !== Number(id));

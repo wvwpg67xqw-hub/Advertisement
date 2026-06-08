@@ -2280,6 +2280,17 @@ client.once('clientReady', async () => {
     await autoLinkGuilds(hub.guild_id, allGuildIds).catch(() => {});
     console.log(`🌐 Auto-linked ${allGuildIds.length - 1} servers to network hub (${hub.guild_id})`);
   }
+
+  // ── Auto-sync all guilds into apply_servers (excluding staff server) ─────────
+  const STAFF_SERVER_ID = process.env.STAFF_SERVER;
+  let synced = 0;
+  for (const guild of client.guilds.cache.values()) {
+    if (STAFF_SERVER_ID && guild.id === STAFF_SERVER_ID) continue;
+    const icon_url = guild.iconURL({ size: 256, extension: 'png' }) || null;
+    const { created } = db.syncApplyServer({ guildId: guild.id, name: guild.name, icon_url });
+    if (created) synced++;
+  }
+  if (synced > 0) console.log(`🖥️  Auto-registered ${synced} new server(s) in apply_servers`);
 });
 
 client.on('guildCreate', async (guild) => {
@@ -2292,6 +2303,19 @@ client.on('guildCreate', async (guild) => {
   } catch (err) {
     console.error('guildCreate auto-link error:', err.message);
   }
+
+  // Auto-register in apply_servers unless it's the staff server
+  const STAFF_SERVER_ID = process.env.STAFF_SERVER;
+  if (!STAFF_SERVER_ID || guild.id !== STAFF_SERVER_ID) {
+    const icon_url = guild.iconURL({ size: 256, extension: 'png' }) || null;
+    const { created } = db.syncApplyServer({ guildId: guild.id, name: guild.name, icon_url });
+    if (created) console.log(`🖥️  Auto-registered new server "${guild.name}" (${guild.id}) in apply_servers`);
+  }
+});
+
+client.on('guildDelete', (guild) => {
+  db.setApplyServerActive(guild.id, false);
+  console.log(`🖥️  Marked server "${guild.name}" (${guild.id}) as inactive in apply_servers (bot removed)`);
 });
 
 // ── Break Auto-Expiry ─────────────────────────────────────────────────────────
