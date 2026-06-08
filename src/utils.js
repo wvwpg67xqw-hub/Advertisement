@@ -170,7 +170,7 @@ export async function hasCommandPermission(member, commandName) {
 
 // ─── Log Channel Routing ──────────────────────────────────────────────────────
 
-export async function sendLog(guild, config, type, embed, components = null) {
+export async function sendLog(guild, config, type, embed, components = null, content = null) {
   const channelMap = {
     warn: config.warn_log_channel_id,
     strike: config.strike_log_channel_id,
@@ -191,6 +191,7 @@ export async function sendLog(guild, config, type, embed, components = null) {
   if (channel && channel.isTextBased()) {
     const payload = { embeds: [embed] };
     if (components) payload.components = components;
+    if (content) payload.content = content;
     return channel.send(payload).catch(() => null);
   }
   return null;
@@ -297,6 +298,7 @@ export function buildStaffUpdateEmbed(type, fields) {
       title: '🎉 New Staff Member',
       desc: `Welcome <@${fields.userId}> to the team as **${fields.role}**!`,
     },
+
     promoted: {
       color: 0x5865F2,
       title: '⬆️ Staff Promotion',
@@ -336,6 +338,9 @@ export function buildStaffUpdateEmbed(type, fields) {
     .setTimestamp();
   if (fields.reason) embed.addFields({ name: 'Reason', value: fields.reason });
   if (fields.moderatorId) embed.addFields({ name: 'By', value: `<@${fields.moderatorId}>`, inline: true });
+  if (type === 'hired' && fields.taskChannelId) {
+    embed.addFields({ name: '📋 Next Steps', value: `Head to <#${fields.taskChannelId}> to read your tasks and mark them as complete.` });
+  }
   return embed;
 }
 

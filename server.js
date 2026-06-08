@@ -1275,12 +1275,23 @@ if (id.startsWith('app_')) {
         }).catch(() => null);
 
         const botConfig = await getBotGuild(guildId);
+
+        const TASK_CHANNEL_MAP = [
+          { keywords: ['mod', 'moderator'],                    id: '1502489464851796099' },
+          { keywords: ['hr', 'human resources', 'human res'],  id: '1502489463001972799' },
+          { keywords: ['partner', 'management', 'manager', 'admin', 'lead', 'head'], id: '1502489591725166673' },
+        ];
+        const roleLower = (application.role || '').toLowerCase();
+        const taskChannelId = TASK_CHANNEL_MAP.find(e => e.keywords.some(k => roleLower.includes(k)))?.id
+          || '1502489464851796099';
+
         const staffUpdateEmbed = buildStaffUpdateEmbed('hired', {
           userId: application.userId,
           moderatorId: interaction.user.id,
           role: application.role,
+          taskChannelId,
         });
-        await sendLog(member.guild, botConfig, 'staff_updates', staffUpdateEmbed);
+        await sendLog(member.guild, botConfig, 'staff_updates', staffUpdateEmbed, null, `<@${application.userId}>`);
       }
 
     } catch (err) {
