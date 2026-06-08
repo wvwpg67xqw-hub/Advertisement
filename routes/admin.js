@@ -275,9 +275,124 @@ async function generateAiAnswers(questions, role) {
   return answers.map((a, i) => a ?? `[TEST] Sample answer for: "${questions[i].slice(0, 60)}"`);
 }
 
+// Human-style answers — casual, short, full of contractions, clearly NOT AI-written.
+// Keyed by fragments that appear in standard questions.
+const HUMAN_POOL = {
+  age:         () => String(Math.floor(Math.random() * 6) + 18),
+  timezone:    () => FAKE_TIMEZONES[Math.floor(Math.random() * FAKE_TIMEZONES.length)],
+  hours:       () => ['about 10-15 hrs', '15 hrs or so', 'maybe 20 a week'][Math.floor(Math.random() * 3)],
+  experience:  () => [
+    "yeah i've helped mod a few small servers before, nothing too big but i know the basics",
+    "i was a mod on a gaming server for like 8 months, dealt with a lot of drama lol",
+    "not professionally but i've been staff on a few communities and learned a ton from it",
+  ],
+  arguing:     () => [
+    "i'd jump in, ask them to take it to dms, and warn if they keep going",
+    "separate them first, figure out what started it, then handle it from there",
+    "tell them to cool off and move the convo to a private channel if needed",
+  ],
+  hate:        () => [
+    "screenshot it, remove the message, temp mute them, then decide on further action depending on severity",
+    "delete it, mute the user, check if it's a pattern, then ban if needed",
+    "take it down immediately, check their history, then act accordingly",
+  ],
+  senior:      () => [
+    "honestly i'd treat them the same as anyone else — rank doesn't excuse breaking rules",
+    "same as i'd handle anyone. if they broke the rules they get warned like everyone else",
+    "no special treatment. i'd probably check with a higher up first tho just to be safe",
+  ],
+  quality:     () => [
+    "being consistent i think — people need to know the rules apply to everyone equally",
+    "staying calm under pressure honestly. it's easy to make bad calls when you're frustrated",
+    "fairness. it sounds simple but it's actually hard to stay unbiased all the time",
+  ],
+  difficult:   () => [
+    "had to ban someone i was friends with once. wasn't fun but it had to be done",
+    "warned a really popular member and got a ton of hate for it. stood my ground though",
+    "had to call out a senior mod once for being unfair. it got awkward but someone had to say it",
+  ],
+  burnout:     () => [
+    "i step away when i need to tbh. taking breaks is important",
+    "logging off helps. i try not to let server stuff bleed into my day too much",
+    "i talk to other staff. helps knowing you're not handling everything alone",
+  ],
+  tos:         () => [
+    "yeah i've read through it. basically no harassment, illegal stuff, or exploiting the platform",
+    "pretty familiar with it — covers things like self-harm content, illegal activity, harassment etc",
+    "i know the main points — no nsfw in wrong channels, no harassment, no spam bots and stuff",
+  ],
+  tools:       () => [
+    "Carl-bot, MEE6, and Wick mostly. comfortable with all of them",
+    "used Dyno a lot, some Carl-bot. picking up new ones is pretty easy tbh",
+    "MEE6 and Wick mainly. i'm quick at learning new dashboards though",
+  ],
+  raid:        () => [
+    "lockdown the server, ban raiders as fast as possible, then cleanup after",
+    "enable slowmode everywhere, start banning, ping owners to help",
+    "raid mode on, mass ban the wave, then review to make sure no innocent members got caught",
+  ],
+  unfair:      () => [
+    "i'd explain exactly what they did and why it broke the rule. calmly though",
+    "walk them through it. if they're still unhappy i'd get a second mod to review it",
+    "hear them out first — sometimes i'm wrong. if not, i explain my reasoning",
+  ],
+  bias:        () => [
+    "i just apply the rules the same regardless of who it is. if i'm unsure i ask someone else to handle it",
+    "remove myself if i'm too close to it. better to let another mod deal with it",
+    "treat it like i don't know either of them. the rules are the rules",
+  ],
+  disagree:    () => [
+    "i'd bring it up privately with them first before doing anything",
+    "mention it in staff chat and see if others agree. no point making it a big thing",
+    "talk to them directly. disagreements are fine as long as we handle it professionally",
+  ],
+  warning:     () => [
+    "something like 'hey [user] please keep things civil in here. this is your first warning'",
+    "'[user] — your message broke rule X. consider this a warning, next time will be a mute'",
+    "direct and clear. state the rule, state the consequence, no need to write an essay about it",
+  ],
+  incidents:   () => [
+    "most severe first, always. then whatever's easiest to resolve quickly",
+    "triage — biggest threat to the server first, then deal with the smaller stuff",
+    "check what's most likely to escalate and tackle that first",
+  ],
+  why:         () => [
+    "i've been in this community for a while and genuinely want to help keep it good",
+    "i've seen what this server can be and want to help maintain that",
+    "honestly it just feels like a good fit. i like the vibe here",
+  ],
+  anything:    () => [
+    "i'm pretty active so response times are usually solid",
+    "just that i take this seriously and i'm in it for the long run",
+    "not really, i think i covered everything. thanks for the consideration",
+  ],
+};
+
+function humanAnswer(question) {
+  const lq = question.toLowerCase();
+  for (const [key, fn] of Object.entries(HUMAN_POOL)) {
+    if (lq.includes(key)) {
+      const val = fn();
+      return Array.isArray(val) ? val[Math.floor(Math.random() * val.length)] : val;
+    }
+  }
+  // Generic fallback — still sounds human
+  const fallbacks = [
+    "yeah i've dealt with something like that before, handled it fine",
+    "honestly just depends on the situation but i'd figure it out",
+    "i'd handle it the same way i always do — calmly and fairly",
+    "not something i've faced exactly but i'd use common sense and check with the team",
+  ];
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+}
+
+function generateHumanAnswers(questions) {
+  return questions.map(q => humanAnswer(q));
+}
+
 router.post('/test-application', requireAdmin, async (req, res) => {
   try {
-    const { role } = req.body;
+    const { role, answerType = 'ai' } = req.body;
     if (!role) return res.status(400).json({ error: 'Role is required' });
 
     const validRole = db.getRole(role);
@@ -289,8 +404,9 @@ router.post('/test-application', requireAdmin, async (req, res) => {
     const fakeUser = makeFakeUser();
     const adminUser = req.session.user;
 
-    // AI-generated answers (falls back gracefully if HF is unavailable)
-    const testAnswers = await generateAiAnswers(questions, validRole.name);
+    const testAnswers = answerType === 'human'
+      ? generateHumanAnswers(questions)
+      : await generateAiAnswers(questions, validRole.name);
 
     const result = db.insertApplication({
       userId: fakeUser.userId,
@@ -317,7 +433,7 @@ router.post('/test-application', requireAdmin, async (req, res) => {
             { name: '⏰ Hours/week', value: testAnswers[2], inline: true },
             { name: `📝 ${(questions[3] || 'Q4').slice(0, 100)}`, value: testAnswers[3]?.slice(0, 300) || '—', inline: false },
           )
-          .setFooter({ text: `TEST Application #${applicationId} · Reviewed by ${adminUser.username} · Full answers in thread` })
+          .setFooter({ text: `TEST Application #${applicationId} · ${answerType === 'human' ? '🙋 Human answers' : '🤖 AI answers'} · Reviewed by ${adminUser.username}` })
           .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
@@ -387,7 +503,7 @@ router.post('/test-application', requireAdmin, async (req, res) => {
       }
     }
 
-    res.json({ success: true, applicationId, fakeUser: { username: fakeUser.username, userId: fakeUser.userId }, message: `Test application #${applicationId} sent to Discord with AI-generated answers.` });
+    res.json({ success: true, applicationId, fakeUser: { username: fakeUser.username, userId: fakeUser.userId }, message: `Test application #${applicationId} sent with ${answerType === 'human' ? '🙋 human-style' : '🤖 AI-generated'} answers. Check Discord for the AI detection result.` });
   } catch (err) {
     console.error('Test application error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
