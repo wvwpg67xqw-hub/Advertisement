@@ -574,7 +574,7 @@ router.get('/apply-servers/guild-info/:guildId', requireAdmin, async (req, res) 
 
 router.post('/apply-servers', requireAdmin, async (req, res) => {
   try {
-    const { guildId, name, short_name, description, icon_url, log_channel_id, apply_channel_id } = req.body;
+    const { guildId, name, short_name, description, icon_url, log_channel_id, apply_channel_id, staff_role_id, role_ids } = req.body;
     if (!guildId?.trim()) return res.status(400).json({ error: 'Guild ID is required' });
     if (!name?.trim()) return res.status(400).json({ error: 'Server name is required' });
     const entry = db.insertApplyServer({
@@ -585,6 +585,8 @@ router.post('/apply-servers', requireAdmin, async (req, res) => {
       icon_url: icon_url ? String(icon_url).slice(0, 500) : null,
       log_channel_id: log_channel_id ? String(log_channel_id).trim() : null,
       apply_channel_id: apply_channel_id ? String(apply_channel_id).trim() : null,
+      staff_role_id: staff_role_id ? String(staff_role_id).trim() : null,
+      role_ids: role_ids && typeof role_ids === 'object' ? role_ids : null,
     });
     res.json({ success: true, server: entry });
   } catch (err) {
@@ -594,7 +596,7 @@ router.post('/apply-servers', requireAdmin, async (req, res) => {
 
 router.put('/apply-servers/:id', requireAdmin, (req, res) => {
   try {
-    const { name, short_name, description, icon_url, log_channel_id, apply_channel_id } = req.body;
+    const { name, short_name, description, icon_url, log_channel_id, apply_channel_id, staff_role_id, role_ids } = req.body;
     const updated = db.updateApplyServer(req.params.id, {
       ...(name !== undefined && { name: String(name).slice(0, 100) }),
       ...(short_name !== undefined && { short_name: String(short_name).slice(0, 30) }),
@@ -602,6 +604,8 @@ router.put('/apply-servers/:id', requireAdmin, (req, res) => {
       ...(icon_url !== undefined && { icon_url: icon_url ? String(icon_url).slice(0, 500) : null }),
       ...(log_channel_id !== undefined && { log_channel_id: log_channel_id ? String(log_channel_id).trim() : null }),
       ...(apply_channel_id !== undefined && { apply_channel_id: apply_channel_id ? String(apply_channel_id).trim() : null }),
+      ...(staff_role_id !== undefined && { staff_role_id: staff_role_id ? String(staff_role_id).trim() : null }),
+      ...(role_ids !== undefined && { role_ids: role_ids && typeof role_ids === 'object' ? role_ids : null }),
     });
     res.json({ success: true, server: updated });
   } catch (err) {

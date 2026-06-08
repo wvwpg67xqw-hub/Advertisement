@@ -442,7 +442,7 @@ function ServersTab() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '', apply_channel_id: '' });
+  const [form, setForm] = useState({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '', apply_channel_id: '', staff_role_id: '', role_mod: '', role_hr: '', role_partnership: '' });
   const [postingMsg, setPostingMsg] = useState(null);
   const [postResult, setPostResult] = useState({});
   const [err, setErr] = useState('');
@@ -469,7 +469,7 @@ function ServersTab() {
   useEffect(() => { load(); }, []);
 
   function openAdd() {
-    setForm({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '', apply_channel_id: '' });
+    setForm({ guildId: '', name: '', short_name: '', description: '', icon_url: '', log_channel_id: '', apply_channel_id: '', staff_role_id: '', role_mod: '', role_hr: '', role_partnership: '' });
     setErr(''); setEditing(null); setShowAdd(true);
   }
 
@@ -488,6 +488,7 @@ function ServersTab() {
   }
 
   function openEdit(server) {
+    const rids = (() => { try { return server.role_ids ? JSON.parse(server.role_ids) : {}; } catch { return {}; } })();
     setForm({
       guildId: server.guildId,
       name: server.name,
@@ -496,6 +497,10 @@ function ServersTab() {
       icon_url: server.icon_url || '',
       log_channel_id: server.log_channel_id || '',
       apply_channel_id: server.apply_channel_id || '',
+      staff_role_id: server.staff_role_id || '',
+      role_mod: rids['Moderator'] || '',
+      role_hr: rids['Human Resources'] || '',
+      role_partnership: rids['Partnership'] || '',
     });
     setErr(''); setEditing(server); setShowAdd(true);
   }
@@ -524,10 +529,16 @@ function ServersTab() {
     if (!form.name.trim()) return setErr('Server name is required');
     if (!editing && !form.guildId.trim()) return setErr('Guild ID is required');
     setSaving(true);
+    const role_ids = {};
+    if (form.role_mod.trim())         role_ids['Moderator']        = form.role_mod.trim();
+    if (form.role_hr.trim())          role_ids['Human Resources']  = form.role_hr.trim();
+    if (form.role_partnership.trim()) role_ids['Partnership']      = form.role_partnership.trim();
     const payload = {
       name: form.name, short_name: form.short_name, description: form.description,
       icon_url: form.icon_url, log_channel_id: form.log_channel_id,
       apply_channel_id: form.apply_channel_id,
+      staff_role_id: form.staff_role_id.trim() || null,
+      role_ids: Object.keys(role_ids).length ? role_ids : null,
       ...(!editing && { guildId: form.guildId }),
     };
     const res = editing
@@ -717,6 +728,31 @@ function ServersTab() {
                 <input className="form-input" placeholder="Channel where members click to apply" value={form.apply_channel_id} onChange={set('apply_channel_id')} />
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Once set, use the <strong>📤 Post Apply Message</strong> button to send an embed with Mod / HR / Partnership buttons to this channel.</span>
               </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+                🎭 Role Assignment — assigned in <em>this server</em> when an application is accepted
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                  <label className="form-label">Staff Role ID <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(given to ALL accepted applicants)</span></label>
+                  <input className="form-input" placeholder="e.g. 1234567890123456789" value={form.staff_role_id} onChange={set('staff_role_id')} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">🔨 Moderator Role ID</label>
+                  <input className="form-input" placeholder="Role ID for Moderators" value={form.role_mod} onChange={set('role_mod')} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">🤝 Human Resources Role ID</label>
+                  <input className="form-input" placeholder="Role ID for HR" value={form.role_hr} onChange={set('role_hr')} />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                  <label className="form-label">🌐 Partnership Role ID</label>
+                  <input className="form-input" placeholder="Role ID for Partnership Managers" value={form.role_partnership} onChange={set('role_partnership')} />
+                </div>
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Leave blank if you don't need a specific role assigned for that position. Right-click a role in Discord → Copy ID to get the ID.</span>
             </div>
 
             {/* Preview */}

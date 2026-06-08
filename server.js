@@ -1222,17 +1222,15 @@ if (id.startsWith('app_')) {
     });
   }
 
-  // MAIN SERVER ID
-  const guildId = process.env.MAIN_GUILD_ID;
+  // Use the guild the application was submitted to; fall back to MAIN_GUILD_ID
+  const guildId = application.guildId || process.env.MAIN_GUILD_ID;
 
-  const STAFF_ROLE_ID       = '1501682950331301908';
-
-  // ROLE MAP — main role, team role
-  const roleMap = {
-    Moderator:          { role: '1495222811755806740', team: '1501681813398093955' },
-    'Human Resources':  { role: '1495222820400009246', team: '1501681511324451028' },
-    Partnership:        { role: '1495222796517773335', team: '1501681321343193160' },
-  };
+  // Look up per-server role config from the admin Servers tab
+  const applyServerCfg = application.guildId ? db.getApplyServerByGuildId(application.guildId) : null;
+  const perServerRoles = (() => {
+    try { return applyServerCfg?.role_ids ? JSON.parse(applyServerCfg.role_ids) : {}; } catch { return {}; }
+  })();
+  const STAFF_ROLE_ID = applyServerCfg?.staff_role_id || process.env.STAFF_ROLE_ID || '1501682950331301908';
 
   // ── ACCEPT APPLICATION ─────────────────────────────
   if (action === 'accept') {
@@ -1247,10 +1245,8 @@ if (id.startsWith('app_')) {
       const member = await guild.members.fetch(application.userId).catch(() => null);
 
       if (member) {
-        const roles = roleMap[application.role];
-        const toAdd = [STAFF_ROLE_ID];
-        if (roles?.role) toAdd.push(roles.role);
-        if (roles?.team) toAdd.push(roles.team);
+        const specificRoleId = perServerRoles[application.role];
+        const toAdd = [STAFF_ROLE_ID, ...(specificRoleId ? [specificRoleId] : [])].filter(Boolean);
         await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
         // Auto-add to staff server using stored OAuth token
