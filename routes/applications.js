@@ -251,6 +251,16 @@ router.post(
                 const essayText = cleanAnswers.slice(3).filter(Boolean).join('\n\n');
                 const result = await detectAI(essayText);
 
+                if (result.skipped) {
+                  const skipEmbed = new EmbedBuilder()
+                    .setTitle('🤖 AI Detection — Skipped')
+                    .setDescription(result.error || 'Not enough text to analyse.')
+                    .setColor(0x99aab5)
+                    .setFooter({ text: 'Staff-only · Not visible to applicant' });
+                  await thread.send({ embeds: [skipEmbed] }).catch(() => null);
+                  return;
+                }
+
                 const color = result.aiScore >= 75 ? 0xed4245
                   : result.aiScore >= 45 ? 0xfee75c
                   : 0x57f287;
@@ -263,7 +273,7 @@ router.post(
                     { name: '🤖 AI Score',    value: `\`${progressBar(result.aiScore)}\``,    inline: false },
                     { name: '👤 Human Score', value: `\`${progressBar(result.humanScore)}\``, inline: false },
                   )
-                  .setFooter({ text: `Staff-only · Not visible to applicant · ${result.source || 'Essay answers Q4+'}` })
+                  .setFooter({ text: `Staff-only · Not visible to applicant · ${result.source}` })
                   .setTimestamp();
 
                 await thread.send({ embeds: [detectionEmbed] }).catch(() => null);

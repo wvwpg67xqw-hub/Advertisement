@@ -136,45 +136,48 @@ export async function detectAI(text) {
 
   const input = trimmed.slice(0, 512);
 
+  // ── No token → skip (heuristic is only a network-failure fallback) ────────
+  if (!token) {
+    return { aiScore: 0, humanScore: 0, label: 'Unknown', skipped: true, source: null, error: 'HUGGINGFACE_TOKEN not set' };
+  }
+
   // ── Try HuggingFace models ────────────────────────────────────────────────
-  if (token) {
-    for (const modelUrl of HF_MODELS) {
-      try {
-        const res = await callHF(modelUrl, token, input);
-        if (!res.ok) continue;
+  for (const modelUrl of HF_MODELS) {
+    try {
+      const res = await callHF(modelUrl, token, input);
+      if (!res.ok) continue;
 
-        const data    = await res.json();
-        const results = Array.isArray(data[0]) ? data[0] : data;
-        if (!Array.isArray(results)) continue;
+      const data    = await res.json();
+      const results = Array.isArray(data[0]) ? data[0] : data;
+      if (!Array.isArray(results)) continue;
 
-        const aiEntry    = results.find(r => r.label === 'ChatGPT' || r.label === 'Fake'  || r.label?.toLowerCase().includes('ai'));
-        const humanEntry = results.find(r => r.label === 'Human'   || r.label === 'Real'  || r.label?.toLowerCase().includes('human'));
+      const aiEntry    = results.find(r => r.label === 'ChatGPT' || r.label === 'Fake'  || r.label?.toLowerCase().includes('ai'));
+      const humanEntry = results.find(r => r.label === 'Human'   || r.label === 'Real'  || r.label?.toLowerCase().includes('human'));
 
-        const aiScore    = aiEntry    ? Math.round(aiEntry.score    * 100) : 0;
-        const humanScore = humanEntry ? Math.round(humanEntry.score * 100) : 0;
-        const modelName  = modelUrl.split('/').slice(-2).join('/');
+      const aiScore    = aiEntry    ? Math.round(aiEntry.score    * 100) : 0;
+      const humanScore = humanEntry ? Math.round(humanEntry.score * 100) : 0;
+      const modelName  = modelUrl.split('/').slice(-2).join('/');
 
-        return {
-          aiScore, humanScore,
-          label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
-          skipped: false,
-          source:  `ML · ${modelName}`,
-          error:   null,
-        };
-      } catch {
-        // try next model
-      }
+      return {
+        aiScore, humanScore,
+        label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
+        skipped: false,
+        source:  `ML · ${modelName}`,
+        error:   null,
+      };
+    } catch {
+      // try next model
     }
   }
 
-  // ── Local heuristic — always works ───────────────────────────────────────
+  // ── HuggingFace failed → local heuristic fallback ────────────────────────
   const aiScore    = heuristicScore(input);
   const humanScore = 100 - aiScore;
   return {
     aiScore, humanScore,
     label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
     skipped: false,
-    source:  token ? 'Heuristic (API unavailable)' : 'Heuristic (no token)',
+    source:  'Heuristic (HuggingFace API unavailable)',
     error:   null,
   };
 }
