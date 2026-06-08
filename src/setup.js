@@ -760,8 +760,8 @@ export async function handleSetupNetworkRoles(interaction) {
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
-    .setTitle('✅ Network Staff Roles Configured')
-    .setDescription('These roles now define staff ranks **across every server in the network**. Linked servers automatically inherit this hierarchy.')
+    .setTitle('✅ Staff Roles Configured')
+    .setDescription(`Staff ranks are now set for **${interaction.guild.name}**. Run this command in each server separately — roles are not inherited from other servers.`)
     .addFields(
       { name: '🟡 Mod (Rank 1)',       value: `<@&${modRole.id}>`,      inline: true },
       { name: '🟠 Team Lead (Rank 2)', value: `<@&${teamLeadRole.id}>`, inline: true },
