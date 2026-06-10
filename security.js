@@ -4,6 +4,14 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = discordPk
 import db from './db.js';
 import { sendDM } from './dmRest.js';
 
+// ── Crawler / Bot User-Agent Detection ────────────────────────────────────────
+
+const CRAWLER_UA = /discordbot|slackbot|twitterbot|facebookexternalhit|whatsapp|telegrambot|linkedinbot|applebot|googlebot|bingbot|iframely|embedly/i;
+
+export function isCrawler(req) {
+  return CRAWLER_UA.test(req.headers['user-agent'] || '');
+}
+
 // ── Get Real Client IP ─────────────────────────────────────────────────────────
 
 export function getClientIp(req) {
@@ -35,6 +43,7 @@ function isRateLimited(ip, key, maxRequests, windowMs) {
 
 export function rateLimit(key, maxRequests, windowMs) {
   return (req, res, next) => {
+    if (isCrawler(req)) return next();
     const ip = getClientIp(req);
     if (isRateLimited(ip, key, maxRequests, windowMs)) {
       sendBreachAlert({
@@ -113,6 +122,7 @@ async function submitAppeal() {
 </body></html>`;
 
 export function ipBlacklistMiddleware(req, res, next) {
+  if (isCrawler(req)) return next();
   const ip = getClientIp(req);
   if (db.isIpWhitelisted(ip)) return next();
   if (!db.isIpBlacklisted(ip)) return next();
