@@ -3,37 +3,90 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Staff Portal</title>
-    <link rel="icon" type="image/webp" href="https://cdn.discordapp.com/icons/1487744336908124190/4235733b69bbdcb75e2479404e2eaaa1.webp?size=64" />
+
+    <title>Staff Application Portal</title>
+
+    <!-- Favicon -->
+    <link
+      rel="icon"
+      type="image/webp"
+      href="https://cdn.discordapp.com/icons/1487744336908124190/4235733b69bbdcb75e2479404e2eaaa1.webp?size=64"
+    />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- 🔥 Open Graph (Discord / iMessage preview) -->
+    <meta property="og:title" content="Staff Application Portal" />
+    <meta
+      property="og:description"
+      content="Apply to become staff and help manage and grow our community. We're looking for active and trusted members."
+    />
+    <meta
+      property="og:image"
+      content="https://cdn.discordapp.com/icons/1487744336908124190/4235733b69bbdcb75e2479404e2eaaa1.webp"
+    />
+    <meta property="og:type" content="website" />
+
+    <!-- Twitter/X preview -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Staff Application Portal" />
+    <meta
+      name="twitter:description"
+      content="Apply to become staff and help manage and grow our community."
+    />
+    <meta
+      name="twitter:image"
+      content="https://cdn.discordapp.com/icons/1487744336908124190/4235733b69bbdcb75e2479404e2eaaa1.webp"
+    />
+
+    <!-- Theme color (Discord embed accent) -->
+    <meta name="theme-color" content="#5865F2" />
   </head>
+
   <body>
     <div id="root"></div>
+
     <script type="module" src="/main.jsx"></script>
+
+    <!-- Auto reload (dev only) -->
     <script>
       (function () {
         var firstConnect = true;
         var retryDelay = 1000;
 
         function connect() {
-          var sse = new EventSource('/api/sse/reload');
+          var sse = new EventSource("/api/sse/reload");
 
-          sse.addEventListener('connected', function () {
+          sse.addEventListener("connected", function () {
             if (firstConnect) {
               firstConnect = false;
               retryDelay = 1000;
-              console.log('%c[AutoReload] Connected — will auto-refresh when the server updates.', 'color:#57F287;font-weight:600');
+              console.log(
+                "%c[AutoReload] Connected — watching updates.",
+                "color:#57F287;font-weight:600"
+              );
             } else {
-              console.log('%c[AutoReload] Server updated — reloading page...', 'color:#FEE75C;font-weight:600');
+              console.log(
+                "%c[AutoReload] Update detected — reloading...",
+                "color:#FEE75C;font-weight:600"
+              );
               window.location.reload();
             }
           });
 
           sse.onerror = function () {
             sse.close();
-            console.log('%c[AutoReload] Connection lost — retrying in ' + (retryDelay / 1000) + 's...', 'color:#ED4245');
+            console.log(
+              "%c[AutoReload] Disconnected — retrying...",
+              "color:#ED4245"
+            );
+
             setTimeout(function () {
               retryDelay = Math.min(retryDelay * 2, 15000);
               connect();
