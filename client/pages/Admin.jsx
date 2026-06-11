@@ -637,17 +637,6 @@ function ServersTab() {
                 <span style={{ fontSize: 12, color: server.active ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
                   {server.active ? 'Active' : 'Hidden'}
                 </span>
-                {botInviteUrl(server.guildId) && (
-                  <a
-                    href={botInviteUrl(server.guildId)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-ghost btn-sm"
-                    title="Add the bot to this server"
-                  >
-                    🤖 Add Bot
-                  </a>
-                )}
                 {server.apply_channel_id && (
                   <button
                     className="btn btn-primary btn-sm"
@@ -710,18 +699,6 @@ function ServersTab() {
                   >
                     {fetching ? <div className="spinner" style={{ width: 14, height: 14 }} /> : '🔍 Auto-fill'}
                   </button>
-                  {botInviteUrl(form.guildId.trim()) && form.guildId.trim() && (
-                    <a
-                      href={botInviteUrl(form.guildId.trim())}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-ghost btn-sm"
-                      title="Add the bot to this server"
-                      style={{ flexShrink: 0 }}
-                    >
-                      🤖 Add Bot
-                    </a>
-                  )}
                 </div>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   Add the bot first, then Auto-fill to pull the server name &amp; icon.
@@ -1502,7 +1479,7 @@ function BotsTab() {
                 <label className="form-label">Custom Permissions Integer</label>
                 <input className="form-input" placeholder="e.g. 277025507328" value={form.customPerms} onChange={e => setForm(f => ({ ...f, customPerms: e.target.value }))} />
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Use the <a href="https://discordapi.com/permissions.html" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Discord Permissions Calculator</a> to get the number.
+                  Enter the permissions integer for the bot.
                 </span>
               </div>
             )}

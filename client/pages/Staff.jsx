@@ -323,32 +323,24 @@ export default function Staff() {
       {/* ── Info cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
         {[
-          { icon: '🔨', label: 'Mod Tasks', url: 'https://discord.com/channels/1495198147109060618/1502489464851796099' },
-          { icon: '🤝', label: 'HR Tasks', url: 'https://discord.com/channels/1495198147109060618/1502489463001972799' },
-          { icon: '📋', label: 'Management Tasks', url: 'https://discord.com/channels/1495198147109060618/1502489591725166673' },
+          { icon: '🔨', label: 'Mod Tasks' },
+          { icon: '🤝', label: 'HR Tasks' },
+          { icon: '📋', label: 'Management Tasks' },
         ].map(item => (
-          <a
+          <div
             key={item.label}
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
             style={{
               background: 'var(--surface)',
               border: '1px solid var(--border)',
               borderRadius: 10,
               padding: '18px 16px',
               textAlign: 'center',
-              textDecoration: 'none',
               color: 'var(--text)',
-              transition: 'border-color 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
           >
             <div style={{ fontSize: 28, marginBottom: 6 }}>{item.icon}</div>
             <div style={{ fontWeight: 600, fontSize: 13 }}>{item.label}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>Open in Discord →</div>
-          </a>
+          </div>
         ))}
       </div>
     </div>
