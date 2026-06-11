@@ -2245,7 +2245,19 @@ client.on('messageCreate', async (msg) => {
       try {
         if (xpConfig?.level_log_channel_id) {
           const levelCh = await client.channels.fetch(xpConfig.level_log_channel_id).catch(() => null);
-          if (levelCh) await levelCh.send(`🎉 <@${msg.author.id}> just leveled up to **Level ${newLevel}**! Congratulations! 🎊`);
+          if (levelCh) {
+            const rainbowColors = [0xFF0000, 0xFF7F00, 0xFFFF00, 0x00FF00, 0x0000FF, 0x4B0082, 0x9400D3];
+            const rainbowColor = rainbowColors[newLevel % rainbowColors.length];
+            const levelUpEmbed = new EmbedBuilder()
+              .setColor(rainbowColor)
+              .setTitle('🌈 Level Up!')
+              .setDescription(`🎉 <@${msg.author.id}> just leveled up to **Level ${newLevel}**! Congratulations! 🎊`)
+              .setThumbnail(msg.author.displayAvatarURL({ size: 128 }))
+              .addFields({ name: '🏆 New Level', value: `**${newLevel}**`, inline: true })
+              .setFooter({ text: msg.guild.name, iconURL: msg.guild.iconURL() || undefined })
+              .setTimestamp();
+            await levelCh.send({ embeds: [levelUpEmbed] });
+          }
         } else if (!dmmedOwnerGuilds.has(msg.guild.id)) {
           dmmedOwnerGuilds.add(msg.guild.id);
           const owner = await client.users.fetch(OWNER_ID).catch(() => null);
