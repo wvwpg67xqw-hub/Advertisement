@@ -8,10 +8,6 @@ export const defs = [
     .setDescription('Submit a resignation request — a form will open asking for your reason'),
 
   new SlashCommandBuilder()
-    .setName('apply')
-    .setDescription('Apply for a staff position — a form will open with application questions'),
-
-  new SlashCommandBuilder()
     .setName('update')
     .setDescription('Post a manual staff update announcement to the staff updates channel')
     .addUserOption(o => o.setName('user').setDescription('Staff member').setRequired(true))
@@ -44,30 +40,6 @@ export async function handleResignRequest(interaction) {
   await interaction.showModal(modal);
 }
 
-export async function handleApply(interaction) {
-  const modal = new ModalBuilder()
-    .setCustomId(`application_modal_${interaction.guildId}`)
-    .setTitle('📋 Staff Application');
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('app_why').setLabel('Why do you want to join the staff team?')
-        .setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('app_experience').setLabel('What experience do you have?')
-        .setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('app_timezone').setLabel('What is your timezone?')
-        .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(50)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('app_age').setLabel('How old are you?')
-        .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3)
-    ),
-  );
-  await interaction.showModal(modal);
-}
 
 export async function handleUpdate(interaction) {
   if (!await hasCommandPermission(interaction.member, 'update')) return deny(interaction);
