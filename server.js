@@ -2247,16 +2247,25 @@ client.on('messageCreate', async (msg) => {
           const levelCh = await client.channels.fetch(xpConfig.level_log_channel_id).catch(() => null);
           if (levelCh) {
             const rainbowColors = [0xFF0000, 0xFF7F00, 0xFFFF00, 0x00FF00, 0x0000FF, 0x4B0082, 0x9400D3];
-            const rainbowColor = rainbowColors[newLevel % rainbowColors.length];
-            const levelUpEmbed = new EmbedBuilder()
-              .setColor(rainbowColor)
+            const buildEmbed = (colorIndex) => new EmbedBuilder()
+              .setColor(rainbowColors[colorIndex % rainbowColors.length])
               .setTitle('🌈 Level Up!')
               .setDescription(`🎉 <@${msg.author.id}> just leveled up to **Level ${newLevel}**! Congratulations! 🎊`)
               .setThumbnail(msg.author.displayAvatarURL({ size: 128 }))
               .addFields({ name: '🏆 New Level', value: `**${newLevel}**`, inline: true })
               .setFooter({ text: msg.guild.name, iconURL: msg.guild.iconURL() || undefined })
               .setTimestamp();
-            await levelCh.send({ embeds: [levelUpEmbed] });
+            const sentMsg = await levelCh.send({ embeds: [buildEmbed(0)] });
+            let colorIndex = 1;
+            const cycleInterval = setInterval(async () => {
+              try {
+                await sentMsg.edit({ embeds: [buildEmbed(colorIndex)] });
+                colorIndex++;
+                if (colorIndex >= rainbowColors.length * 3) clearInterval(cycleInterval);
+              } catch {
+                clearInterval(cycleInterval);
+              }
+            }, 2000);
           }
         } else if (!dmmedOwnerGuilds.has(msg.guild.id)) {
           dmmedOwnerGuilds.add(msg.guild.id);
