@@ -1,10 +1,17 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
-// Kill any process already holding the port so restarts never get EADDRINUSE
 const port = process.env.PORT || 5000;
-try { execSync(`fuser -k ${port}/tcp 2>/dev/null || true`); } catch {}
-try { execSync('sleep 1'); } catch {}
+
+try {
+  execSync(`fuser -k ${port}/tcp 2>/dev/null || true`);
+  execSync('sleep 2');
+} catch {}
+
+try {
+  execSync(`lsof -ti:${port} | xargs -r kill -9 2>/dev/null || true`);
+  execSync('sleep 1');
+} catch {}
 
 const distPath = './client/dist';
 if (existsSync('./client/package.json') && !existsSync(distPath)) {
