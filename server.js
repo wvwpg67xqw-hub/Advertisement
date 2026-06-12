@@ -51,9 +51,9 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
-import { sendLog, buildStaffUpdateEmbed, getStaffRank } from './src/utils.js';
+import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1895,15 +1895,13 @@ if (id.startsWith('app_')) {
           }
         }
 
-        const { addWarn, getWarnCount, getGuild: getGuildDb } = await import('./src/database.js');
-        const { buildWarnEmbed, sendLog: sendLogUtil } = await import('./src/utils.js');
         const caseId = await addWarn(interaction.guildId, targetId, interaction.user.id, reason);
         const totalWarns = await getWarnCount(interaction.guildId, targetId);
         const embed = buildWarnEmbed({ userId: targetId, moderatorId: interaction.user.id, caseId, reason });
         embed.setFooter({ text: `Total warnings: ${totalWarns}` });
         await interaction.editReply({ embeds: [embed] });
-        const guildConfig = await getGuildDb(interaction.guildId).catch(() => null);
-        await sendLogUtil(interaction.guild, guildConfig, 'ad_warn', embed);
+        const guildConfig = await getBotGuild(interaction.guildId).catch(() => null);
+        await sendLog(interaction.guild, guildConfig, 'warn', embed);
         const dmEmbed = new EmbedBuilder()
           .setColor(0xFFAA00)
           .setTitle('⚠️ You have received a warning')
@@ -1937,13 +1935,11 @@ if (id.startsWith('app_')) {
         const deletedContent = msg.content || null;
         await msg.delete().catch(() => null);
 
-        const { addAdWarn, getAdWarns, getAdWarnCountByModerator, getGuild: getGuildDb2 } = await import('./src/database.js');
-        const { buildAdWarnEmbed, sendLog: sendLogUtil2 } = await import('./src/utils.js');
         const caseId = await addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, messageId, deletedContent);
         const adWarns = await getAdWarns(interaction.guildId, target.id);
         const totalWarns = adWarns.length;
         const moderatorAdWarnCount = await getAdWarnCountByModerator(interaction.guildId, interaction.user.id);
-        const guildConfig = await getGuildDb2(interaction.guildId).catch(() => null);
+        const guildConfig = await getBotGuild(interaction.guildId).catch(() => null);
         const logEmbed = buildAdWarnEmbed({
           userId: target.id, moderatorId: interaction.user.id,
           moderatorUsername: interaction.user.username, moderatorAdWarnCount,
