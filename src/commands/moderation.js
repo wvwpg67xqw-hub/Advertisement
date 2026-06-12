@@ -392,23 +392,62 @@ export async function handleFire(interaction) {
 
 export async function handleJail(interaction) {
   if (!await hasCommandPermission(interaction.member, 'jail')) return deny(interaction);
+
   const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason') || 'No reason provided';
+
   const config = await getGuild(interaction.guildId);
   if (!config.jail_role_id) return noConfig(interaction, 'jail-role');
+
   const member = await safeFetchMember(interaction.guild, target.id);
   if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+
   if (!await canModerateInGuild(interaction.member, member, interaction.guildId)) {
     return interaction.reply({ content: RANK_ERR, flags: 64 });
   }
-  if (await isJailed(interaction.guildId, target.id)) return interaction.reply({ content: `❌ **${target.tag}** is already jailed.`, flags: 64 });
-  const originalRoles = member.roles.cache.filter(r => r.id !== interaction.guild.id && r.editable).map(r => r.id);
+
+  if (await isJailed(interaction.guildId, target.id)) {
+    return interaction.reply({
+      content: `❌ **${target.tag}** is already jailed.`,
+      flags: 64
+    });
+  }
+
+  const originalRoles = member.roles.cache
+    .filter(r => r.id !== interaction.guild.id && r.editable)
+    .map(r => r.id);
+
   await member.roles.remove(originalRoles, reason).catch(() => {});
   await member.roles.add(config.jail_role_id, reason).catch(() => {});
   await jailUser(interaction.guildId, target.id, originalRoles);
-  const embed = buildModEmbed('jail', { userId: target.id, moderatorId: interaction.user.id, reason });
+
+  const embed = buildModEmbed('jail', {
+    userId: target.id,
+    moderatorId: interaction.user.id,
+    reason
+  });
+
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
+
+  // ─────────────────────────────────────────────
+  // 🔒 JAIL CHANNEL PING + GIF MESSAGE
+  // ─────────────────────────────────────────────
+  const jailChannel = await interaction.guild.channels.fetch(config.jail_channel_id).catch(() => null);
+
+  if (jailChannel && jailChannel.isTextBased()) {
+    await jailChannel.send({
+      content: `🚨 <@${target.id}>`,
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x2f3136)
+          .setTitle('🔒 You have been jailed')
+          .setDescription('How is jail? 😏')
+          .setImage('https://media.tenor.com/bsh-in-jail-bongo-behind-the-bars-bsh-jailed.gif')
+          .setTimestamp()
+      ]
+    });
+  }
 }
 
 export async function handleUnjail(interaction) {
