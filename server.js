@@ -33,6 +33,7 @@ import {
   handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleUpdate,
+  handleWarnUserContextMenu, handleAdWarnMessageContextMenu,
   handleSetupNetworkApply, handleNetworkApplyPost,
   handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
   handleModGuide, handleModGuideButton,
@@ -1857,6 +1858,117 @@ if (id.startsWith('app_')) {
         ],
         flags: 64,
       });
+    }
+
+    if (interaction.isUserContextMenuCommand()) {
+      if (interaction.commandName === 'Warn User') {
+        await handleWarnUserContextMenu(interaction);
+      }
+    }
+
+    if (interaction.isMessageContextMenuCommand()) {
+      if (interaction.commandName === 'Ad-Warn Message') {
+        await handleAdWarnMessageContextMenu(interaction);
+      }
+    }
+
+    if (interaction.isModalSubmit()) {
+      const { customId } = interaction;
+
+      if (customId.startsWith('ctx_warn_')) {
+        const targetId = customId.slice('ctx_warn_'.length);
+        const reason = interaction.fields.getTextInputValue('warn_reason');
+        if (!await hasCommandPermission(interaction.member, 'warn')) {
+          return interaction.reply({ content: '❌ You do not have permission to warn users.', flags: 64 });
+        }
+        await interaction.deferReply({ flags: 64 });
+        const target = await client.users.fetch(targetId).catch(() => null);
+        if (!target) return interaction.editReply({ content: '❌ Could not find that user.' });
+
+        const lastWarnTime = await getLastWarnTime(interaction.guildId, targetId);
+        if (lastWarnTime) {
+          const elapsed = Date.now() - lastWarnTime * 1000;
+          const WARN_COOLDOWN_MS = 60 * 60 * 1000;
+          if (elapsed < WARN_COOLDOWN_MS) {
+            const remaining = Math.ceil((WARN_COOLDOWN_MS - elapsed) / 60000);
+            return interaction.editReply({ content: `⏳ **${target.username}** was already warned recently. Please wait **${remaining} minute${remaining !== 1 ? 's' : ''}** before warning them again.` });
+          }
+        }
+
+        const { addWarn, getWarnCount, getGuild: getGuildDb } = await import('./src/database.js');
+        const { buildWarnEmbed, sendLog: sendLogUtil } = await import('./src/utils.js');
+        const caseId = await addWarn(interaction.guildId, targetId, interaction.user.id, reason);
+        const totalWarns = await getWarnCount(interaction.guildId, targetId);
+        const embed = buildWarnEmbed({ userId: targetId, moderatorId: interaction.user.id, caseId, reason });
+        embed.setFooter({ text: `Total warnings: ${totalWarns}` });
+        await interaction.editReply({ embeds: [embed] });
+        const guildConfig = await getGuildDb(interaction.guildId).catch(() => null);
+        await sendLogUtil(interaction.guild, guildConfig, 'ad_warn', embed);
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0xFFAA00)
+          .setTitle('⚠️ You have received a warning')
+          .setDescription(`You were warned in **${interaction.guild?.name || 'a server'}**.`)
+          .addFields(
+            { name: '📋 Reason', value: reason, inline: false },
+            { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+            { name: '🗂️ Case ID', value: caseId, inline: true },
+            { name: '⚠️ Total Warnings', value: String(totalWarns), inline: true },
+          )
+          .setFooter({ text: 'Please review the server rules to avoid further action.' })
+          .setTimestamp();
+        await target.send({ embeds: [dmEmbed] }).catch(() => null);
+        return;
+      }
+
+      if (customId.startsWith('ctx_adwarn_')) {
+        const parts = customId.slice('ctx_adwarn_'.length).split('_');
+        const messageId = parts[0];
+        const channelId = parts[1];
+        const reason = interaction.fields.getTextInputValue('adwarn_reason');
+        if (!await hasCommandPermission(interaction.member, 'ad-warn')) {
+          return interaction.reply({ content: '❌ You do not have permission to ad-warn.', flags: 64 });
+        }
+        await interaction.deferReply({ flags: 64 });
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (!channel) return interaction.editReply({ content: '❌ Could not find the original channel.' });
+        const msg = await channel.messages.fetch(messageId).catch(() => null);
+        if (!msg) return interaction.editReply({ content: '❌ Message no longer exists.' });
+        const target = msg.author;
+        const deletedContent = msg.content || null;
+        await msg.delete().catch(() => null);
+
+        const { addAdWarn, getAdWarns, getAdWarnCountByModerator, getGuild: getGuildDb2 } = await import('./src/database.js');
+        const { buildAdWarnEmbed, sendLog: sendLogUtil2 } = await import('./src/utils.js');
+        const caseId = await addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, messageId, deletedContent);
+        const adWarns = await getAdWarns(interaction.guildId, target.id);
+        const totalWarns = adWarns.length;
+        const moderatorAdWarnCount = await getAdWarnCountByModerator(interaction.guildId, interaction.user.id);
+        const guildConfig = await getGuildDb2(interaction.guildId).catch(() => null);
+        const logEmbed = buildAdWarnEmbed({
+          userId: target.id, moderatorId: interaction.user.id,
+          moderatorUsername: interaction.user.username, moderatorAdWarnCount,
+          guildName: interaction.guild?.name || 'Moderation',
+          caseId, reason, messageContent: null,
+          channelId, messageId, totalWarns,
+        });
+        await interaction.editReply({ embeds: [logEmbed] });
+        await sendLogUtil2(interaction.guild, guildConfig, 'ad_warn', logEmbed);
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0xFF5555)
+          .setTitle('🚫 You have received an ad warning')
+          .setDescription(`You were warned for advertising in **${interaction.guild?.name || 'a server'}**.`)
+          .addFields(
+            { name: '📋 Reason', value: reason, inline: false },
+            ...(deletedContent ? [{ name: '🗑️ Deleted Message', value: deletedContent.length > 1024 ? deletedContent.slice(0, 1021) + '...' : deletedContent, inline: false }] : []),
+            { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+            { name: '🗂️ Case ID', value: caseId, inline: true },
+            { name: '⚠️ Total Ad Warnings', value: String(totalWarns), inline: true },
+          )
+          .setFooter({ text: 'Please review the server advertising rules.' })
+          .setTimestamp();
+        await target.send({ embeds: [dmEmbed] }).catch(() => null);
+        return;
+      }
     }
 
     if (interaction.isCommand()) {
