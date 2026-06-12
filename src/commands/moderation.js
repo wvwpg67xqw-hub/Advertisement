@@ -205,6 +205,15 @@ export async function handleAdWarn(interaction) {
 
   const guildConfig = await getGuild(interaction.guildId);
 
+  const timeoutMinutes = totalWarns * 5;
+  const timeoutMs = timeoutMinutes * 60 * 1000;
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+  let timedOut = false;
+  if (member) {
+    await member.timeout(timeoutMs, `Ad-warn #${totalWarns} — ${reason}`).catch(() => null);
+    timedOut = true;
+  }
+
   const logEmbed = buildAdWarnEmbed({
     userId: target.id, moderatorId: interaction.user.id,
     moderatorUsername: interaction.user.username, moderatorAdWarnCount,
@@ -212,6 +221,7 @@ export async function handleAdWarn(interaction) {
     caseId, reason, messageContent: null,
     channelId: resolvedChannelId, messageId: resolvedMessageId, totalWarns,
   });
+  if (timedOut) logEmbed.addFields({ name: '⏱️ Timeout Applied', value: `${timeoutMinutes} minute${timeoutMinutes !== 1 ? 's' : ''}`, inline: true });
   await interaction.editReply({ embeds: [logEmbed] });
   await sendLog(interaction.guild, guildConfig, 'ad_warn', logEmbed);
 
@@ -225,6 +235,7 @@ export async function handleAdWarn(interaction) {
       { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
       { name: '🗂️ Case ID', value: caseId, inline: true },
       { name: '⚠️ Total Ad Warnings', value: String(totalWarns), inline: true },
+      ...(timedOut ? [{ name: '⏱️ Timeout', value: `${timeoutMinutes} minute${timeoutMinutes !== 1 ? 's' : ''}`, inline: true }] : []),
     )
     .setFooter({ text: 'Please review the server advertising rules.' })
     .setTimestamp();
