@@ -33,7 +33,7 @@ export const defs = [
     .setName('ad-warn')
     .setDescription('Warn the author of an ad message or thread')
     .addStringOption(o => o.setName('reason').setDescription('Reason for the warning').setRequired(true))
-    .addStringOption(o => o.setName('message-id').setDescription('Message ID or thread ID of the ad').setRequired(true)),
+    .addStringOption(o => o.setName('message-id').setDescription('Message ID, thread ID, or Discord message link').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('remove-warn')
@@ -173,29 +173,64 @@ export async function handleAdWarn(interaction) {
   let resolvedMessageId = rawId;
   let resolvedChannelId = interaction.channelId;
 
-  const msg = await interaction.channel.messages.fetch(rawId).catch(() => null);
-  if (msg) {
-    target = msg.author;
-    deletedContent = msg.content || null;
-    await msg.delete().catch(() => null);
+  // Parse Discord message links: discord.com/channels/GUILD/CHANNEL/MESSAGE
+  const linkMatch = rawId.match(/(?:https?:\/\/)?(?:(?:ptb|canary)\.)?discord\.com\/channels\/\d+\/(\d+)\/(\d+)/);
+  if (linkMatch) {
+    resolvedChannelId = linkMatch[1];
+    resolvedMessageId = linkMatch[2];
+    const linkChannel = await interaction.guild.channels.fetch(resolvedChannelId).catch(() => null);
+    if (linkChannel) {
+      const linkMsg = await linkChannel.messages.fetch(resolvedMessageId).catch(() => null);
+      if (linkMsg) {
+        target = linkMsg.author;
+        deletedContent = linkMsg.content || null;
+        await linkMsg.delete().catch(() => null);
+      }
+    }
   } else {
-    const thread = await interaction.guild.channels.fetch(rawId).catch(() => null);
-    if (thread && thread.isThread()) {
-      const starterMsg = await thread.fetchStarterMessage().catch(() => null);
-      if (starterMsg) {
-        target = starterMsg.author;
-        deletedContent = starterMsg.content || null;
-        resolvedMessageId = starterMsg.id;
-        resolvedChannelId = thread.id;
-        await starterMsg.delete().catch(() => null);
-      } else {
-        target = thread.owner ?? null;
+    // Plain ID — try current channel first, then all guild text channels
+    const tryChannels = [
+      interaction.channel,
+      ...interaction.guild.channels.cache
+        .filter(c => c.isTextBased() && c.id !== interaction.channelId)
+        .values(),
+    ];
+    for (const ch of tryChannels) {
+      if (!ch) continue;
+      const fetchedCh = ch.messages ? ch : await interaction.guild.channels.fetch(ch.id).catch(() => null);
+      if (!fetchedCh?.messages) continue;
+      const msg = await fetchedCh.messages.fetch(rawId).catch(() => null);
+      if (msg) {
+        target = msg.author;
+        deletedContent = msg.content || null;
+        resolvedMessageId = msg.id;
+        resolvedChannelId = fetchedCh.id;
+        await msg.delete().catch(() => null);
+        break;
+      }
+    }
+
+    // If still not found, try as a thread ID
+    if (!target) {
+      const thread = await interaction.guild.channels.fetch(rawId).catch(() => null);
+      if (thread && thread.isThread()) {
+        const starterMsg = await thread.fetchStarterMessage().catch(() => null);
+        if (starterMsg) {
+          target = starterMsg.author;
+          deletedContent = starterMsg.content || null;
+          resolvedMessageId = starterMsg.id;
+          resolvedChannelId = thread.id;
+          await starterMsg.delete().catch(() => null);
+        } else {
+          target = thread.owner ?? null;
+          resolvedChannelId = thread.id;
+        }
       }
     }
   }
 
   if (!target) {
-    return interaction.editReply({ content: `❌ Could not find a message or thread with ID **${rawId}**. Make sure you use it in the same channel as the message, or provide the thread ID.` });
+    return interaction.editReply({ content: `❌ Could not find a message or thread with ID **${rawId}**. Try right-clicking the message → Copy Message Link and paste that instead.` });
   }
 
   const caseId = await addAdWarn(interaction.guildId, target.id, interaction.user.id, reason, resolvedMessageId, deletedContent);
