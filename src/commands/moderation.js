@@ -390,42 +390,71 @@ export async function handleFire(interaction) {
   await sendLog(interaction.guild, config, 'staff_updates', buildStaffUpdateEmbed('fired', { userId: target.id, moderatorId: interaction.user.id, reason }));
 }
 
-export async function handleJail(interaction) {
-  if (!await hasCommandPermission(interaction.member, 'jail')) return deny(interaction);
+  export async function handleJail(interaction) {
+    if (!await hasCommandPermission(interaction.member, 'jail')) return deny(interaction);
 
-  const target = interaction.options.getUser('user');
-  const reason = interaction.options.getString('reason') || 'No reason provided';
+    const target = interaction.options.getUser('user');
+    const reason = interaction.options.getString('reason') || 'No reason provided';
 
-  const config = await getGuild(interaction.guildId);
-  if (!config.jail_role_id) return noConfig(interaction, 'jail-role');
+    const config = await getGuild(interaction.guildId);
+    if (!config.jail_role_id) return noConfig(interaction, 'jail-role');
 
-  const member = await safeFetchMember(interaction.guild, target.id);
-  if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
+    const member = await safeFetchMember(interaction.guild, target.id);
+    if (!member) return interaction.reply({ content: '❌ Could not find that member.', flags: 64 });
 
-  if (!await canModerateInGuild(interaction.member, member, interaction.guildId)) {
-    return interaction.reply({ content: RANK_ERR, flags: 64 });
-  }
+    if (!await canModerateInGuild(interaction.member, member, interaction.guildId)) {
+      return interaction.reply({ content: RANK_ERR, flags: 64 });
+    }
 
-  if (await isJailed(interaction.guildId, target.id)) {
-    return interaction.reply({
-      content: `❌ **${target.tag}** is already jailed.`,
-      flags: 64
+    if (await isJailed(interaction.guildId, target.id)) {
+      return interaction.reply({
+        content: `❌ **${target.tag}** is already jailed.`,
+        flags: 64
+      });
+    }
+
+    const originalRoles = member.roles.cache
+      .filter(r => r.id !== interaction.guild.id && r.editable)
+      .map(r => r.id);
+
+    await member.roles.remove(originalRoles, reason).catch(() => {});
+    await member.roles.add(config.jail_role_id, reason).catch(() => {});
+    await jailUser(interaction.guildId, target.id, originalRoles);
+
+    const embed = buildModEmbed('jail', {
+      userId: target.id,
+      moderatorId: interaction.user.id,
+      reason
     });
+
+    await interaction.reply({ embeds: [embed] });
+
+    await sendLog(interaction.guild, config, 'general', embed);
+
+    // ─── JAIL CHANNEL (ENV) ─────────────────────────────
+    const jailChannelId = process.env.JAIL_CHANNEL_ID;
+
+    if (jailChannelId) {
+      const jailChannel = await interaction.guild.channels
+        .fetch(jailChannelId)
+        .catch(() => null);
+
+      if (jailChannel && jailChannel.isTextBased()) {
+        await jailChannel.send({
+          content: `🚨 <@${target.id}> has been jailed!`,
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x2f3136)
+              .setTitle('🔒 Jail Notice')
+              .setDescription('How is jail? 😏')
+              .setImage('https://media.tenor.com/bsh-in-jail-bongo-behind-the-bars-bsh-jailed.gif')
+              .setFooter({ text: `Reason: ${reason}` })
+              .setTimestamp()
+          ]
+        }).catch(() => {});
+      }
+    }
   }
-
-  const originalRoles = member.roles.cache
-    .filter(r => r.id !== interaction.guild.id && r.editable)
-    .map(r => r.id);
-
-  await member.roles.remove(originalRoles, reason).catch(() => {});
-  await member.roles.add(config.jail_role_id, reason).catch(() => {});
-  await jailUser(interaction.guildId, target.id, originalRoles);
-
-  const embed = buildModEmbed('jail', {
-    userId: target.id,
-    moderatorId: interaction.user.id,
-    reason
-  });
 
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
