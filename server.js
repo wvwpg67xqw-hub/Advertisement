@@ -2589,7 +2589,6 @@ client.on('messageReactionAdd', async (reaction, user) => {
       .addFields(
         { name: '📍 Channel', value: `<#${msg.channel.id}>`, inline: true },
         { name: '⭐ Stars',   value: String(starCount),       inline: true },
-        { name: '🔗 Jump',    value: `[Go to message](${jumpUrl})`, inline: true },
       )
       .setTimestamp(msg.createdAt)
       .setFooter({ text: `Message ID: ${msg.id}` });
@@ -2599,7 +2598,14 @@ client.on('messageReactionAdd', async (reaction, user) => {
       if (img) embed.setImage(img.url);
     }
 
-    await shameChannel.send({ embeds: [embed] });
+    const jumpRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('🔗 Jump to Message')
+        .setURL(jumpUrl)
+        .setStyle(ButtonStyle.Link),
+    );
+
+    await shameChannel.send({ embeds: [embed], components: [jumpRow] });
   } catch (err) {
     console.error('Hall of Shame error:', err.message);
   }
