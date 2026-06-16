@@ -60,4 +60,3 @@ export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp,
 export { handleModGuide, handleModGuideButton } from './modguide.js';
 export { handleStatus, handleActivity } from './botsettings.js';
 export { handleUnblockAll } from './devtools.js';
-export { handleSticky } from './sticky.js';
