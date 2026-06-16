@@ -52,7 +52,7 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, updateStickyLastMessageId } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
 
@@ -2201,13 +2201,15 @@ client.on('messageCreate', async (msg) => {
         || (msg.channel.parentId ? await getStickyMessage(msg.guild.id, msg.channel.parentId) : null);
       if (!sticky) return;
 
-      if (sticky.last_message_id) {
-        const old = await msg.channel.messages.fetch(sticky.last_message_id).catch(() => null);
+      // Use per-channel state so each channel in a category tracks its own last post
+      const state = await getStickyChannelState(msg.guild.id, msg.channel.id);
+      if (state?.last_message_id) {
+        const old = await msg.channel.messages.fetch(state.last_message_id).catch(() => null);
         if (old) await old.delete().catch(() => {});
       }
 
       const sent = await msg.channel.send(sticky.message);
-      await updateStickyLastMessageId(msg.guild.id, sticky.channel_id, sent.id);
+      await updateStickyChannelState(msg.guild.id, msg.channel.id, sent.id);
     } catch {}
   })();
 

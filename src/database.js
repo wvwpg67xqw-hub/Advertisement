@@ -627,18 +627,24 @@ export async function getStickyMessage(guildId, channelId) {
 export async function setStickyMessage(guildId, channelId, message) {
   await q(
     `INSERT INTO sticky_messages (guild_id, channel_id, message) VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE message = VALUES(message), last_message_id = NULL`,
+     ON DUPLICATE KEY UPDATE message = VALUES(message)`,
     [guildId, channelId, message]
   );
 }
 
 export async function deleteStickyMessage(guildId, channelId) {
   await q('DELETE FROM sticky_messages WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+  await q('DELETE FROM sticky_channel_state WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
 }
 
-export async function updateStickyLastMessageId(guildId, channelId, messageId) {
+export async function getStickyChannelState(guildId, channelId) {
+  return q1('SELECT last_message_id FROM sticky_channel_state WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+}
+
+export async function updateStickyChannelState(guildId, channelId, messageId) {
   await q(
-    'UPDATE sticky_messages SET last_message_id = ? WHERE guild_id = ? AND channel_id = ?',
-    [messageId, guildId, channelId]
+    `INSERT INTO sticky_channel_state (guild_id, channel_id, last_message_id) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE last_message_id = VALUES(last_message_id)`,
+    [guildId, channelId, messageId]
   );
 }

@@ -219,6 +219,11 @@ export async function initDatabase() {
       guild_id        VARCHAR(20),
       channel_id      VARCHAR(20),
       message         TEXT NOT NULL,
+      PRIMARY KEY (guild_id, channel_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS sticky_channel_state (
+      guild_id        VARCHAR(20),
+      channel_id      VARCHAR(20),
       last_message_id VARCHAR(20),
       PRIMARY KEY (guild_id, channel_id)
     )`,
