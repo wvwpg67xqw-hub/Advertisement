@@ -719,7 +719,7 @@ const PANEL_CMD_ROWS = [
   ['warn', 'ad-warn', 'mute', 'ban', 'fire'],
   ['promote', 'demote-user', 'strike', 'jail', 'unjail'],
   ['ban-request', 'blacklist-request', 'network-ban-request', 'partnership-request'],
-  ['add-xp', 'remove-xp', 'add-level', 'set-level'],
+  ['add-xp', 'remove-xp', 'add-level', 'set-level', 'sticky'],
 ];
 
 async function buildOwnerPanel(guildId) {
@@ -2195,6 +2195,8 @@ client.on('messageCreate', async (msg) => {
   // ── Sticky Messages ───────────────────────────────────────────────────────
   (async () => {
     try {
+      if (await isCommandDisabled(msg.guild.id, 'sticky')) return;
+
       const sticky = await getStickyMessage(msg.guild.id, msg.channel.id)
         || (msg.channel.parentId ? await getStickyMessage(msg.guild.id, msg.channel.parentId) : null);
       if (!sticky) return;
