@@ -227,6 +227,11 @@ export async function initDatabase() {
       last_message_id VARCHAR(20),
       PRIMARY KEY (guild_id, channel_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS hall_of_shame (
+      guild_id   VARCHAR(20),
+      message_id VARCHAR(20),
+      PRIMARY KEY (guild_id, message_id)
+    )`,
   ];
 
   for (const sql of migrations) {

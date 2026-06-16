@@ -648,3 +648,14 @@ export async function updateStickyChannelState(guildId, channelId, messageId) {
     [guildId, channelId, messageId]
   );
 }
+
+// ── Hall of Shame ─────────────────────────────────────────────────────────────
+
+export async function isInHallOfShame(guildId, messageId) {
+  const row = await q1('SELECT 1 FROM hall_of_shame WHERE guild_id = ? AND message_id = ?', [guildId, messageId]);
+  return !!row;
+}
+
+export async function addToHallOfShame(guildId, messageId) {
+  await q('INSERT IGNORE INTO hall_of_shame (guild_id, message_id) VALUES (?, ?)', [guildId, messageId]);
+}

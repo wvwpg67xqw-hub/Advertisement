@@ -52,7 +52,7 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
 
@@ -2549,6 +2549,61 @@ async function processExpiredBreaks() {
 }
 
 setInterval(processExpiredBreaks, 60 * 1000);
+
+// ── Hall of Shame ─────────────────────────────────────────────────────────────
+
+const HALL_OF_SHAME_THRESHOLD = 2;
+
+client.on('messageReactionAdd', async (reaction, user) => {
+  try {
+    if (reaction.emoji.name !== '⭐') return;
+
+    const SHAME_CHANNEL_ID = process.env.HALL_OF_SHAME_CHANNEL_ID;
+    if (!SHAME_CHANNEL_ID) return;
+
+    // Fetch partial reaction/message if needed
+    if (reaction.partial) await reaction.fetch().catch(() => null);
+    const msg = reaction.message.partial
+      ? await reaction.message.fetch().catch(() => null)
+      : reaction.message;
+    if (!msg || !msg.guild) return;
+
+    const starCount = reaction.count ?? reaction.message.reactions.cache.get('⭐')?.count ?? 0;
+    if (starCount < HALL_OF_SHAME_THRESHOLD) return;
+
+    // Don't post the same message twice
+    if (await isInHallOfShame(msg.guild.id, msg.id)) return;
+    await addToHallOfShame(msg.guild.id, msg.id);
+
+    const shameChannel = await client.channels.fetch(SHAME_CHANNEL_ID).catch(() => null);
+    if (!shameChannel) return;
+
+    const author = msg.author;
+    const avatar = author?.displayAvatarURL({ size: 256, extension: 'png' });
+    const jumpUrl = msg.url;
+
+    const embed = new EmbedBuilder()
+      .setColor(0xFFD700)
+      .setAuthor({ name: author?.tag ?? 'Unknown', iconURL: avatar })
+      .setDescription(msg.content || '*[no text content]*')
+      .addFields(
+        { name: '📍 Channel', value: `<#${msg.channel.id}>`, inline: true },
+        { name: '⭐ Stars',   value: String(starCount),       inline: true },
+        { name: '🔗 Jump',    value: `[Go to message](${jumpUrl})`, inline: true },
+      )
+      .setTimestamp(msg.createdAt)
+      .setFooter({ text: `Message ID: ${msg.id}` });
+
+    if (msg.attachments.size > 0) {
+      const img = [...msg.attachments.values()].find(a => a.contentType?.startsWith('image/'));
+      if (img) embed.setImage(img.url);
+    }
+
+    await shameChannel.send({ embeds: [embed] });
+  } catch (err) {
+    console.error('Hall of Shame error:', err.message);
+  }
+});
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 
