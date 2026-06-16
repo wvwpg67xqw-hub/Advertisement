@@ -39,6 +39,7 @@ import {
   handleModGuide, handleModGuideButton,
   handleStatus, handleActivity,
   handleUnblockAll,
+  handleSticky,
 } from './src/commands/index.js';
 
 import {
@@ -51,7 +52,7 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, updateStickyLastMessageId } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
 
@@ -709,6 +710,7 @@ const botHandlers = {
   status: handleStatus,
   activity: handleActivity,
   'unblock-all': handleUnblockAll,
+  sticky: handleSticky,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
@@ -2189,6 +2191,23 @@ client.on('messageCreate', async (msg) => {
 
   await incrementMessageCount(msg.guild.id, msg.author.id);
   if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
+
+  // ── Sticky Messages ───────────────────────────────────────────────────────
+  (async () => {
+    try {
+      const sticky = await getStickyMessage(msg.guild.id, msg.channel.id)
+        || (msg.channel.parentId ? await getStickyMessage(msg.guild.id, msg.channel.parentId) : null);
+      if (!sticky) return;
+
+      if (sticky.last_message_id) {
+        const old = await msg.channel.messages.fetch(sticky.last_message_id).catch(() => null);
+        if (old) await old.delete().catch(() => {});
+      }
+
+      const sent = await msg.channel.send(sticky.message);
+      await updateStickyLastMessageId(msg.guild.id, sticky.channel_id, sent.id);
+    } catch {}
+  })();
 
   // ── Prefix command: .snipe ────────────────────────────────────────────────
   if (msg.content.trim().toLowerCase() === '.snipe') {

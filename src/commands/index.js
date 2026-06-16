@@ -11,6 +11,7 @@ export { defs as levelingDefs } from './leveling.js';
 export { defs as modGuideDefs } from './modguide.js';
 export { defs as botSettingsDefs } from './botsettings.js';
 export { defs as devtoolsDefs } from './devtools.js';
+export { defs as stickyDefs, handleSticky } from './sticky.js';
 export { contextMenuDefs, handleWarnUserContextMenu, handleAdWarnMessageContextMenu } from './context-menus.js';
 
 import { defs as moderationDefs } from './moderation.js';
@@ -25,6 +26,7 @@ import { defs as levelingDefs } from './leveling.js';
 import { defs as modGuideDefs } from './modguide.js';
 import { defs as botSettingsDefs } from './botsettings.js';
 import { defs as devtoolsDefs } from './devtools.js';
+import { defs as stickyDefs, handleSticky } from './sticky.js';
 
 import { contextMenuDefs } from './context-menus.js';
 
@@ -41,6 +43,7 @@ export const commandDefs = [
   ...modGuideDefs,
   ...botSettingsDefs,
   ...devtoolsDefs,
+  ...stickyDefs,
   ...contextMenuDefs,
 ];
 
@@ -57,3 +60,4 @@ export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp,
 export { handleModGuide, handleModGuideButton } from './modguide.js';
 export { handleStatus, handleActivity } from './botsettings.js';
 export { handleUnblockAll } from './devtools.js';
+export { handleSticky } from './sticky.js';

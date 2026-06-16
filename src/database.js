@@ -617,3 +617,28 @@ export async function resolveNetworkApplication(id, status) {
   await q('UPDATE network_applications SET status = ? WHERE id = ?', [status, Number(id)]);
   return q1('SELECT * FROM network_applications WHERE id = ?', [Number(id)]);
 }
+
+// ── Sticky Messages ────────────────────────────────────────────────────────────
+
+export async function getStickyMessage(guildId, channelId) {
+  return q1('SELECT * FROM sticky_messages WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+}
+
+export async function setStickyMessage(guildId, channelId, message) {
+  await q(
+    `INSERT INTO sticky_messages (guild_id, channel_id, message) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE message = VALUES(message), last_message_id = NULL`,
+    [guildId, channelId, message]
+  );
+}
+
+export async function deleteStickyMessage(guildId, channelId) {
+  await q('DELETE FROM sticky_messages WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+}
+
+export async function updateStickyLastMessageId(guildId, channelId, messageId) {
+  await q(
+    'UPDATE sticky_messages SET last_message_id = ? WHERE guild_id = ? AND channel_id = ?',
+    [messageId, guildId, channelId]
+  );
+}

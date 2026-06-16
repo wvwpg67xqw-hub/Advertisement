@@ -215,6 +215,13 @@ export async function initDatabase() {
       animated   TINYINT(1)  DEFAULT 0,
       PRIMARY KEY (guild_id, user_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS sticky_messages (
+      guild_id        VARCHAR(20),
+      channel_id      VARCHAR(20),
+      message         TEXT NOT NULL,
+      last_message_id VARCHAR(20),
+      PRIMARY KEY (guild_id, channel_id)
+    )`,
   ];
 
   for (const sql of migrations) {
