@@ -3,6 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = discordPk
 
 import db from './db.js';
 import { sendDM } from './dmRest.js';
+import { logWarning, logError } from './src/devLogger.js';
 
 // ── Crawler / Bot User-Agent Detection ────────────────────────────────────────
 
@@ -128,6 +129,7 @@ export function ipBlacklistMiddleware(req, res, next) {
   if (!db.isIpBlacklisted(ip)) return next();
 
   console.warn(`🚫 Blocked IP: ${ip} → ${req.method} ${req.path}`);
+  logWarning('Blocked IP Access Attempt', `**IP:** ${ip}\n**Request:** ${req.method} ${req.path}`).catch(() => {});
 
   // Always allow the appeal submission through
   if (req.method === 'POST' && req.path === '/api/ip-appeal') return next();
@@ -165,7 +167,8 @@ export async function checkVpn(ip) {
       ['VPN', 'TOR', 'SOCKS4', 'SOCKS5', 'SOCKS', 'HTTP', 'HTTPS'].includes(entry.type?.toUpperCase());
     vpnCache.set(ip, { isVpn, checkedAt: Date.now() });
     return isVpn;
-  } catch {
+  } catch (err) {
+    logWarning('VPN Check API Failure', `**IP:** ${ip}\n**Error:** ${err?.message ?? String(err)}`).catch(() => {});
     return false;
   }
 }
@@ -234,6 +237,9 @@ export async function sendBreachAlert({ type, ip, detail, userId, username }) {
       .setLabel('Dismiss')
       .setStyle(ButtonStyle.Secondary),
   );
+
+  // Send to dev server warnings channel
+  logWarning(`Security: ${type}`, `**Event:** ${detail || 'N/A'}\n**IP:** ${ip || 'unknown'}\n**User:** ${userId ? `${username || 'Unknown'} (${userId})` : 'Not logged in'}`).catch(() => {});
 
   await sendDM(ownerId, {
     embeds: [embed.toJSON()],

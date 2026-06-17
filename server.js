@@ -403,6 +403,7 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
     });
   } catch (err) {
     console.error('OAuth callback error:', err);
+    logError('OAuth Callback Error', err).catch(() => {});
     res.redirect('/?error=oauth_error');
   }
 });
@@ -2052,6 +2053,7 @@ if (id.startsWith('app_')) {
     }
   } catch (err) {
     console.error('Interaction error:', err);
+    logError(`Interaction Error — /${interaction.commandName ?? interaction.customId ?? '?'}`, err).catch(() => {});
     try {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
@@ -2518,6 +2520,7 @@ client.once('clientReady', async () => {
       console.log(`✅ Registered ${allCommands.length} slash commands globally`);
     } catch (err) {
       console.error('❌ Failed to register commands:', err.message);
+      logError('Slash Command Registration Failed', err).catch(() => {});
     }
   }
 
