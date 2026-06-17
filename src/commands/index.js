@@ -11,6 +11,10 @@ export { defs as levelingDefs } from './leveling.js';
 export { defs as modGuideDefs } from './modguide.js';
 export { defs as botSettingsDefs } from './botsettings.js';
 export { defs as devtoolsDefs } from './devtools.js';
+export {
+  handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
+  handleDevGuilds, handleDevGuildInfo, handleDevShutdown, handleDevDebug,
+} from './devtools.js';
 export { defs as stickyDefs, handleSticky } from './sticky.js';
 export { contextMenuDefs, handleWarnUserContextMenu, handleAdWarnMessageContextMenu } from './context-menus.js';
 export { defs as buyDefs, handleBuy } from './buy.js';
@@ -63,3 +67,4 @@ export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp,
 export { handleModGuide, handleModGuideButton } from './modguide.js';
 export { handleStatus, handleActivity } from './botsettings.js';
 export { handleUnblockAll } from './devtools.js';
+

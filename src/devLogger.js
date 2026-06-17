@@ -20,6 +20,26 @@ const CHANNEL_DEFS = [
 const ch = {};   // channel name → TextChannel
 let _client = null;
 
+// ── Log Buffer (ring buffer for /dev-logs) ────────────────────────────────────
+
+const LOG_BUFFER_MAX = 100;
+const logBuffer = [];  // { ts, level, message }
+
+function pushLog(level, message) {
+  logBuffer.push({ ts: Date.now(), level, message });
+  if (logBuffer.length > LOG_BUFFER_MAX) logBuffer.shift();
+}
+
+export function getRecentLogs(count = 20) {
+  return logBuffer.slice(-Math.min(count, LOG_BUFFER_MAX));
+}
+
+// ── Debug Toggle ──────────────────────────────────────────────────────────────
+
+let debugEnabled = false;
+export function setDebug(value) { debugEnabled = value; }
+export function isDebugEnabled() { return debugEnabled; }
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 export async function setupDevServer(client) {
@@ -160,6 +180,7 @@ export async function logCommand(interaction) {
 export async function logError(type, error) {
   try {
     const text = (error?.stack ?? String(error)).slice(0, 1900);
+    pushLog('error', `${type}: ${String(error?.message ?? error).slice(0, 120)}`);
     await send('errors', {
       embeds: [
         new EmbedBuilder()
@@ -206,6 +227,7 @@ export async function logGuildLeave(guild) {
 
 export async function logWarning(type, detail) {
   try {
+    pushLog('warn', `${type}: ${String(detail).slice(0, 120)}`);
     await send('warnings', {
       embeds: [
         new EmbedBuilder()

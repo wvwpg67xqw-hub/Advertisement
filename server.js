@@ -42,6 +42,10 @@ import {
   handleUnblockAll,
   handleSticky,
 } from './src/commands/index.js';
+import {
+  handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
+  handleDevGuilds, handleDevGuildInfo, handleDevShutdown, handleDevDebug,
+} from './src/commands/devtools.js';
 import { uploadAppEmoji, emojiCdnUrl } from './src/appEmoji.js';
 import {
   setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
@@ -757,6 +761,14 @@ const botHandlers = {
   activity: handleActivity,
   'unblock-all': handleUnblockAll,
   sticky: handleSticky,
+  'dev-status':     handleDevStatus,
+  'dev-logs':       handleDevLogs,
+  'dev-reload':     handleDevReload,
+  'setup-dev':      handleSetupDev,
+  'dev-guilds':     handleDevGuilds,
+  'dev-guild-info': handleDevGuildInfo,
+  'dev-shutdown':   handleDevShutdown,
+  'dev-debug':      handleDevDebug,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
