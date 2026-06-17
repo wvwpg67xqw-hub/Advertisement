@@ -45,7 +45,7 @@ import {
 import {
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
   handleDevGuilds, handleDevGuildInfo, handleDevShutdown, handleDevDebug,
-} from './src/commands/devtools.js';
+} from './src/commands/dev-commands.js';
 import { uploadAppEmoji, emojiCdnUrl } from './src/appEmoji.js';
 import {
   setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
