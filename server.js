@@ -31,6 +31,7 @@ import {
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
   handleBreakRequest, handleManageBreak,
   handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel,
+  handleAutoReact, handleAutoReactClear,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleUpdate,
   handleWarnUserContextMenu, handleAdWarnMessageContextMenu,
@@ -41,6 +42,7 @@ import {
   handleUnblockAll,
   handleSticky,
 } from './src/commands/index.js';
+import { uploadAppEmoji, emojiCdnUrl } from './src/appEmoji.js';
 
 import {
   setupCommands, handleSetup, handleSetupRoles, handleSetupRolesExtra,
@@ -696,6 +698,8 @@ const botHandlers = {
   addbalance: handleAddBalance,
   setbalance: handleSetBalance,
   'setup-owner-role': handleSetupOwnerRole,
+  ar: handleAutoReact,
+  'ar-clear': handleAutoReactClear,
   'resign-request': handleResignRequest, update: handleUpdate,
   'setup-network-apply': handleSetupNetworkApply,
   'network-apply-post': handleNetworkApplyPost,
@@ -2281,17 +2285,17 @@ client.on('messageCreate', async (msg) => {
       const customMatch2 = emoji.match(/^<(a?):([^:]+):(\d+)>$/);
       if (customMatch2) {
         const [, a, name, id] = customMatch2;
-        await setAutoReact(msg.guild.id, targetId, id, name, a === 'a').catch(() => {});
-        msg.reply(`✅ Auto-react set to ${emoji} for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
-      } else {
+        const animated2 = a === 'a';
         try {
-          const test = await msg.react(emoji);
-          await test.remove().catch(() => {});
-          await setAutoReact(msg.guild.id, targetId, null, emoji, false).catch(() => {});
-          msg.reply(`✅ Auto-react set to ${emoji} for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
-        } catch {
-          msg.reply('❌ Invalid emoji.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+          const appEmoji2 = await uploadAppEmoji(name, emojiCdnUrl(id, animated2), animated2);
+          await setAutoReact(msg.guild.id, targetId, appEmoji2.id, appEmoji2.name, appEmoji2.animated).catch(() => {});
+          msg.reply(`✅ Auto-react set to <${appEmoji2.animated ? 'a' : ''}:${appEmoji2.name}:${appEmoji2.id}> for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        } catch (e) {
+          msg.reply(`❌ Failed to upload emoji: ${e.message}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
         }
+      } else {
+        await setAutoReact(msg.guild.id, targetId, null, emoji, false).catch(() => {});
+        msg.reply(`✅ Auto-react set to ${emoji} for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       }
       return;
     }
@@ -2332,29 +2336,46 @@ client.on('messageCreate', async (msg) => {
       }
     }
 
-    // Custom emoji: <a?:name:id>
+    // Image attachment — upload to bot application emojis
+    const attachment = msg.attachments.first();
+    if (attachment && /\.(png|jpe?g|gif|webp)$/i.test(attachment.name)) {
+      try {
+        const appEmoji = await uploadAppEmoji(
+          attachment.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_') || 'custom',
+          attachment.url,
+        );
+        if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
+        await setAutoReact(msg.guild.id, msg.author.id, appEmoji.id, appEmoji.name, appEmoji.animated).catch(() => {});
+        const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
+        msg.reply(`✅ Auto-react set to <:${appEmoji.name}:${appEmoji.id}>.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      } catch (e) {
+        msg.reply(`❌ Failed to upload emoji: ${e.message}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      }
+      return;
+    }
+
+    // Custom emoji: <a?:name:id> — upload image to bot application emojis
     const customMatch = arg.match(/^<(a?):([^:]+):(\d+)>$/);
     if (customMatch) {
       const [, a, name, id] = customMatch;
       const animated = a === 'a';
-      if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
-      await setAutoReact(msg.guild.id, msg.author.id, id, name, animated).catch(() => {});
-      const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
-      msg.reply(`✅ Auto-react set to ${arg}.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      try {
+        const appEmoji = await uploadAppEmoji(name, emojiCdnUrl(id, animated), animated);
+        if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
+        await setAutoReact(msg.guild.id, msg.author.id, appEmoji.id, appEmoji.name, appEmoji.animated).catch(() => {});
+        const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
+        msg.reply(`✅ Auto-react set to <${appEmoji.animated ? 'a' : ''}:${appEmoji.name}:${appEmoji.id}>.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      } catch (e) {
+        msg.reply(`❌ Failed to upload emoji: ${e.message}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+      }
       return;
     }
 
-    // Unicode emoji — test by attempting a react, then save if it works
-    try {
-      const test = await msg.react(arg);
-      await test.remove().catch(() => {});
-      if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
-      await setAutoReact(msg.guild.id, msg.author.id, null, arg, false).catch(() => {});
-      const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
-      msg.reply(`✅ Auto-react set to ${arg}.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
-    } catch {
-      msg.reply('❌ Invalid emoji. Send a standard emoji or a custom emoji from this server.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
-    }
+    // Unicode emoji — save directly
+    if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
+    await setAutoReact(msg.guild.id, msg.author.id, null, arg, false).catch(() => {});
+    const suffix2 = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
+    msg.reply(`✅ Auto-react set to ${arg}.${suffix2}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
     return;
   }
 
@@ -2362,8 +2383,7 @@ client.on('messageCreate', async (msg) => {
   const ar = await getAutoReact(msg.guild.id, msg.author.id).catch(() => null);
   if (ar && ar.emoji_name !== '__blocked__') {
     if (ar.emoji_id) {
-      const emoji = msg.guild.emojis.cache.get(ar.emoji_id);
-      if (emoji) msg.react(emoji).catch(() => {});
+      msg.react(`<${ar.animated ? 'a' : ''}:${ar.emoji_name}:${ar.emoji_id}>`).catch(() => {});
     } else if (ar.emoji_name) {
       msg.react(ar.emoji_name).catch(() => {});
     }

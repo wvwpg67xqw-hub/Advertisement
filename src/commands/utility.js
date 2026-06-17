@@ -4,6 +4,7 @@ import {
   getSnipeCache, getBalance, addBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact, setOwnerRole,
 } from '../database.js';
 import { hasCommandPermission, getStaffRank } from '../utils.js';
+import { uploadAppEmoji, emojiCdnUrl } from '../appEmoji.js';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -79,6 +80,16 @@ export const defs = [
     .addStringOption(o => o.setName('button-label').setDescription('Label shown on the button (default: Click Here)'))
     .addStringOption(o => o.setName('color').setDescription('Embed colour as a hex code, e.g. #5865F2').setRequired(false))
     .addChannelOption(o => o.setName('channel').setDescription('Channel to post in (defaults to current channel)')),
+
+  new SlashCommandBuilder()
+    .setName('ar')
+    .setDescription('Set your auto-react emoji — any emoji or image, uploaded to the bot (no server emoji needed)')
+    .addStringOption(o => o.setName('emoji').setDescription('Paste any emoji — Unicode 😄 or custom <:name:id> from any server').setRequired(false))
+    .addAttachmentOption(o => o.setName('image').setDescription('Upload an image to use as your auto-react emoji').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('ar-clear')
+    .setDescription('Remove your auto-react'),
 ];
 
 export async function handleMessages(interaction) {
@@ -226,19 +237,39 @@ export async function handleAddBalance(interaction) {
 }
 
 export async function handleAutoReact(interaction) {
-  const raw = interaction.options.getString('emoji');
-  const match = raw.match(/^<(a?):([^:]+):(\d+)>$/);
-  if (!match) {
-    return interaction.reply({ content: '❌ That\'s not a valid server emoji. Right-click a custom emoji and paste it here.', flags: 64 });
+  const raw        = interaction.options.getString('emoji');
+  const attachment = interaction.options.getAttachment('image');
+
+  if (!raw && !attachment) {
+    return interaction.reply({ content: '❌ Provide an emoji or attach an image.', flags: 64 });
   }
-  const [, a, name, id] = match;
-  const animated = a === 'a';
-  const serverEmoji = interaction.guild.emojis.cache.get(id);
-  if (!serverEmoji) {
-    return interaction.reply({ content: '❌ That emoji doesn\'t belong to this server. Pick one from here.', flags: 64 });
+
+  await interaction.deferReply({ flags: 64 });
+
+  try {
+    if (attachment) {
+      const appEmoji = await uploadAppEmoji(
+        attachment.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_') || 'custom',
+        attachment.url,
+      );
+      await setAutoReact(interaction.guildId, interaction.user.id, appEmoji.id, appEmoji.name, appEmoji.animated);
+      return interaction.editReply({ content: `✅ Done! The bot will now react with <:${appEmoji.name}:${appEmoji.id}> to every message you send in this server.` });
+    }
+
+    const customMatch = raw.match(/^<(a?):([^:]+):(\d+)>$/);
+    if (customMatch) {
+      const [, a, name, id] = customMatch;
+      const animated = a === 'a';
+      const appEmoji = await uploadAppEmoji(name, emojiCdnUrl(id, animated), animated);
+      await setAutoReact(interaction.guildId, interaction.user.id, appEmoji.id, appEmoji.name, appEmoji.animated);
+      return interaction.editReply({ content: `✅ Done! The bot will now react with <${appEmoji.animated ? 'a' : ''}:${appEmoji.name}:${appEmoji.id}> to every message you send in this server.` });
+    }
+
+    await setAutoReact(interaction.guildId, interaction.user.id, null, raw, false);
+    return interaction.editReply({ content: `✅ Done! The bot will now react with ${raw} to every message you send in this server.` });
+  } catch (err) {
+    return interaction.editReply({ content: `❌ Failed to set auto-react: ${err.message}` });
   }
-  await setAutoReact(interaction.guildId, interaction.user.id, id, name, animated);
-  await interaction.reply({ content: `✅ Done! The bot will now react with ${raw} to every message you send in this server.`, flags: 64 });
 }
 
 export async function handleAutoReactClear(interaction) {
