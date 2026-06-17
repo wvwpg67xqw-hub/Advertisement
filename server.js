@@ -54,6 +54,7 @@ import {
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
+import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -2582,21 +2583,20 @@ client.on('messageReactionAdd', async (reaction, user) => {
     const avatar = author?.displayAvatarURL({ size: 256, extension: 'png' });
     const jumpUrl = msg.url;
 
-    const embed = new EmbedBuilder()
-      .setColor(0xFFD700)
-      .setAuthor({ name: author?.tag ?? 'Unknown', iconURL: avatar })
-      .setDescription(msg.content || '*[no text content]*')
-      .addFields(
-        { name: '📍 Channel', value: `<#${msg.channel.id}>`, inline: true },
-        { name: '⭐ Stars',   value: String(starCount),       inline: true },
-      )
-      .setTimestamp(msg.createdAt)
-      .setFooter({ text: `Message ID: ${msg.id}` });
+    const attachmentImg = msg.attachments.size > 0
+      ? ([...msg.attachments.values()].find(a => a.contentType?.startsWith('image/'))?.url ?? null)
+      : null;
 
-    if (msg.attachments.size > 0) {
-      const img = [...msg.attachments.values()].find(a => a.contentType?.startsWith('image/'));
-      if (img) embed.setImage(img.url);
-    }
+    const imageBuffer = await buildMessageCard({
+      avatarUrl:     avatar,
+      username:      author?.tag ?? 'Unknown',
+      content:       msg.content || '',
+      timestamp:     msg.createdAt,
+      channelName:   msg.channel.name ?? 'unknown',
+      guildName:     msg.guild.name ?? 'Unknown Server',
+      starCount,
+      attachmentUrl: attachmentImg,
+    }).catch(() => null);
 
     const jumpRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -2605,7 +2605,25 @@ client.on('messageReactionAdd', async (reaction, user) => {
         .setStyle(ButtonStyle.Link),
     );
 
-    await shameChannel.send({ embeds: [embed], components: [jumpRow] });
+    const sendOpts = { components: [jumpRow] };
+    if (imageBuffer) {
+      sendOpts.files = [{ attachment: imageBuffer, name: 'shame.png' }];
+    } else {
+      sendOpts.embeds = [
+        new EmbedBuilder()
+          .setColor(0xFFD700)
+          .setAuthor({ name: author?.tag ?? 'Unknown', iconURL: avatar })
+          .setDescription(msg.content || '*[no text content]*')
+          .addFields(
+            { name: '📍 Channel', value: `<#${msg.channel.id}>`, inline: true },
+            { name: '⭐ Stars',   value: String(starCount),       inline: true },
+          )
+          .setTimestamp(msg.createdAt)
+          .setFooter({ text: `Message ID: ${msg.id}` }),
+      ];
+    }
+
+    await shameChannel.send(sendOpts);
   } catch (err) {
     console.error('Hall of Shame error:', err.message);
   }
