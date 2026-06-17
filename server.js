@@ -43,6 +43,10 @@ import {
   handleSticky,
 } from './src/commands/index.js';
 import { uploadAppEmoji, emojiCdnUrl } from './src/appEmoji.js';
+import {
+  setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
+  logWarning, startMetricsLoop, registerProcessHandlers,
+} from './src/devLogger.js';
 
 import {
   setupCommands, handleSetup, handleSetupRoles, handleSetupRolesExtra,
@@ -60,6 +64,9 @@ import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Register process-level error & shutdown handlers as early as possible
+registerProcessHandlers();
 
 // In-memory state for pending application approvals (role selection before confirm)
 const pendingApprovals = new Map(); // key: `GUILDID_APPROVERID` → { applicantId, staffRoleId, teamRoleId }
@@ -2021,6 +2028,7 @@ if (id.startsWith('app_')) {
 
     if (interaction.isCommand()) {
       const name = interaction.commandName;
+      logCommand(interaction).catch(() => {});
       const handler = botHandlers[name];
       if (handler) {
         if (interaction.guildId && await isCommandDisabled(interaction.guildId, name)) {
@@ -2544,6 +2552,7 @@ client.once('clientReady', async () => {
 });
 
 client.on('guildCreate', async (guild) => {
+  logGuildJoin(guild).catch(() => {});
   try {
     const hub = await getNetworkHub();
     if (hub && hub.guild_id !== guild.id) {
@@ -2564,6 +2573,7 @@ client.on('guildCreate', async (guild) => {
 });
 
 client.on('guildDelete', (guild) => {
+  logGuildLeave(guild).catch(() => {});
   db.setApplyServerActive(guild.id, false);
   console.log(`🖥️  Marked server "${guild.name}" (${guild.id}) as inactive in apply_servers (bot removed)`);
 });
@@ -2700,6 +2710,18 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await shameChannel.send(sendOpts);
   } catch (err) {
     console.error('Hall of Shame error:', err.message);
+  }
+});
+
+// ── Dev Server Setup (runs once after bot is ready) ───────────────────────────
+
+client.once('ready', async () => {
+  try {
+    await setupDevServer(client);
+    await logStartup(client);
+    await startMetricsLoop(client);
+  } catch (err) {
+    console.error('[DevLogger] Ready handler error:', err.message);
   }
 });
 
