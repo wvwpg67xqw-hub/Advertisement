@@ -2362,8 +2362,10 @@ client.on('messageCreate', async (msg) => {
       return;
     }
 
-    // Subscription gate — admins (rank 3+) bypass
-    const isFree = rank >= 3;
+    // Subscription gate — any staff (rank 1+) or server admin/manager bypasses
+    const isFree = rank >= 1
+      || msg.member?.permissions?.has('Administrator')
+      || msg.member?.permissions?.has('ManageGuild');
     if (!isFree) {
       const expiry = await getArExpiry(msg.author.id).catch(() => null);
       const active = expiry && new Date(expiry) > new Date();

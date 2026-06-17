@@ -245,9 +245,13 @@ export async function handleAutoReact(interaction) {
     return interaction.reply({ content: '❌ Provide an emoji or attach an image.', flags: 64 });
   }
 
-  // Subscription gate — admins (rank 3+) bypass
+  // Subscription gate — any staff (rank 1+) or server admin/manager bypasses
   const rank = getStaffRank(interaction.member);
-  if (rank < 3) {
+  const perms = interaction.memberPermissions;
+  const isStaffOrAdmin = rank >= 1
+    || perms?.has('Administrator')
+    || perms?.has('ManageGuild');
+  if (!isStaffOrAdmin) {
     const expiry = await getArExpiry(interaction.user.id);
     const active = expiry && new Date(expiry) > new Date();
     if (!active) {
