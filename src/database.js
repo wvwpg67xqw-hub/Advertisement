@@ -141,6 +141,32 @@ export async function isAutoReactBlocked(_guildId, userId) {
   return row?.emoji_name === '__blocked__';
 }
 
+export async function getArExpiry(userId) {
+  const row = await q1(
+    `SELECT ar_expires_at FROM auto_reacts WHERE user_id = ? ORDER BY (guild_id = 'global') DESC LIMIT 1`,
+    [userId]
+  );
+  return row?.ar_expires_at ?? null;
+}
+
+export async function renewArSubscription(userId) {
+  const result = await q(
+    `UPDATE auto_reacts
+     SET ar_expires_at = DATE_ADD(GREATEST(COALESCE(ar_expires_at, NOW()), NOW()), INTERVAL 7 DAY)
+     WHERE user_id = ?`,
+    [userId]
+  );
+  if (result.affectedRows === 0) {
+    // No AR row yet — create a placeholder so the expiry is stored
+    await q(
+      `INSERT IGNORE INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated, ar_expires_at)
+       VALUES ('global', ?, '', '__pending__', 0, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
+      [userId]
+    );
+  }
+  return getArExpiry(userId);
+}
+
 export async function setGithubRepo(guildId, repo) {
   await getGuild(guildId);
   await q('UPDATE guilds SET github_repo = ? WHERE guild_id = ?', [repo || null, guildId]);

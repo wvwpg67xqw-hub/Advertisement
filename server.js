@@ -31,7 +31,7 @@ import {
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
   handleBreakRequest, handleManageBreak,
   handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel,
-  handleAutoReact, handleAutoReactClear,
+  handleAutoReact, handleAutoReactClear, handleBuy,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleUpdate,
   handleWarnUserContextMenu, handleAdWarnMessageContextMenu,
@@ -54,7 +54,7 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
@@ -732,6 +732,7 @@ const botHandlers = {
   'setup-owner-role': handleSetupOwnerRole,
   ar: handleAutoReact,
   'ar-clear': handleAutoReactClear,
+  buy: handleBuy,
   'resign-request': handleResignRequest, update: handleUpdate,
   'setup-network-apply': handleSetupNetworkApply,
   'network-apply-post': handleNetworkApplyPost,
@@ -2361,14 +2362,13 @@ client.on('messageCreate', async (msg) => {
       return;
     }
 
-    // Rank check — admin+ (rank 3+) are free, everyone else pays 10,000 coins
-    const AR_COST = 10000;
+    // Subscription gate — admins (rank 3+) bypass
     const isFree = rank >= 3;
-
     if (!isFree) {
-      const bal = await getBalance(msg.guild.id, msg.author.id).catch(() => 0);
-      if (bal < AR_COST) {
-        msg.reply(`❌ You need **${AR_COST.toLocaleString()} coins** to set an auto-react. You have **${bal.toLocaleString()}**.`).then(r => setTimeout(() => r.delete().catch(() => {}), 7000));
+      const expiry = await getArExpiry(msg.author.id).catch(() => null);
+      const active = expiry && new Date(expiry) > new Date();
+      if (!active) {
+        msg.reply('❌ You need an active auto-react subscription. Use `,buy ar` or `/buy ar` (20,000 coins/week).').then(r => setTimeout(() => r.delete().catch(() => {}), 7000));
         return;
       }
     }
@@ -2381,11 +2381,9 @@ client.on('messageCreate', async (msg) => {
           attachment.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_') || 'custom',
           attachment.url,
         );
-        if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
         await setAutoReact(msg.guild.id, msg.author.id, appEmoji.id, appEmoji.name, appEmoji.animated).catch(() => {});
         invalidateArCache(msg.author.id);
-        const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
-        msg.reply(`✅ Auto-react set to <:${appEmoji.name}:${appEmoji.id}>.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        msg.reply(`✅ Auto-react set to <:${appEmoji.name}:${appEmoji.id}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       } catch (e) {
         msg.reply(`❌ Failed to upload emoji: ${e.message}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       }
@@ -2399,11 +2397,9 @@ client.on('messageCreate', async (msg) => {
       const animated = a === 'a';
       try {
         const appEmoji = await uploadAppEmoji(name, emojiCdnUrl(id, animated), animated);
-        if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
         await setAutoReact(msg.guild.id, msg.author.id, appEmoji.id, appEmoji.name, appEmoji.animated).catch(() => {});
         invalidateArCache(msg.author.id);
-        const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
-        msg.reply(`✅ Auto-react set to <${appEmoji.animated ? 'a' : ''}:${appEmoji.name}:${appEmoji.id}>.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+        msg.reply(`✅ Auto-react set to <${appEmoji.animated ? 'a' : ''}:${appEmoji.name}:${appEmoji.id}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       } catch (e) {
         msg.reply(`❌ Failed to upload emoji: ${e.message}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       }
@@ -2411,11 +2407,9 @@ client.on('messageCreate', async (msg) => {
     }
 
     // Unicode emoji — save directly
-    if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
     await setAutoReact(msg.guild.id, msg.author.id, null, arg, false).catch(() => {});
     invalidateArCache(msg.author.id);
-    const suffix2 = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
-    msg.reply(`✅ Auto-react set to ${arg}.${suffix2}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
+    msg.reply(`✅ Auto-react set to ${arg}.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
     return;
   }
 
@@ -2430,14 +2424,19 @@ client.on('messageCreate', async (msg) => {
       ar = await getAutoReact(null, msg.author.id).catch(() => null);
       arCache.set(msg.author.id, { ar, fetchedAt: nowMs });
     }
-    if (ar && ar.emoji_name !== '__blocked__') {
-      const lastReact = arReactCooldowns.get(msg.author.id) || 0;
-      if (nowMs - lastReact >= AR_REACT_COOLDOWN) {
-        arReactCooldowns.set(msg.author.id, nowMs);
-        const emoji = ar.emoji_id
-          ? `<${ar.animated ? 'a' : ''}:${ar.emoji_name}:${ar.emoji_id}>`
-          : ar.emoji_name;
-        queueReaction(msg, emoji);
+    if (ar && ar.emoji_name !== '__blocked__' && ar.emoji_name !== '__pending__') {
+      // Skip if subscription expired (NULL expiry = admin/no-expiry, always fires)
+      if (ar.ar_expires_at && new Date(ar.ar_expires_at) <= new Date()) {
+        arCache.set(msg.author.id, { ar: null, fetchedAt: nowMs });
+      } else {
+        const lastReact = arReactCooldowns.get(msg.author.id) || 0;
+        if (nowMs - lastReact >= AR_REACT_COOLDOWN) {
+          arReactCooldowns.set(msg.author.id, nowMs);
+          const emoji = ar.emoji_id
+            ? `<${ar.animated ? 'a' : ''}:${ar.emoji_name}:${ar.emoji_id}>`
+            : ar.emoji_name;
+          queueReaction(msg, emoji);
+        }
       }
     }
   }

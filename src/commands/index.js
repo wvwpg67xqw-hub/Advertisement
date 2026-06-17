@@ -13,6 +13,7 @@ export { defs as botSettingsDefs } from './botsettings.js';
 export { defs as devtoolsDefs } from './devtools.js';
 export { defs as stickyDefs, handleSticky } from './sticky.js';
 export { contextMenuDefs, handleWarnUserContextMenu, handleAdWarnMessageContextMenu } from './context-menus.js';
+export { defs as buyDefs, handleBuy } from './buy.js';
 
 import { defs as moderationDefs } from './moderation.js';
 import { defs as staffManagementDefs } from './staff-management.js';
@@ -27,6 +28,7 @@ import { defs as modGuideDefs } from './modguide.js';
 import { defs as botSettingsDefs } from './botsettings.js';
 import { defs as devtoolsDefs } from './devtools.js';
 import { defs as stickyDefs, handleSticky } from './sticky.js';
+import { defs as buyDefs } from './buy.js';
 
 import { contextMenuDefs } from './context-menus.js';
 
@@ -44,6 +46,7 @@ export const commandDefs = [
   ...botSettingsDefs,
   ...devtoolsDefs,
   ...stickyDefs,
+  ...buyDefs,
   ...contextMenuDefs,
 ];
 

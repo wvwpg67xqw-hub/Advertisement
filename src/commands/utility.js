@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, But
 import {
   getMessageCount, getMessageLeaderboard, resetMessages, resetMessagesAll,
   getSnipeCache, getBalance, addBalance, getCaseInfo, getGuild, setAutoReact, getAutoReact, clearAutoReact, setOwnerRole,
+  getArExpiry,
 } from '../database.js';
 import { hasCommandPermission, getStaffRank } from '../utils.js';
 import { uploadAppEmoji, emojiCdnUrl } from '../appEmoji.js';
@@ -244,6 +245,19 @@ export async function handleAutoReact(interaction) {
     return interaction.reply({ content: '❌ Provide an emoji or attach an image.', flags: 64 });
   }
 
+  // Subscription gate — admins (rank 3+) bypass
+  const rank = getStaffRank(interaction.member);
+  if (rank < 3) {
+    const expiry = await getArExpiry(interaction.user.id);
+    const active = expiry && new Date(expiry) > new Date();
+    if (!active) {
+      return interaction.reply({
+        content: '❌ You need an active auto-react subscription. Use `/buy ar` (20,000 coins/week) to purchase one.',
+        flags: 64,
+      });
+    }
+  }
+
   await interaction.deferReply({ flags: 64 });
 
   try {
@@ -253,7 +267,7 @@ export async function handleAutoReact(interaction) {
         attachment.url,
       );
       await setAutoReact(interaction.guildId, interaction.user.id, appEmoji.id, appEmoji.name, appEmoji.animated);
-      return interaction.editReply({ content: `✅ Done! The bot will now react with <:${appEmoji.name}:${appEmoji.id}> to every message you send in this server.` });
+      return interaction.editReply({ content: `✅ Done! The bot will now react with <:${appEmoji.name}:${appEmoji.id}> to every message you send.` });
     }
 
     const customMatch = raw.match(/^<(a?):([^:]+):(\d+)>$/);
@@ -262,11 +276,11 @@ export async function handleAutoReact(interaction) {
       const animated = a === 'a';
       const appEmoji = await uploadAppEmoji(name, emojiCdnUrl(id, animated), animated);
       await setAutoReact(interaction.guildId, interaction.user.id, appEmoji.id, appEmoji.name, appEmoji.animated);
-      return interaction.editReply({ content: `✅ Done! The bot will now react with <${appEmoji.animated ? 'a' : ''}:${appEmoji.name}:${appEmoji.id}> to every message you send in this server.` });
+      return interaction.editReply({ content: `✅ Done! The bot will now react with <${appEmoji.animated ? 'a' : ''}:${appEmoji.name}:${appEmoji.id}> to every message you send.` });
     }
 
     await setAutoReact(interaction.guildId, interaction.user.id, null, raw, false);
-    return interaction.editReply({ content: `✅ Done! The bot will now react with ${raw} to every message you send in this server.` });
+    return interaction.editReply({ content: `✅ Done! The bot will now react with ${raw} to every message you send.` });
   } catch (err) {
     return interaction.editReply({ content: `❌ Failed to set auto-react: ${err.message}` });
   }
