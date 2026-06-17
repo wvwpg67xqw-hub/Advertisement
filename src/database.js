@@ -104,34 +104,40 @@ export async function autoLinkGuilds(hubGuildId, guildIds) {
   }
 }
 
-export async function setAutoReact(guildId, userId, emojiId, emojiName, animated) {
+export async function setAutoReact(_guildId, userId, emojiId, emojiName, animated) {
   await q(
     `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated)
-     VALUES (?, ?, ?, ?, ?)
+     VALUES ('global', ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE emoji_id = VALUES(emoji_id), emoji_name = VALUES(emoji_name), animated = VALUES(animated)`,
-    [guildId, userId, emojiId, emojiName, animated ? 1 : 0]
+    [userId, emojiId, emojiName, animated ? 1 : 0]
   );
 }
 
-export async function getAutoReact(guildId, userId) {
-  return q1('SELECT * FROM auto_reacts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+export async function getAutoReact(_guildId, userId) {
+  return q1(
+    `SELECT * FROM auto_reacts WHERE user_id = ? ORDER BY (guild_id = 'global') DESC LIMIT 1`,
+    [userId]
+  );
 }
 
-export async function clearAutoReact(guildId, userId) {
-  await q('DELETE FROM auto_reacts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+export async function clearAutoReact(_guildId, userId) {
+  await q('DELETE FROM auto_reacts WHERE user_id = ?', [userId]);
 }
 
-export async function blockAutoReact(guildId, userId) {
+export async function blockAutoReact(_guildId, userId) {
   await q(
     `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated)
-     VALUES (?, ?, NULL, '__blocked__', 0)
+     VALUES ('global', ?, NULL, '__blocked__', 0)
      ON DUPLICATE KEY UPDATE emoji_id = NULL, emoji_name = '__blocked__', animated = 0`,
-    [guildId, userId]
+    [userId]
   );
 }
 
-export async function isAutoReactBlocked(guildId, userId) {
-  const row = await q1('SELECT emoji_name FROM auto_reacts WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+export async function isAutoReactBlocked(_guildId, userId) {
+  const row = await q1(
+    `SELECT emoji_name FROM auto_reacts WHERE user_id = ? ORDER BY (guild_id = 'global') DESC LIMIT 1`,
+    [userId]
+  );
   return row?.emoji_name === '__blocked__';
 }
 

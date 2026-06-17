@@ -11,7 +11,8 @@ async function fetchImageAsDataUrl(url) {
 }
 
 export function emojiCdnUrl(emojiId, animated) {
-  return `https://cdn.discordapp.com/emojis/${emojiId}.${animated ? 'gif' : 'png'}?size=128&quality=lossless`;
+  if (animated) return `https://cdn.discordapp.com/emojis/${emojiId}.gif`;
+  return `https://cdn.discordapp.com/emojis/${emojiId}.png?size=128&quality=lossless`;
 }
 
 export async function uploadAppEmoji(name, imageSource, animated = false) {
