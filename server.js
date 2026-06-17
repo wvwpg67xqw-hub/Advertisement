@@ -64,6 +64,38 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // In-memory state for pending application approvals (role selection before confirm)
 const pendingApprovals = new Map(); // key: `GUILDID_APPROVERID` → { applicantId, staffRoleId, teamRoleId }
 const xpCooldowns = new Map(); // key: `${guildId}-${userId}` → last XP gain timestamp
+
+// ── Auto-react rate-limit infrastructure ──────────────────────────────────────
+const arCache           = new Map(); // userId → { ar, fetchedAt }
+const arReactCooldowns  = new Map(); // userId → last reaction timestamp
+const AR_CACHE_TTL      = 5 * 60 * 1000; // 5 min — re-fetch from DB after this
+const AR_REACT_COOLDOWN = 3_000;          // ms — max 1 reaction per user per 3 s
+const AR_QUEUE_MAX      = 20;             // drop silently if queue is this long
+const AR_REACT_DELAY    = 350;            // ms between queued reactions
+
+const reactionQueue = [];
+let   reactionQueueRunning = false;
+
+async function processReactionQueue() {
+  if (reactionQueueRunning) return;
+  reactionQueueRunning = true;
+  while (reactionQueue.length > 0) {
+    const { msg, emoji } = reactionQueue.shift();
+    await msg.react(emoji).catch(() => {});
+    await new Promise(r => setTimeout(r, AR_REACT_DELAY));
+  }
+  reactionQueueRunning = false;
+}
+
+function queueReaction(msg, emoji) {
+  if (reactionQueue.length >= AR_QUEUE_MAX) return;
+  reactionQueue.push({ msg, emoji });
+  processReactionQueue();
+}
+
+function invalidateArCache(userId) {
+  arCache.delete(userId);
+}
 const dmmedOwnerGuilds = new Set(); // guilds already DM'd about missing level log channel
 const PORT = process.env.PORT || 5000;
 
@@ -2255,6 +2287,7 @@ client.on('messageCreate', async (msg) => {
       }
       const targetId = target[1];
       await blockAutoReact(msg.guild.id, targetId).catch(() => {});
+      invalidateArCache(targetId);
       msg.reply(`✅ <@${targetId}> is now blocked from using auto-react.`).then(r => setTimeout(() => r.delete().catch(() => {}), 6000));
       return;
     }
@@ -2268,6 +2301,7 @@ client.on('messageCreate', async (msg) => {
       }
       const targetId = target[1];
       await clearAutoReact(msg.guild.id, targetId).catch(() => {});
+      invalidateArCache(targetId);
       msg.reply(`✅ Auto-react removed for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       return;
     }
@@ -2289,12 +2323,14 @@ client.on('messageCreate', async (msg) => {
         try {
           const appEmoji2 = await uploadAppEmoji(name, emojiCdnUrl(id, animated2), animated2);
           await setAutoReact(msg.guild.id, targetId, appEmoji2.id, appEmoji2.name, appEmoji2.animated).catch(() => {});
+          invalidateArCache(targetId);
           msg.reply(`✅ Auto-react set to <${appEmoji2.animated ? 'a' : ''}:${appEmoji2.name}:${appEmoji2.id}> for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
         } catch (e) {
           msg.reply(`❌ Failed to upload emoji: ${e.message}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
         }
       } else {
         await setAutoReact(msg.guild.id, targetId, null, emoji, false).catch(() => {});
+        invalidateArCache(targetId);
         msg.reply(`✅ Auto-react set to ${emoji} for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       }
       return;
@@ -2312,6 +2348,7 @@ client.on('messageCreate', async (msg) => {
         }
       } else {
         await clearAutoReact(msg.guild.id, msg.author.id).catch(() => {});
+        invalidateArCache(msg.author.id);
         msg.reply('✅ Auto-react removed.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       }
       return;
@@ -2346,6 +2383,7 @@ client.on('messageCreate', async (msg) => {
         );
         if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
         await setAutoReact(msg.guild.id, msg.author.id, appEmoji.id, appEmoji.name, appEmoji.animated).catch(() => {});
+        invalidateArCache(msg.author.id);
         const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
         msg.reply(`✅ Auto-react set to <:${appEmoji.name}:${appEmoji.id}>.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       } catch (e) {
@@ -2363,6 +2401,7 @@ client.on('messageCreate', async (msg) => {
         const appEmoji = await uploadAppEmoji(name, emojiCdnUrl(id, animated), animated);
         if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
         await setAutoReact(msg.guild.id, msg.author.id, appEmoji.id, appEmoji.name, appEmoji.animated).catch(() => {});
+        invalidateArCache(msg.author.id);
         const suffix = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
         msg.reply(`✅ Auto-react set to <${appEmoji.animated ? 'a' : ''}:${appEmoji.name}:${appEmoji.id}>.${suffix}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
       } catch (e) {
@@ -2374,18 +2413,32 @@ client.on('messageCreate', async (msg) => {
     // Unicode emoji — save directly
     if (!isFree) await setBalance(msg.guild.id, msg.author.id, (await getBalance(msg.guild.id, msg.author.id)) - AR_COST).catch(() => {});
     await setAutoReact(msg.guild.id, msg.author.id, null, arg, false).catch(() => {});
+    invalidateArCache(msg.author.id);
     const suffix2 = isFree ? '' : ` (-${AR_COST.toLocaleString()} coins)`;
     msg.reply(`✅ Auto-react set to ${arg}.${suffix2}`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
     return;
   }
 
-  // Auto-react (skip blocked users)
-  const ar = await getAutoReact(msg.guild.id, msg.author.id).catch(() => null);
-  if (ar && ar.emoji_name !== '__blocked__') {
-    if (ar.emoji_id) {
-      msg.react(`<${ar.animated ? 'a' : ''}:${ar.emoji_name}:${ar.emoji_id}>`).catch(() => {});
-    } else if (ar.emoji_name) {
-      msg.react(ar.emoji_name).catch(() => {});
+  // Auto-react — cached lookup + per-user cooldown + queued reactions
+  {
+    const nowMs = Date.now();
+    const cached = arCache.get(msg.author.id);
+    let ar = null;
+    if (cached && nowMs - cached.fetchedAt < AR_CACHE_TTL) {
+      ar = cached.ar;
+    } else {
+      ar = await getAutoReact(null, msg.author.id).catch(() => null);
+      arCache.set(msg.author.id, { ar, fetchedAt: nowMs });
+    }
+    if (ar && ar.emoji_name !== '__blocked__') {
+      const lastReact = arReactCooldowns.get(msg.author.id) || 0;
+      if (nowMs - lastReact >= AR_REACT_COOLDOWN) {
+        arReactCooldowns.set(msg.author.id, nowMs);
+        const emoji = ar.emoji_id
+          ? `<${ar.animated ? 'a' : ''}:${ar.emoji_name}:${ar.emoji_id}>`
+          : ar.emoji_name;
+        queueReaction(msg, emoji);
+      }
     }
   }
 
