@@ -124,6 +124,11 @@ export async function clearAutoReact(_guildId, userId) {
   await q('DELETE FROM auto_reacts WHERE user_id = ?', [userId]);
 }
 
+export async function getAllAutoReactEmojiIds() {
+  const rows = await q('SELECT DISTINCT emoji_id FROM auto_reacts WHERE emoji_id IS NOT NULL');
+  return rows.map(r => r.emoji_id);
+}
+
 export async function blockAutoReact(_guildId, userId) {
   await q(
     `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated)

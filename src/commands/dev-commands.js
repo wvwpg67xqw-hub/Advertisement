@@ -16,6 +16,8 @@ import {
   setupDevServer, logError, logShutdown,
   getRecentLogs, setDebug, isDebugEnabled,
 } from '../devLogger.js';
+import { listAppEmojis, deleteAppEmoji } from '../appEmoji.js';
+import { getAllAutoReactEmojiIds } from '../database.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -154,6 +156,10 @@ export const defs = [
     .addStringOption(o =>
       o.setName('reason')
         .setDescription('Reason shown to users (optional)')),
+
+  new SlashCommandBuilder()
+    .setName('dev-clean-emojis')
+    .setDescription('[Dev] Delete all bot application emojis not currently assigned to any auto-react'),
 
   new SlashCommandBuilder()
     .setName('dev-debug')
@@ -519,7 +525,7 @@ export async function handleDevMaintenance(interaction) {
       .setColor(maintenanceMode ? 0xED4245 : 0x57F287)
       .setDescription(
         maintenanceMode
-          ? `All non-whitelisted users will now receive a maintenance message.\n\n**Reason shown:** ${maintenanceReason}`
+          ? `All users are now blocked from all commands.\n\n**Reason shown:** ${maintenanceReason}`
           : 'The bot is back online and accepting all interactions.'
       )
       .setFooter({ text: `Set by ${interaction.user.tag}` })
@@ -550,5 +556,67 @@ export async function handleDevDebug(interaction) {
   } catch (err) {
     logError('Dev Command: dev-debug', err).catch(() => {});
     if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
+  }
+}
+
+export async function handleDevCleanEmojis(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const [allEmojis, usedIds] = await Promise.all([
+      listAppEmojis(),
+      getAllAutoReactEmojiIds(),
+    ]);
+
+    const usedSet   = new Set(usedIds.map(String));
+    const toDelete  = allEmojis.filter(e => !usedSet.has(String(e.id)));
+
+    if (toDelete.length === 0) {
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('✅ No Unused Emojis')
+            .setColor(0x57F287)
+            .setDescription(`All **${allEmojis.length}** application emoji${allEmojis.length === 1 ? ' is' : 's are'} currently in use.`)
+            .setTimestamp()
+            .setFooter({ text: 'Staff Portal · Dev Commands' }),
+        ],
+      });
+    }
+
+    const results = await Promise.allSettled(
+      toDelete.map(e => deleteAppEmoji(e.id))
+    );
+    const deleted  = results.filter(r => r.status === 'fulfilled' && r.value).length;
+    const failed   = toDelete.length - deleted;
+
+    const lines = toDelete.map((e, i) => {
+      const ok = results[i].status === 'fulfilled' && results[i].value;
+      return `${ok ? '✅' : '❌'} \`${e.name}\` (\`${e.id}\`)`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle('🧹 Emoji Cleanup Complete')
+      .setColor(failed === 0 ? 0x57F287 : 0xFEE75C)
+      .addFields(
+        { name: 'Total app emojis',  value: String(allEmojis.length), inline: true },
+        { name: 'In use',            value: String(usedSet.size),     inline: true },
+        { name: 'Deleted',           value: `${deleted}${failed ? ` (${failed} failed)` : ''}`, inline: true },
+        { name: 'Removed emojis',    value: lines.slice(0, 20).join('\n') || 'None', inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Requested by ${interaction.user.tag}` });
+
+    if (lines.length > 20) embed.setDescription(`*(showing first 20 of ${lines.length})*`);
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: dev-clean-emojis', err).catch(() => {});
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
+    } else {
+      await interaction.editReply({ content: `❌ Error: ${err.message}` }).catch(() => {});
+    }
   }
 }

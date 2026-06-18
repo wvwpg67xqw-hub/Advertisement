@@ -5,7 +5,7 @@ import {
   getArExpiry,
 } from '../database.js';
 import { hasCommandPermission, getStaffRank } from '../utils.js';
-import { uploadAppEmoji, emojiCdnUrl } from '../appEmoji.js';
+import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji } from '../appEmoji.js';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -295,6 +295,7 @@ export async function handleAutoReactClear(interaction) {
   if (!existing) {
     return interaction.reply({ content: '❌ You don\'t have an auto-react set in this server.', flags: 64 });
   }
+  if (existing.emoji_id) await deleteAppEmoji(existing.emoji_id).catch(() => {});
   await clearAutoReact(interaction.guildId, interaction.user.id);
   await interaction.reply({ content: '✅ Your auto-react has been removed.', flags: 64 });
 }

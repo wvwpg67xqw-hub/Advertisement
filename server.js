@@ -44,11 +44,11 @@ import {
 } from './src/commands/index.js';
 import {
   isMaintenanceMode, getMaintenanceReason,
-  handleWhitelist, handleDevMaintenance,
+  handleWhitelist, handleDevMaintenance, handleDevCleanEmojis,
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
   handleDevGuilds, handleDevGuildInfo, handleDevRestart, handleDevDebug,
 } from './src/commands/dev-commands.js';
-import { uploadAppEmoji, emojiCdnUrl } from './src/appEmoji.js';
+import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
   setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
   logWarning, startMetricsLoop, registerProcessHandlers,
@@ -64,7 +64,7 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
@@ -764,7 +764,8 @@ const botHandlers = {
   'unblock-all': handleUnblockAll,
   sticky: handleSticky,
   'whitelist':        handleWhitelist,
-  'dev-maintenance':  handleDevMaintenance,
+  'dev-maintenance':   handleDevMaintenance,
+  'dev-clean-emojis':  handleDevCleanEmojis,
   'dev-status':     handleDevStatus,
   'dev-logs':       handleDevLogs,
   'dev-reload':     handleDevReload,
@@ -2344,6 +2345,8 @@ client.on('messageCreate', async (msg) => {
         return;
       }
       const targetId = target[1];
+      const existingArAdmin = await getAutoReact(msg.guild.id, targetId).catch(() => null);
+      if (existingArAdmin?.emoji_id) await deleteAppEmoji(existingArAdmin.emoji_id).catch(() => {});
       await clearAutoReact(msg.guild.id, targetId).catch(() => {});
       invalidateArCache(targetId);
       msg.reply(`✅ Auto-react removed for <@${targetId}>.`).then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
@@ -2391,6 +2394,7 @@ client.on('messageCreate', async (msg) => {
           msg.reply('❌ You don\'t have an auto-react set.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));
         }
       } else {
+        if (existing?.emoji_id) await deleteAppEmoji(existing.emoji_id).catch(() => {});
         await clearAutoReact(msg.guild.id, msg.author.id).catch(() => {});
         invalidateArCache(msg.author.id);
         msg.reply('✅ Auto-react removed.').then(r => setTimeout(() => r.delete().catch(() => {}), 5000));

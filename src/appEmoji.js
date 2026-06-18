@@ -15,6 +15,29 @@ export function emojiCdnUrl(emojiId, animated) {
   return `https://cdn.discordapp.com/emojis/${emojiId}.png?size=128&quality=lossless`;
 }
 
+export async function listAppEmojis() {
+  const token    = process.env.TOKEN;
+  const clientId = process.env.CLIENT_ID;
+  if (!token || !clientId) return [];
+  const res = await fetch(`${API}/applications/${clientId}/emojis`, {
+    headers: { Authorization: `Bot ${token}` },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items ?? [];
+}
+
+export async function deleteAppEmoji(emojiId) {
+  const token    = process.env.TOKEN;
+  const clientId = process.env.CLIENT_ID;
+  if (!token || !clientId || !emojiId) return false;
+  const res = await fetch(`${API}/applications/${clientId}/emojis/${emojiId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bot ${token}` },
+  });
+  return res.ok || res.status === 404;
+}
+
 export async function uploadAppEmoji(name, imageSource, animated = false) {
   const token    = process.env.TOKEN;
   const clientId = process.env.CLIENT_ID;
