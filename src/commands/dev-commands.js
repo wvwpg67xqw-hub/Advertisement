@@ -129,8 +129,8 @@ export const defs = [
         .setRequired(true)),
 
   new SlashCommandBuilder()
-    .setName('dev-shutdown')
-    .setDescription('[Dev] Safely shut down the bot after logging a shutdown message'),
+    .setName('dev-restart')
+    .setDescription('[Dev] Restart the bot by exiting cleanly — the panel will bring it back up'),
 
   new SlashCommandBuilder()
     .setName('dev-debug')
@@ -467,24 +467,24 @@ export async function handleDevGuildInfo(interaction) {
   }
 }
 
-export async function handleDevShutdown(interaction) {
+export async function handleDevRestart(interaction) {
   try {
     if (!await devGuard(interaction)) return;
 
     const embed = new EmbedBuilder()
-      .setTitle('🔴 Shutting Down')
-      .setColor(0xED4245)
-      .setDescription(`Shutdown initiated by **${interaction.user.tag}**.`)
+      .setTitle('🔄 Restarting')
+      .setColor(0xF59E0B)
+      .setDescription(`Restart initiated by **${interaction.user.tag}**.\nThe bot will be back online in a few seconds.`)
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
     logCommand(interaction).catch(() => {});
     await interaction.reply({ embeds: [embed], flags: 64 });
-    await logShutdown(`Shutdown triggered by ${interaction.user.tag} via /dev-shutdown`).catch(() => {});
+    await logShutdown(`Restart triggered by ${interaction.user.tag} via /dev-restart`).catch(() => {});
 
     setTimeout(() => process.exit(0), 1500);
   } catch (err) {
-    logError('Dev Command: dev-shutdown', err).catch(() => {});
+    logError('Dev Command: dev-restart', err).catch(() => {});
     if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
   }
 }

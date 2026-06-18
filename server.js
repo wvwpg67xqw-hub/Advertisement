@@ -45,7 +45,7 @@ import {
 import {
   handleWhitelist,
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
-  handleDevGuilds, handleDevGuildInfo, handleDevShutdown, handleDevDebug,
+  handleDevGuilds, handleDevGuildInfo, handleDevRestart, handleDevDebug,
 } from './src/commands/dev-commands.js';
 import { uploadAppEmoji, emojiCdnUrl } from './src/appEmoji.js';
 import {
@@ -769,7 +769,7 @@ const botHandlers = {
   'setup-dev':      handleSetupDev,
   'dev-guilds':     handleDevGuilds,
   'dev-guild-info': handleDevGuildInfo,
-  'dev-shutdown':   handleDevShutdown,
+  'dev-restart':    handleDevRestart,
   'dev-debug':      handleDevDebug,
 };
 
