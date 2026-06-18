@@ -283,11 +283,13 @@ export function registerProcessHandlers() {
   process.on('uncaughtException', async (err) => {
     console.error('[DevLogger] Uncaught Exception:', err);
     await logError('Uncaught Exception', err).catch(() => {});
+    process.exit(1);
   });
 
   process.on('unhandledRejection', async (reason) => {
     console.error('[DevLogger] Unhandled Rejection:', reason);
-    await logError('Unhandled Promise Rejection', reason).catch(() => {});
+    await logError('Unhandled Promise Rejection', reason instanceof Error ? reason : new Error(String(reason))).catch(() => {});
+    process.exit(1);
   });
 
   async function gracefulShutdown(signal) {
