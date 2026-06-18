@@ -19,8 +19,7 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEV_GUILD_ID   = '1472759140232204551';
-const BOT_DEV_ID     = process.env.OWNER_ID || '1453592157607825595';
+const BOT_DEV_ID = process.env.OWNER_ID || '1453592157607825595';
 const WHITELIST_FILE = './dev-whitelist.json';
 
 // ── Whitelist Helpers ─────────────────────────────────────────────────────────
@@ -44,19 +43,10 @@ function isWhitelisted(userId) {
 }
 
 // ── Dev Guard ─────────────────────────────────────────────────────────────────
-// Two layers:
-//   1. Must be in the dev guild (so commands only respond there)
-//   2. Must be the bot owner or on the whitelist
+// Checks that the user is the bot owner or on the whitelist.
+// Commands can be used in any server or DM.
 
 async function devGuard(interaction) {
-  if (interaction.guildId !== DEV_GUILD_ID) {
-    await interaction.reply({
-      content: '🔒 This command can only be used in the developer server.',
-      flags: 64,
-    });
-    return false;
-  }
-
   if (!isWhitelisted(interaction.user.id)) {
     const embed = new EmbedBuilder()
       .setTitle('🔒 Not Whitelisted')
@@ -159,11 +149,6 @@ export const defs = [
 
 export async function handleWhitelist(interaction) {
   try {
-    // Must be in dev guild
-    if (interaction.guildId !== DEV_GUILD_ID) {
-      return interaction.reply({ content: '🔒 This command can only be used in the developer server.', flags: 64 });
-    }
-
     const sub = interaction.options.getSubcommand();
 
     // list — available to all whitelisted users (and owner)
