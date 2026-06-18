@@ -66,7 +66,7 @@ async function devGuard(interaction) {
       .setFooter({ text: 'Staff Portal · Dev Commands' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], flags: 64 });
+    await interaction.reply({ embeds: [embed] });
     return false;
   }
 
@@ -184,7 +184,6 @@ export async function handleWhitelist(interaction) {
             .setDescription('You are not whitelisted to use developer commands.')
             .setFooter({ text: 'Staff Portal · Dev Commands' })
             .setTimestamp()],
-          flags: 64,
         });
       }
 
@@ -200,7 +199,7 @@ export async function handleWhitelist(interaction) {
         .setFooter({ text: `${list.length} user(s) — bot owner always has access` })
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed], flags: 64 });
+      return interaction.reply({ embeds: [embed] });
     }
 
     // add / remove — bot owner only
@@ -212,7 +211,6 @@ export async function handleWhitelist(interaction) {
           .setDescription('Only the bot owner can add or remove users from the whitelist.')
           .setFooter({ text: 'Staff Portal · Dev Commands' })
           .setTimestamp()],
-        flags: 64,
       });
     }
 
@@ -221,10 +219,10 @@ export async function handleWhitelist(interaction) {
 
     if (sub === 'add') {
       if (target.id === BOT_DEV_ID) {
-        return interaction.reply({ content: '⚠️ The bot owner is always whitelisted — no need to add them.', flags: 64 });
+        return interaction.reply({ content: '⚠️ The bot owner is always whitelisted — no need to add them.' });
       }
       if (list.includes(target.id)) {
-        return interaction.reply({ content: `⚠️ ${target.tag} is already on the whitelist.`, flags: 64 });
+        return interaction.reply({ content: `⚠️ ${target.tag} is already on the whitelist.` });
       }
       list.push(target.id);
       saveWhitelist(list);
@@ -236,12 +234,12 @@ export async function handleWhitelist(interaction) {
         .setFooter({ text: `Whitelist size: ${list.length}` })
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed], flags: 64 });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'remove') {
       if (!list.includes(target.id)) {
-        return interaction.reply({ content: `⚠️ ${target.tag} is not on the whitelist.`, flags: 64 });
+        return interaction.reply({ content: `⚠️ ${target.tag} is not on the whitelist.` });
       }
       list = list.filter(id => id !== target.id);
       saveWhitelist(list);
@@ -253,11 +251,11 @@ export async function handleWhitelist(interaction) {
         .setFooter({ text: `Whitelist size: ${list.length}` })
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed], flags: 64 });
+      return interaction.reply({ embeds: [embed] });
     }
   } catch (err) {
     logError('Dev Command: whitelist', err).catch(() => {});
-    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
   }
 }
 
@@ -266,7 +264,7 @@ export async function handleWhitelist(interaction) {
 export async function handleDevStatus(interaction) {
   try {
     if (!await devGuard(interaction)) return;
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply();
 
     const uptime = process.uptime();
     const h = Math.floor(uptime / 3600);
@@ -310,7 +308,7 @@ export async function handleDevLogs(interaction) {
     const entries = getRecentLogs(count);
 
     if (entries.length === 0) {
-      return interaction.reply({ content: '📭 No log entries yet.', flags: 64 });
+      return interaction.reply({ content: '📭 No log entries yet.' });
     }
 
     const ICONS = { error: '🔴', warn: '🟡', info: '🟢' };
@@ -327,17 +325,17 @@ export async function handleDevLogs(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    await interaction.reply({ embeds: [embed], flags: 64 });
+    await interaction.reply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-logs', err).catch(() => {});
-    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
   }
 }
 
 export async function handleDevReload(interaction) {
   try {
     if (!await devGuard(interaction)) return;
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply();
 
     const TOKEN     = process.env.TOKEN;
     const CLIENT_ID = process.env.CLIENT_ID;
@@ -388,7 +386,7 @@ export async function handleDevReload(interaction) {
 export async function handleSetupDev(interaction) {
   try {
     if (!await devGuard(interaction)) return;
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply();
 
     await setupDevServer(client);
 
@@ -409,7 +407,7 @@ export async function handleSetupDev(interaction) {
 export async function handleDevGuilds(interaction) {
   try {
     if (!await devGuard(interaction)) return;
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply();
 
     const guilds = [...client.guilds.cache.values()]
       .sort((a, b) => b.memberCount - a.memberCount);
@@ -447,7 +445,7 @@ export async function handleDevGuilds(interaction) {
 export async function handleDevGuildInfo(interaction) {
   try {
     if (!await devGuard(interaction)) return;
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply();
 
     const guildId = interaction.options.getString('guild_id');
     let guild     = client.guilds.cache.get(guildId)
@@ -495,13 +493,13 @@ export async function handleDevRestart(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    await interaction.reply({ embeds: [embed], flags: 64 });
+    await interaction.reply({ embeds: [embed] });
     await logShutdown(`Restart triggered by ${interaction.user.tag} via /dev-restart`).catch(() => {});
 
     setTimeout(() => process.exit(0), 1500);
   } catch (err) {
     logError('Dev Command: dev-restart', err).catch(() => {});
-    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
   }
 }
 
@@ -527,10 +525,10 @@ export async function handleDevMaintenance(interaction) {
       .setFooter({ text: `Set by ${interaction.user.tag}` })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], flags: 64 });
+    await interaction.reply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-maintenance', err).catch(() => {});
-    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
   }
 }
 
@@ -548,9 +546,9 @@ export async function handleDevDebug(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    await interaction.reply({ embeds: [embed], flags: 64 });
+    await interaction.reply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-debug', err).catch(() => {});
-    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
   }
 }
