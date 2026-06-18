@@ -837,16 +837,10 @@ client.on('interactionCreate', async (interaction) => {
       try { await client.guilds.fetch(interaction.guildId); } catch {}
     }
 
-    // ── Maintenance mode — block all non-whitelisted users ────────────────────
+    // ── Maintenance mode — block ALL commands except /dev-maintenance ─────────
     if (isMaintenanceMode()) {
-      const MAINT_OWNER = process.env.OWNER_ID || '1453592157607825595';
-      let wl = [];
-      try {
-        const { readFileSync, existsSync } = await import('fs');
-        if (existsSync('./dev-whitelist.json')) wl = JSON.parse(readFileSync('./dev-whitelist.json', 'utf8'));
-      } catch {}
-      const maintAllowed = interaction.user?.id === MAINT_OWNER || wl.includes(interaction.user?.id ?? '');
-      if (!maintAllowed && (interaction.isChatInputCommand() || interaction.isButton() || interaction.isModalSubmit())) {
+      const isDevMaintCmd = interaction.isChatInputCommand() && interaction.commandName === 'dev-maintenance';
+      if (!isDevMaintCmd && (interaction.isChatInputCommand() || interaction.isButton() || interaction.isModalSubmit())) {
         const maintEmbed = new EmbedBuilder()
           .setTitle('🔧 Under Maintenance')
           .setColor(0xED4245)
