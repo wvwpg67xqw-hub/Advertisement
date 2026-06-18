@@ -43,6 +43,7 @@ import {
   handleSticky,
 } from './src/commands/index.js';
 import {
+  handleWhitelist,
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
   handleDevGuilds, handleDevGuildInfo, handleDevShutdown, handleDevDebug,
 } from './src/commands/dev-commands.js';
@@ -761,6 +762,7 @@ const botHandlers = {
   activity: handleActivity,
   'unblock-all': handleUnblockAll,
   sticky: handleSticky,
+  'whitelist':      handleWhitelist,
   'dev-status':     handleDevStatus,
   'dev-logs':       handleDevLogs,
   'dev-reload':     handleDevReload,

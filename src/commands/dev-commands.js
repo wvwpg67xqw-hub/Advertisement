@@ -1,14 +1,16 @@
 /**
  * dev-commands.js
- * All developer-server-only slash commands.
- * These commands are locked behind setDefaultMemberPermissions(0) — Discord
- * shows its native "NO PERMISSIONS" lock screen to anyone outside the dev server.
- * A server-side devGuard() adds a second layer of protection.
+ * Developer-server-only slash commands, protected by a user whitelist.
+ * The bot owner (BOT_DEV_ID) is always allowed regardless of the whitelist.
+ * All other users must be added via /whitelist add before they can run any
+ * dev command — non-whitelisted users receive an ephemeral "not whitelisted"
+ * response and the interaction goes no further.
  */
 
 import pkg from 'discord.js';
 const { SlashCommandBuilder, EmbedBuilder } = pkg;
 
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import client from '../../botClient.js';
 import {
   setupDevServer, logCommand, logError, logShutdown,
@@ -17,9 +19,34 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEV_GUILD_ID = '1472759140232204551';
+const DEV_GUILD_ID   = '1472759140232204551';
+const BOT_DEV_ID     = process.env.OWNER_ID || '1453592157607825595';
+const WHITELIST_FILE = './dev-whitelist.json';
+
+// ── Whitelist Helpers ─────────────────────────────────────────────────────────
+
+function loadWhitelist() {
+  try {
+    if (!existsSync(WHITELIST_FILE)) return [];
+    return JSON.parse(readFileSync(WHITELIST_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function saveWhitelist(list) {
+  writeFileSync(WHITELIST_FILE, JSON.stringify(list, null, 2), 'utf8');
+}
+
+function isWhitelisted(userId) {
+  if (userId === BOT_DEV_ID) return true;
+  return loadWhitelist().includes(userId);
+}
 
 // ── Dev Guard ─────────────────────────────────────────────────────────────────
+// Two layers:
+//   1. Must be in the dev guild (so commands only respond there)
+//   2. Must be the bot owner or on the whitelist
 
 async function devGuard(interaction) {
   if (interaction.guildId !== DEV_GUILD_ID) {
@@ -29,6 +56,22 @@ async function devGuard(interaction) {
     });
     return false;
   }
+
+  if (!isWhitelisted(interaction.user.id)) {
+    const embed = new EmbedBuilder()
+      .setTitle('🔒 Not Whitelisted')
+      .setColor(0xED4245)
+      .setDescription(
+        `You are not whitelisted to use developer commands.\n\n` +
+        `Ask the bot owner to run \`/whitelist add\` to grant you access.`
+      )
+      .setFooter({ text: 'Staff Portal · Dev Commands' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed], flags: 64 });
+    return false;
+  }
+
   return true;
 }
 
@@ -46,9 +89,25 @@ async function getCpuPercent() {
 
 export const defs = [
   new SlashCommandBuilder()
+    .setName('whitelist')
+    .setDescription('[Dev] Manage the developer command whitelist')
+    .addSubcommand(sub =>
+      sub.setName('add')
+        .setDescription('Add a user to the whitelist')
+        .addUserOption(o =>
+          o.setName('user').setDescription('The user to whitelist').setRequired(true)))
+    .addSubcommand(sub =>
+      sub.setName('remove')
+        .setDescription('Remove a user from the whitelist')
+        .addUserOption(o =>
+          o.setName('user').setDescription('The user to remove').setRequired(true)))
+    .addSubcommand(sub =>
+      sub.setName('list')
+        .setDescription('Show all whitelisted users')),
+
+  new SlashCommandBuilder()
     .setName('dev-status')
-    .setDescription('[Dev] Show bot uptime, ping, RAM, CPU, guild & user count')
-    .setDefaultMemberPermissions(0),
+    .setDescription('[Dev] Show bot uptime, ping, RAM, CPU, guild & user count'),
 
   new SlashCommandBuilder()
     .setName('dev-logs')
@@ -57,23 +116,19 @@ export const defs = [
       o.setName('count')
         .setDescription('Number of entries to show (1–50, default 20)')
         .setMinValue(1)
-        .setMaxValue(50))
-    .setDefaultMemberPermissions(0),
+        .setMaxValue(50)),
 
   new SlashCommandBuilder()
     .setName('dev-reload')
-    .setDescription('[Dev] Re-register slash commands and re-run dev server setup')
-    .setDefaultMemberPermissions(0),
+    .setDescription('[Dev] Re-register slash commands and re-run dev server setup'),
 
   new SlashCommandBuilder()
     .setName('setup-dev')
-    .setDescription('[Dev] Re-run developer server setup — recreate missing channels/categories')
-    .setDefaultMemberPermissions(0),
+    .setDescription('[Dev] Re-run developer server setup — recreate missing channels/categories'),
 
   new SlashCommandBuilder()
     .setName('dev-guilds')
-    .setDescription('[Dev] List all guilds the bot is in')
-    .setDefaultMemberPermissions(0),
+    .setDescription('[Dev] List all guilds the bot is in'),
 
   new SlashCommandBuilder()
     .setName('dev-guild-info')
@@ -81,13 +136,11 @@ export const defs = [
     .addStringOption(o =>
       o.setName('guild_id')
         .setDescription('The guild ID to look up')
-        .setRequired(true))
-    .setDefaultMemberPermissions(0),
+        .setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('dev-shutdown')
-    .setDescription('[Dev] Safely shut down the bot after logging a shutdown message')
-    .setDefaultMemberPermissions(0),
+    .setDescription('[Dev] Safely shut down the bot after logging a shutdown message'),
 
   new SlashCommandBuilder()
     .setName('dev-debug')
@@ -99,11 +152,108 @@ export const defs = [
         .addChoices(
           { name: '✅ On',  value: 'on'  },
           { name: '❌ Off', value: 'off' },
-        ))
-    .setDefaultMemberPermissions(0),
+        )),
 ];
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
+// ── /whitelist Handler ────────────────────────────────────────────────────────
+
+export async function handleWhitelist(interaction) {
+  try {
+    // Must be in dev guild
+    if (interaction.guildId !== DEV_GUILD_ID) {
+      return interaction.reply({ content: '🔒 This command can only be used in the developer server.', flags: 64 });
+    }
+
+    const sub = interaction.options.getSubcommand();
+
+    // list — available to all whitelisted users (and owner)
+    if (sub === 'list') {
+      if (!isWhitelisted(interaction.user.id)) {
+        return interaction.reply({
+          embeds: [new EmbedBuilder()
+            .setTitle('🔒 Not Whitelisted')
+            .setColor(0xED4245)
+            .setDescription('You are not whitelisted to use developer commands.')
+            .setFooter({ text: 'Staff Portal · Dev Commands' })
+            .setTimestamp()],
+          flags: 64,
+        });
+      }
+
+      const list = loadWhitelist();
+      const lines = list.length === 0
+        ? ['*(no users whitelisted — only the bot owner has access)*']
+        : list.map(id => `<@${id}> \`${id}\``);
+
+      const embed = new EmbedBuilder()
+        .setTitle('📋 Dev Command Whitelist')
+        .setColor(0x5865F2)
+        .setDescription(lines.join('\n'))
+        .setFooter({ text: `${list.length} user(s) — bot owner always has access` })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed], flags: 64 });
+    }
+
+    // add / remove — bot owner only
+    if (interaction.user.id !== BOT_DEV_ID) {
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setTitle('🔒 Owner Only')
+          .setColor(0xED4245)
+          .setDescription('Only the bot owner can add or remove users from the whitelist.')
+          .setFooter({ text: 'Staff Portal · Dev Commands' })
+          .setTimestamp()],
+        flags: 64,
+      });
+    }
+
+    const target = interaction.options.getUser('user');
+    let list = loadWhitelist();
+
+    if (sub === 'add') {
+      if (target.id === BOT_DEV_ID) {
+        return interaction.reply({ content: '⚠️ The bot owner is always whitelisted — no need to add them.', flags: 64 });
+      }
+      if (list.includes(target.id)) {
+        return interaction.reply({ content: `⚠️ ${target.tag} is already on the whitelist.`, flags: 64 });
+      }
+      list.push(target.id);
+      saveWhitelist(list);
+
+      const embed = new EmbedBuilder()
+        .setTitle('✅ User Whitelisted')
+        .setColor(0x57F287)
+        .setDescription(`${target} (\`${target.id}\`) can now use developer commands.`)
+        .setFooter({ text: `Whitelist size: ${list.length}` })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed], flags: 64 });
+    }
+
+    if (sub === 'remove') {
+      if (!list.includes(target.id)) {
+        return interaction.reply({ content: `⚠️ ${target.tag} is not on the whitelist.`, flags: 64 });
+      }
+      list = list.filter(id => id !== target.id);
+      saveWhitelist(list);
+
+      const embed = new EmbedBuilder()
+        .setTitle('🗑️ User Removed')
+        .setColor(0xED4245)
+        .setDescription(`${target} (\`${target.id}\`) has been removed from the developer whitelist.`)
+        .setFooter({ text: `Whitelist size: ${list.length}` })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed], flags: 64 });
+    }
+  } catch (err) {
+    logError('Dev Command: whitelist', err).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
+  }
+}
+
+// ── Dev Command Handlers ──────────────────────────────────────────────────────
 
 export async function handleDevStatus(interaction) {
   try {
