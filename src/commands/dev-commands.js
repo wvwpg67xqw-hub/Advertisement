@@ -13,7 +13,7 @@ const { SlashCommandBuilder, EmbedBuilder } = pkg;
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import client from '../../botClient.js';
 import {
-  setupDevServer, logCommand, logError, logShutdown,
+  setupDevServer, logError, logShutdown,
   getRecentLogs, setDebug, isDebugEnabled,
 } from '../devLogger.js';
 
@@ -272,7 +272,6 @@ export async function handleDevStatus(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-status', err).catch(() => {});
@@ -305,7 +304,6 @@ export async function handleDevLogs(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.reply({ embeds: [embed], flags: 64 });
   } catch (err) {
     logError('Dev Command: dev-logs', err).catch(() => {});
@@ -357,7 +355,6 @@ export async function handleDevReload(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-reload', err).catch(() => {});
@@ -379,7 +376,6 @@ export async function handleSetupDev(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: setup-dev', err).catch(() => {});
@@ -418,7 +414,6 @@ export async function handleDevGuilds(interaction) {
       .setTimestamp()
       .setFooter({ text: chunks.length > 1 ? `Page 1/${chunks.length} — use /dev-guild-info for details` : 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-guilds', err).catch(() => {});
@@ -459,7 +454,6 @@ export async function handleDevGuildInfo(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-guild-info', err).catch(() => {});
@@ -478,7 +472,6 @@ export async function handleDevRestart(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.reply({ embeds: [embed], flags: 64 });
     await logShutdown(`Restart triggered by ${interaction.user.tag} via /dev-restart`).catch(() => {});
 
@@ -503,7 +496,6 @@ export async function handleDevDebug(interaction) {
       .setTimestamp()
       .setFooter({ text: 'Staff Portal · Dev Commands' });
 
-    logCommand(interaction).catch(() => {});
     await interaction.reply({ embeds: [embed], flags: 64 });
   } catch (err) {
     logError('Dev Command: dev-debug', err).catch(() => {});
