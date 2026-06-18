@@ -22,6 +22,14 @@ import {
 const BOT_DEV_ID = process.env.OWNER_ID || '1453592157607825595';
 const WHITELIST_FILE = './dev-whitelist.json';
 
+// ── Maintenance Mode ──────────────────────────────────────────────────────────
+
+let maintenanceMode = false;
+let maintenanceReason = 'The bot is currently undergoing maintenance. Please try again later.';
+
+export function isMaintenanceMode() { return maintenanceMode; }
+export function getMaintenanceReason() { return maintenanceReason; }
+
 // ── Whitelist Helpers ─────────────────────────────────────────────────────────
 
 function loadWhitelist() {
@@ -131,6 +139,21 @@ export const defs = [
   new SlashCommandBuilder()
     .setName('dev-restart')
     .setDescription('[Dev] Restart the bot by exiting cleanly — the panel will bring it back up'),
+
+  new SlashCommandBuilder()
+    .setName('dev-maintenance')
+    .setDescription('[Dev] Toggle maintenance mode — all non-whitelisted interactions are blocked')
+    .addStringOption(o =>
+      o.setName('mode')
+        .setDescription('Turn maintenance mode on or off')
+        .setRequired(true)
+        .addChoices(
+          { name: '🔴 On',  value: 'on'  },
+          { name: '🟢 Off', value: 'off' },
+        ))
+    .addStringOption(o =>
+      o.setName('reason')
+        .setDescription('Reason shown to users (optional)')),
 
   new SlashCommandBuilder()
     .setName('dev-debug')
@@ -478,6 +501,35 @@ export async function handleDevRestart(interaction) {
     setTimeout(() => process.exit(0), 1500);
   } catch (err) {
     logError('Dev Command: dev-restart', err).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
+  }
+}
+
+export async function handleDevMaintenance(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+
+    const mode   = interaction.options.getString('mode');
+    const reason = interaction.options.getString('reason');
+
+    maintenanceMode = mode === 'on';
+    if (reason) maintenanceReason = reason;
+    else if (mode === 'off') maintenanceReason = 'The bot is currently undergoing maintenance. Please try again later.';
+
+    const embed = new EmbedBuilder()
+      .setTitle(maintenanceMode ? '🔴 Maintenance Mode Enabled' : '🟢 Maintenance Mode Disabled')
+      .setColor(maintenanceMode ? 0xED4245 : 0x57F287)
+      .setDescription(
+        maintenanceMode
+          ? `All non-whitelisted users will now receive a maintenance message.\n\n**Reason shown:** ${maintenanceReason}`
+          : 'The bot is back online and accepting all interactions.'
+      )
+      .setFooter({ text: `Set by ${interaction.user.tag}` })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed], flags: 64 });
+  } catch (err) {
+    logError('Dev Command: dev-maintenance', err).catch(() => {});
     if (!interaction.replied) await interaction.reply({ content: `❌ Error: ${err.message}`, flags: 64 }).catch(() => {});
   }
 }

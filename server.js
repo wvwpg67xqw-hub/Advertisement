@@ -43,7 +43,8 @@ import {
   handleSticky,
 } from './src/commands/index.js';
 import {
-  handleWhitelist,
+  isMaintenanceMode, getMaintenanceReason,
+  handleWhitelist, handleDevMaintenance,
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
   handleDevGuilds, handleDevGuildInfo, handleDevRestart, handleDevDebug,
 } from './src/commands/dev-commands.js';
@@ -762,7 +763,8 @@ const botHandlers = {
   activity: handleActivity,
   'unblock-all': handleUnblockAll,
   sticky: handleSticky,
-  'whitelist':      handleWhitelist,
+  'whitelist':        handleWhitelist,
+  'dev-maintenance':  handleDevMaintenance,
   'dev-status':     handleDevStatus,
   'dev-logs':       handleDevLogs,
   'dev-reload':     handleDevReload,
@@ -833,6 +835,29 @@ client.on('interactionCreate', async (interaction) => {
     // If guild isn't in cache yet (e.g. bot just restarted), fetch it before proceeding
     if (interaction.guildId && !interaction.guild) {
       try { await client.guilds.fetch(interaction.guildId); } catch {}
+    }
+
+    // ── Maintenance mode — block all non-whitelisted users ────────────────────
+    if (isMaintenanceMode()) {
+      const MAINT_OWNER = process.env.OWNER_ID || '1453592157607825595';
+      let wl = [];
+      try {
+        const { readFileSync, existsSync } = await import('fs');
+        if (existsSync('./dev-whitelist.json')) wl = JSON.parse(readFileSync('./dev-whitelist.json', 'utf8'));
+      } catch {}
+      const maintAllowed = interaction.user?.id === MAINT_OWNER || wl.includes(interaction.user?.id ?? '');
+      if (!maintAllowed && (interaction.isChatInputCommand() || interaction.isButton() || interaction.isModalSubmit())) {
+        const maintEmbed = new EmbedBuilder()
+          .setTitle('🔧 Under Maintenance')
+          .setColor(0xED4245)
+          .setDescription(getMaintenanceReason())
+          .setFooter({ text: 'Please check back soon.' })
+          .setTimestamp();
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ embeds: [maintEmbed], flags: 64 }).catch(() => {});
+        }
+        return;
+      }
     }
 
     if (interaction.isButton()) {
