@@ -47,6 +47,7 @@ import {
   handleWhitelist, handleDevMaintenance, handleDevCleanEmojis,
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
   handleDevGuilds, handleDevGuildInfo, handleDevRestart, handleDevDebug,
+  handleDevLines,
 } from './src/commands/dev-commands.js';
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
@@ -774,6 +775,7 @@ const botHandlers = {
   'dev-guild-info': handleDevGuildInfo,
   'dev-restart':    handleDevRestart,
   'dev-debug':      handleDevDebug,
+  'dev-lines':      handleDevLines,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────

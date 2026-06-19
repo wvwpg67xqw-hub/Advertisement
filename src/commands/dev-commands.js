@@ -10,7 +10,8 @@
 import pkg from 'discord.js';
 const { SlashCommandBuilder, EmbedBuilder } = pkg;
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { join, relative } from 'path';
 import client from '../../botClient.js';
 import {
   setupDevServer, logError, logShutdown,
@@ -172,6 +173,14 @@ export const defs = [
           { name: '✅ On',  value: 'on'  },
           { name: '❌ Off', value: 'off' },
         )),
+
+  new SlashCommandBuilder()
+    .setName('dev-lines')
+    .setDescription('[Dev] Count lines of code in a specific file or the entire project')
+    .addStringOption(o =>
+      o.setName('file')
+        .setDescription('Relative file path (e.g. server.js) — omit to count the whole project')
+        .setRequired(false)),
 ];
 
 // ── /whitelist Handler ────────────────────────────────────────────────────────
@@ -613,6 +622,117 @@ export async function handleDevCleanEmojis(interaction) {
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     logError('Dev Command: dev-clean-emojis', err).catch(() => {});
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
+    } else {
+      await interaction.editReply({ content: `❌ Error: ${err.message}` }).catch(() => {});
+    }
+  }
+}
+
+// ── /dev-lines Handler ────────────────────────────────────────────────────────
+
+const LINES_SKIP_DIRS  = new Set(['node_modules', '.git', 'dist', '.cache', '.agents', '.local', 'attached_assets']);
+const LINES_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json', '.css', '.html', '.sh', '.md']);
+
+function countLinesInFile(filePath) {
+  try {
+    const content = readFileSync(filePath, 'utf8');
+    return content.split('\n').length;
+  } catch {
+    return 0;
+  }
+}
+
+function walkAndCount(dir, root) {
+  let total = 0;
+  const breakdown = [];
+
+  function recurse(current) {
+    let entries;
+    try { entries = readdirSync(current, { withFileTypes: true }); } catch { return; }
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+
+      if (entry.isDirectory()) {
+        if (LINES_SKIP_DIRS.has(entry.name)) continue;
+        recurse(fullPath);
+      } else if (entry.isFile()) {
+        const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop() : '';
+        if (!LINES_EXTENSIONS.has(ext)) continue;
+        const count = countLinesInFile(fullPath);
+        if (count > 0) {
+          total += count;
+          breakdown.push({ path: relative(root, fullPath), lines: count });
+        }
+      }
+    }
+  }
+
+  recurse(dir);
+  breakdown.sort((a, b) => b.lines - a.lines);
+  return { total, breakdown };
+}
+
+export async function handleDevLines(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const filePath = interaction.options.getString('file');
+    const ROOT     = process.cwd();
+
+    if (filePath) {
+      const abs = join(ROOT, filePath);
+
+      if (!existsSync(abs)) {
+        return interaction.editReply({ content: `❌ File not found: \`${filePath}\`` });
+      }
+
+      let stat;
+      try { stat = statSync(abs); } catch {
+        return interaction.editReply({ content: `❌ Cannot read: \`${filePath}\`` });
+      }
+
+      if (!stat.isFile()) {
+        return interaction.editReply({ content: `❌ \`${filePath}\` is a directory — leave the \`file\` option blank to count the whole project.` });
+      }
+
+      const lineCount = countLinesInFile(abs);
+      const embed = new EmbedBuilder()
+        .setTitle('📄 Line Count')
+        .setColor(0x5865F2)
+        .addFields(
+          { name: 'File',  value: `\`${filePath}\``,          inline: true },
+          { name: 'Lines', value: lineCount.toLocaleString(), inline: true },
+        )
+        .setTimestamp()
+        .setFooter({ text: `Staff Portal · Dev Commands · requested by ${interaction.user.tag}` });
+
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    const { total, breakdown } = walkAndCount(ROOT, ROOT);
+
+    const top = breakdown.slice(0, 15)
+      .map(f => `\`${f.path}\` — **${f.lines.toLocaleString()}**`)
+      .join('\n');
+
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Project Line Count')
+      .setColor(0x5865F2)
+      .addFields(
+        { name: '📁 Total Lines',  value: total.toLocaleString(),      inline: true },
+        { name: '📄 Files Counted', value: breakdown.length.toLocaleString(), inline: true },
+        { name: `📋 Top ${Math.min(15, breakdown.length)} Files`, value: top || 'None', inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · requested by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: dev-lines', err).catch(() => {});
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: `❌ Error: ${err.message}` }).catch(() => {});
     } else {
