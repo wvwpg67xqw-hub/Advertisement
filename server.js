@@ -2648,7 +2648,11 @@ client.once('clientReady', async () => {
         console.log(`ℹ️  DEV_GUILD_ID not set — ${devCommands.length} dev/test commands skipped`);
       }
     } catch (err) {
-      console.error('❌ Failed to register commands:', err.message);
+      if (err.code === 50013 || err.message?.includes('Missing Access')) {
+        console.error('❌ Failed to register guild commands: Missing Access — make sure the bot is invited to your DEV_GUILD_ID server with the applications.commands scope.');
+      } else {
+        console.error('❌ Failed to register commands:', err.message);
+      }
       logError('Slash Command Registration Failed', err).catch(() => {});
     }
   }
@@ -2847,7 +2851,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
 // ── Dev Server Setup (runs once after bot is ready) ───────────────────────────
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   try {
     await setupDevServer(client);
     await logStartup(client);
