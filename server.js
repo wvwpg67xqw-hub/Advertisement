@@ -51,6 +51,13 @@ import {
   handleDevLines, handleDevLinesAutocomplete,
   handleDbStatus, handleCacheClear, handleBackup, handleUserInfo,
   handleFakeJoin, handleFakeLeave, handleSimulateMessage,
+  handleTestMessage, handleTestReply, handleTestEmbed, handleTestButton,
+  handleTestModal, handleTestSelect, handleTestJoin, handleTestLeave,
+  handleTestReaction, handleTestTyping, handleTestPerms, handleTestRoles,
+  handleTestAdmin, handleSeedData, handleClearTestData, handleDataCheck,
+  handleBenchmark, handleLoadTest, handleRateLimit, handleForceError,
+  handleTestFail, handleDebug, handleTestLongMsg, handleTestUnicode,
+  handleTestEmpty, handleTestSpam, handleDevTestInteraction,
 } from './src/commands/dev-commands.js';
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
@@ -780,6 +787,32 @@ const botHandlers = {
   'fakejoin':          handleFakeJoin,
   'fakeleave':         handleFakeLeave,
   'simulate-message':  handleSimulateMessage,
+  'testmessage':       handleTestMessage,
+  'testreply':         handleTestReply,
+  'testembed':         handleTestEmbed,
+  'testbutton':        handleTestButton,
+  'testmodal':         handleTestModal,
+  'testselect':        handleTestSelect,
+  'testjoin':          handleTestJoin,
+  'testleave':         handleTestLeave,
+  'testreaction':      handleTestReaction,
+  'testtyping':        handleTestTyping,
+  'testperms':         handleTestPerms,
+  'testroles':         handleTestRoles,
+  'testadmin':         handleTestAdmin,
+  'seeddata':          handleSeedData,
+  'cleartestdata':     handleClearTestData,
+  'datacheck':         handleDataCheck,
+  'benchmark':         handleBenchmark,
+  'loadtest':          handleLoadTest,
+  'ratelimit':         handleRateLimit,
+  'forceerror':        handleForceError,
+  'testfail':          handleTestFail,
+  'debug':             handleDebug,
+  'testlongmsg':       handleTestLongMsg,
+  'testunicode':       handleTestUnicode,
+  'testempty':         handleTestEmpty,
+  'testspam':          handleTestSpam,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
@@ -2072,6 +2105,13 @@ if (id.startsWith('app_')) {
         await handleDevLinesAutocomplete(interaction);
       }
       return;
+    }
+
+    if (
+      (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) &&
+      interaction.customId?.startsWith('devtest:')
+    ) {
+      return handleDevTestInteraction(interaction);
     }
 
     if (interaction.isCommand()) {

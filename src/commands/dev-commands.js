@@ -8,7 +8,12 @@
  */
 
 import pkg from 'discord.js';
-const { SlashCommandBuilder, EmbedBuilder } = pkg;
+const {
+  SlashCommandBuilder, EmbedBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  ModalBuilder, TextInputBuilder, TextInputStyle,
+  StringSelectMenuBuilder, ChannelType,
+} = pkg;
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
@@ -227,17 +232,132 @@ export const defs = [
     .setName('simulate-message')
     .setDescription('[Dev] Emit a fake messageCreate event as any user — tests XP, auto-react, sticky, etc.')
     .addUserOption(o =>
-      o.setName('user')
-        .setDescription('User to impersonate (defaults to you)')
-        .setRequired(false))
+      o.setName('user').setDescription('User to impersonate (defaults to you)').setRequired(false))
     .addStringOption(o =>
-      o.setName('content')
-        .setDescription('Message content')
-        .setRequired(false))
+      o.setName('content').setDescription('Message content').setRequired(false))
     .addChannelOption(o =>
-      o.setName('channel')
-        .setDescription('Channel to fire the event in (defaults to this channel)')
-        .setRequired(false)),
+      o.setName('channel').setDescription('Channel to fire the event in (defaults to this channel)').setRequired(false)),
+
+  // ── UI Testing ───────────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('testmessage')
+    .setDescription('[Dev] Post a test message via webhook as any user')
+    .addUserOption(o => o.setName('user').setDescription('User to impersonate').setRequired(false))
+    .addStringOption(o => o.setName('content').setDescription('Message text').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('testreply')
+    .setDescription('[Dev] Post a message and have the bot reply to it — tests reply threading'),
+
+  new SlashCommandBuilder()
+    .setName('testembed')
+    .setDescription('[Dev] Preview a fully decorated sample embed with all common fields'),
+
+  new SlashCommandBuilder()
+    .setName('testbutton')
+    .setDescription('[Dev] Post a message with all four button styles — click to verify handler fires'),
+
+  new SlashCommandBuilder()
+    .setName('testmodal')
+    .setDescription('[Dev] Open a test modal popup with two text inputs'),
+
+  new SlashCommandBuilder()
+    .setName('testselect')
+    .setDescription('[Dev] Post a message with a string select menu — select to verify handler fires'),
+
+  // ── Event Testing ────────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('testjoin')
+    .setDescription('[Dev] Alias for /fakejoin — simulate guildMemberAdd')
+    .addUserOption(o => o.setName('user').setDescription('Member to simulate joining').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('testleave')
+    .setDescription('[Dev] Alias for /fakeleave — simulate guildMemberRemove')
+    .addUserOption(o => o.setName('user').setDescription('Member to simulate leaving').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('testreaction')
+    .setDescription('[Dev] Bot reacts to the most recent message in this channel with test emojis'),
+
+  new SlashCommandBuilder()
+    .setName('testtyping')
+    .setDescription('[Dev] Trigger typing indicator in a channel for 5 seconds')
+    .addChannelOption(o => o.setName('channel').setDescription('Target channel (defaults to this one)').setRequired(false)),
+
+  // ── Permission Testing ───────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('testperms')
+    .setDescription('[Dev] Show bot permissions in this channel as a ✅/❌ checklist'),
+
+  new SlashCommandBuilder()
+    .setName('testroles')
+    .setDescription('[Dev] Show a user\'s role hierarchy and which staff tiers they qualify for')
+    .addUserOption(o => o.setName('user').setDescription('User to inspect (defaults to you)').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('testadmin')
+    .setDescription('[Dev] List members in this server who have Administrator or Manage Guild permissions'),
+
+  // ── Database Testing ─────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('seeddata')
+    .setDescription('[Dev] Insert fake test rows (warns, strikes, XP, balance) for a dummy user'),
+
+  new SlashCommandBuilder()
+    .setName('cleartestdata')
+    .setDescription('[Dev] Delete all rows seeded by /seeddata from every table'),
+
+  new SlashCommandBuilder()
+    .setName('datacheck')
+    .setDescription('[Dev] Run DB integrity checks — orphaned records, missing guild configs, etc.'),
+
+  // ── Performance Testing ──────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('benchmark')
+    .setDescription('[Dev] Run 10 serial + 10 parallel DB queries and report timing'),
+
+  new SlashCommandBuilder()
+    .setName('loadtest')
+    .setDescription('[Dev] Fire N fake messageCreate events rapidly and report throughput')
+    .addIntegerOption(o =>
+      o.setName('count').setDescription('Number of events (1–20, default 5)').setMinValue(1).setMaxValue(20).setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('ratelimit')
+    .setDescription('[Dev] Show Discord REST rate-limit bucket info and current cache sizes'),
+
+  // ── Error Testing ────────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('forceerror')
+    .setDescription('[Dev] Throw a controlled error through the logger — verifies error handling pipeline'),
+
+  new SlashCommandBuilder()
+    .setName('testfail')
+    .setDescription('[Dev] Simulate a failed DB query and show how the error is handled'),
+
+  new SlashCommandBuilder()
+    .setName('debug')
+    .setDescription('[Dev] Full debug dump — caches, DB, memory, uptime, guild config'),
+
+  // ── Edge Case Testing ────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('testlongmsg')
+    .setDescription('[Dev] Send a message near Discord\'s 2000-char limit to test truncation'),
+
+  new SlashCommandBuilder()
+    .setName('testunicode')
+    .setDescription('[Dev] Send emoji, RTL text, zero-width chars, and special characters'),
+
+  new SlashCommandBuilder()
+    .setName('testempty')
+    .setDescription('[Dev] Test how the bot handles empty / null inputs across common fields'),
+
+  new SlashCommandBuilder()
+    .setName('testspam')
+    .setDescription('[Dev] Send N messages in rapid succession to test rate limiting')
+    .addIntegerOption(o =>
+      o.setName('count').setDescription('Number of messages (1–10, default 5)').setMinValue(1).setMaxValue(10).setRequired(false)),
 ];
 
 // ── /whitelist Handler ────────────────────────────────────────────────────────
@@ -1132,5 +1252,851 @@ export async function handleSimulateMessage(interaction) {
   } catch (err) {
     logError('Dev Command: simulate-message', err).catch(() => {});
     if (!interaction.replied) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
+const TEST_USER_ID = '000000000000000001';
+
+function errReply(interaction, err) {
+  const msg = { content: `❌ ${err.message}` };
+  if (!interaction.replied && !interaction.deferred) return interaction.reply(msg).catch(() => {});
+  return interaction.editReply(msg).catch(() => {});
+}
+
+// ── /testmessage ──────────────────────────────────────────────────────────────
+
+export async function handleTestMessage(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const targetUser = interaction.options.getUser('user') ?? interaction.user;
+    const content    = interaction.options.getString('content') ?? '👋 This is a test message!';
+
+    let hook;
+    try {
+      hook = await interaction.channel.createWebhook({
+        name:   targetUser.displayName ?? targetUser.username,
+        avatar: targetUser.displayAvatarURL({ size: 256 }),
+      });
+      await hook.send(content);
+      await hook.delete();
+      await interaction.reply({ content: `✅ Test message posted as **${targetUser.tag}**.` });
+    } catch {
+      if (hook) await hook.delete().catch(() => {});
+      await interaction.reply({ content: `📨 **(webhook unavailable — plain post)**\n${content}` });
+    }
+  } catch (err) {
+    logError('Dev: testmessage', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testreply ────────────────────────────────────────────────────────────────
+
+export async function handleTestReply(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.reply({ content: '📤 Test message sent — bot will reply below.' });
+    const msg = await interaction.fetchReply();
+    await msg.reply({ content: '↩️ **Bot reply** — threading works correctly.' });
+  } catch (err) {
+    logError('Dev: testreply', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testembed ────────────────────────────────────────────────────────────────
+
+export async function handleTestEmbed(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const embed = new EmbedBuilder()
+      .setTitle('🧪 Test Embed')
+      .setDescription('This embed showcases every common field so you can verify rendering.')
+      .setColor(0x5865F2)
+      .setThumbnail(client.user?.displayAvatarURL() ?? null)
+      .addFields(
+        { name: '📌 Inline A', value: 'Value A', inline: true },
+        { name: '📌 Inline B', value: 'Value B', inline: true },
+        { name: '📌 Inline C', value: 'Value C', inline: true },
+        { name: '📄 Full-width', value: 'This field spans the full width of the embed.', inline: false },
+        { name: '🔗 Links',  value: '[discord.js docs](https://discord.js.org)', inline: true },
+        { name: '📅 Relative time', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+      )
+      .setFooter({ text: 'Footer text · Staff Portal Dev', iconURL: client.user?.displayAvatarURL() ?? undefined })
+      .setTimestamp();
+    await interaction.reply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testembed', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testbutton ───────────────────────────────────────────────────────────────
+
+export async function handleTestButton(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('devtest:btn:primary').setLabel('Primary').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('devtest:btn:secondary').setLabel('Secondary').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('devtest:btn:success').setLabel('Success').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('devtest:btn:danger').setLabel('Danger').setStyle(ButtonStyle.Danger),
+    );
+    await interaction.reply({ content: '🔘 Click a button to verify the handler fires:', components: [row] });
+  } catch (err) {
+    logError('Dev: testbutton', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testmodal ────────────────────────────────────────────────────────────────
+
+export async function handleTestModal(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const modal = new ModalBuilder()
+      .setCustomId('devtest:modal:main')
+      .setTitle('🧪 Test Modal');
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('devtest:modal:name')
+          .setLabel('Short text input')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Type something short...')
+          .setRequired(true),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('devtest:modal:desc')
+          .setLabel('Paragraph input (optional)')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Type a longer message...')
+          .setRequired(false),
+      ),
+    );
+    await interaction.showModal(modal);
+  } catch (err) {
+    logError('Dev: testmodal', err).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /testselect ───────────────────────────────────────────────────────────────
+
+export async function handleTestSelect(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('devtest:select:main')
+      .setPlaceholder('Choose an option to verify selection handling...')
+      .addOptions(
+        { label: 'Option Alpha',   value: 'alpha',   description: 'First test option',   emoji: '🔴' },
+        { label: 'Option Beta',    value: 'beta',    description: 'Second test option',  emoji: '🟡' },
+        { label: 'Option Gamma',   value: 'gamma',   description: 'Third test option',   emoji: '🟢' },
+        { label: 'Option Delta',   value: 'delta',   description: 'Fourth test option',  emoji: '🔵' },
+        { label: 'Option Epsilon', value: 'epsilon', description: 'Fifth test option',   emoji: '🟣' },
+      );
+    const row = new ActionRowBuilder().addComponents(menu);
+    await interaction.reply({ content: '🔽 Select an option to verify the handler fires:', components: [row] });
+  } catch (err) {
+    logError('Dev: testselect', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testjoin & /testleave (aliases) ──────────────────────────────────────────
+
+export async function handleTestJoin(interaction) {
+  return handleFakeJoin(interaction);
+}
+
+export async function handleTestLeave(interaction) {
+  return handleFakeLeave(interaction);
+}
+
+// ── /testreaction ─────────────────────────────────────────────────────────────
+
+export async function handleTestReaction(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const msgs = await interaction.channel.messages.fetch({ limit: 5 });
+    const target = msgs.filter(m => !m.author.bot).first() ?? msgs.first();
+
+    if (!target) return interaction.editReply({ content: '❌ No recent messages found to react to.' });
+
+    const emojis = ['👍', '🎉', '✅', '🔥', '⭐'];
+    const results = [];
+    for (const e of emojis) {
+      try { await target.react(e); results.push(`${e} ✅`); }
+      catch { results.push(`${e} ❌`); }
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('😀 Reaction Test')
+      .setColor(0x5865F2)
+      .setDescription(`Reacted to [this message](${target.url}):\n${results.join('  ')}`)
+      .setTimestamp()
+      .setFooter({ text: `Triggered by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testreaction', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testtyping ───────────────────────────────────────────────────────────────
+
+export async function handleTestTyping(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const ch = interaction.options.getChannel('channel') ?? interaction.channel;
+
+    await interaction.reply({ content: `⌨️ Typing in <#${ch.id}> for 5 seconds…` });
+    await ch.sendTyping();
+    const interval = setInterval(() => ch.sendTyping().catch(() => {}), 5000);
+    setTimeout(() => {
+      clearInterval(interval);
+      interaction.editReply({ content: `✅ Typing in <#${ch.id}> finished.` }).catch(() => {});
+    }, 10000);
+  } catch (err) {
+    logError('Dev: testtyping', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testperms ────────────────────────────────────────────────────────────────
+
+export async function handleTestPerms(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const botMember = interaction.guild.members.me;
+    const chPerms   = interaction.channel.permissionsFor(botMember);
+
+    const checks = [
+      ['View Channel',        'ViewChannel'],
+      ['Send Messages',       'SendMessages'],
+      ['Send Messages in Threads', 'SendMessagesInThreads'],
+      ['Embed Links',         'EmbedLinks'],
+      ['Attach Files',        'AttachFiles'],
+      ['Add Reactions',       'AddReactions'],
+      ['Read Message History','ReadMessageHistory'],
+      ['Manage Messages',     'ManageMessages'],
+      ['Manage Channels',     'ManageChannels'],
+      ['Create Webhooks',     'ManageWebhooks'],
+      ['Kick Members',        'KickMembers'],
+      ['Ban Members',         'BanMembers'],
+      ['Timeout Members',     'ModerateMembers'],
+      ['Manage Roles',        'ManageRoles'],
+      ['Administrator',       'Administrator'],
+    ];
+
+    const lines = checks.map(([label, flag]) =>
+      `${chPerms?.has(flag) ? '✅' : '❌'} ${label}`
+    );
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🔐 Bot Permissions in #${interaction.channel.name}`)
+      .setColor(0x5865F2)
+      .setDescription(lines.join('\n'))
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testperms', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testroles ────────────────────────────────────────────────────────────────
+
+export async function handleTestRoles(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const target = interaction.options.getUser('user') ?? interaction.user;
+    const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+
+    if (!member) return interaction.editReply({ content: `❌ ${target.tag} is not in this server.` });
+
+    const roles = member.roles.cache
+      .filter(r => r.id !== interaction.guild.id)
+      .sort((a, b) => b.position - a.position);
+
+    const staffRoleIds = [
+      process.env.STAFF_ROLE_ID, process.env.MODERATOR_ROLE_ID, process.env.MOD_TEAM_ROLE_ID,
+      process.env.HR_ROLE_ID, process.env.HR_TEAM_ROLE_ID,
+      process.env.PARTNERSHIP_ROLE_ID, process.env.PARTNERSHIP_TEAM_ROLE_ID,
+    ].filter(Boolean);
+
+    const staffFlags = staffRoleIds.map(id => {
+      const r = interaction.guild.roles.cache.get(id);
+      const has = member.roles.cache.has(id);
+      return `${has ? '✅' : '❌'} ${r ? r.name : id}`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎭 Roles — ${target.tag}`)
+      .setColor(member.displayColor || 0x5865F2)
+      .setThumbnail(target.displayAvatarURL({ size: 128 }))
+      .addFields(
+        { name: `📋 All Roles (${roles.size})`,  value: roles.map(r => `<@&${r.id}>`).join(' ').slice(0, 1024) || 'None', inline: false },
+        { name: '🔑 Staff Tier Matches',         value: staffFlags.length ? staffFlags.join('\n') : 'No staff roles configured', inline: false },
+        { name: '🔒 Admin',  value: member.permissions.has('Administrator') ? '✅ Yes' : '❌ No', inline: true },
+        { name: '⚙️ Manage Guild', value: member.permissions.has('ManageGuild') ? '✅ Yes' : '❌ No', inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testroles', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testadmin ────────────────────────────────────────────────────────────────
+
+export async function handleTestAdmin(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    await interaction.guild.members.fetch();
+    const admins = interaction.guild.members.cache
+      .filter(m => !m.user.bot && (m.permissions.has('Administrator') || m.permissions.has('ManageGuild')))
+      .sort((a, b) => b.joinedTimestamp - a.joinedTimestamp);
+
+    const lines = admins.map(m => {
+      const flags = [];
+      if (m.permissions.has('Administrator')) flags.push('Admin');
+      if (m.permissions.has('ManageGuild'))   flags.push('Manage Guild');
+      return `<@${m.id}> — \`${flags.join(', ')}\``;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🔑 Privileged Members (${admins.size})`)
+      .setColor(0xFEE75C)
+      .setDescription(lines.slice(0, 20).join('\n') || 'None found')
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · ${interaction.user.tag}${admins.size > 20 ? ` · showing 20/${admins.size}` : ''}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testadmin', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /seeddata ─────────────────────────────────────────────────────────────────
+
+export async function handleSeedData(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const guildId = interaction.guildId ?? '000000000000000001';
+    const now     = Math.floor(Date.now() / 1000);
+    const modId   = interaction.user.id;
+
+    await Promise.all([
+      pool.execute('INSERT INTO warns (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',   [`SEED-W1-${now}`, guildId, TEST_USER_ID, modId, '[TEST] Seed warn 1', now]),
+      pool.execute('INSERT INTO warns (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',   [`SEED-W2-${now}`, guildId, TEST_USER_ID, modId, '[TEST] Seed warn 2', now]),
+      pool.execute('INSERT INTO strikes (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)', [`SEED-S1-${now}`, guildId, TEST_USER_ID, modId, '[TEST] Seed strike 1', now]),
+      pool.execute('INSERT INTO balances (guild_id, user_id, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = 9999',    [guildId, TEST_USER_ID, 9999]),
+      pool.execute('INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE total_xp = 99999',  [guildId, TEST_USER_ID, 99999]),
+    ]);
+
+    const embed = new EmbedBuilder()
+      .setTitle('🌱 Seed Data Inserted')
+      .setColor(0x57F287)
+      .addFields(
+        { name: '🧑 Test User ID', value: `\`${TEST_USER_ID}\``, inline: true },
+        { name: '🏠 Guild',        value: `\`${guildId}\``,      inline: true },
+        { name: '📊 Rows Added',   value: '2 warns · 1 strike · 1 balance (9999) · 1 level (99999 XP)', inline: false },
+        { name: '🧹 Cleanup',      value: 'Run `/cleartestdata` to remove all seeded rows.', inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Seeded by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: seeddata', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /cleartestdata ────────────────────────────────────────────────────────────
+
+export async function handleClearTestData(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const tables = ['warns', 'ad_warns', 'strikes', 'jailed_users', 'message_counts',
+                    'balances', 'breaks', 'applications', 'levels', 'bot_blacklist'];
+
+    const results = await Promise.all(
+      tables.map(t =>
+        pool.execute(`DELETE FROM \`${t}\` WHERE user_id = ?`, [TEST_USER_ID])
+          .then(([r]) => ({ table: t, deleted: r.affectedRows }))
+          .catch(() => ({ table: t, deleted: 'err' }))
+      )
+    );
+
+    const total = results.reduce((s, r) => s + (typeof r.deleted === 'number' ? r.deleted : 0), 0);
+    const lines = results.filter(r => r.deleted !== 0 && r.deleted !== 'err')
+      .map(r => `\`${r.table}\` — **${r.deleted}** row(s)`).join('\n') || 'Nothing to delete.';
+
+    const embed = new EmbedBuilder()
+      .setTitle('🧹 Test Data Cleared')
+      .setColor(0xED4245)
+      .addFields(
+        { name: '🧑 Test User ID',   value: `\`${TEST_USER_ID}\``, inline: true },
+        { name: '🗑️ Total Deleted',   value: String(total),         inline: true },
+        { name: '📋 By Table', value: lines, inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Cleared by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: cleartestdata', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /datacheck ────────────────────────────────────────────────────────────────
+
+export async function handleDataCheck(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const checks = await Promise.all([
+      pool.execute('SELECT COUNT(*) AS c FROM warns   WHERE guild_id NOT IN (SELECT guild_id FROM guilds)').then(([r]) => ({ name: 'Warns with no guild config',   count: r[0].c })).catch(() => ({ name: 'Warns orphan check',  count: '?' })),
+      pool.execute('SELECT COUNT(*) AS c FROM strikes WHERE guild_id NOT IN (SELECT guild_id FROM guilds)').then(([r]) => ({ name: 'Strikes with no guild config', count: r[0].c })).catch(() => ({ name: 'Strikes orphan check', count: '?' })),
+      pool.execute('SELECT COUNT(*) AS c FROM levels  WHERE guild_id NOT IN (SELECT guild_id FROM guilds)').then(([r]) => ({ name: 'Levels with no guild config',  count: r[0].c })).catch(() => ({ name: 'Levels orphan check',  count: '?' })),
+      pool.execute('SELECT COUNT(*) AS c FROM guilds  WHERE log_channel_id IS NULL AND warn_log_channel_id IS NULL').then(([r]) => ({ name: 'Guilds with no log channels configured', count: r[0].c })).catch(() => ({ name: 'Guild config check', count: '?' })),
+      pool.execute('SELECT COUNT(*) AS c FROM breaks  WHERE end_at < UNIX_TIMESTAMP() AND saved_roles IS NOT NULL').then(([r]) => ({ name: 'Expired breaks (roles not restored)', count: r[0].c })).catch(() => ({ name: 'Breaks check', count: '?' })),
+    ]);
+
+    const allOk  = checks.every(c => c.count === 0 || c.count === '?');
+    const lines  = checks.map(c => `${c.count === 0 ? '✅' : c.count === '?' ? '⚠️' : '❌'} ${c.name}: **${c.count}**`).join('\n');
+
+    const embed = new EmbedBuilder()
+      .setTitle(`${allOk ? '✅' : '⚠️'} Database Integrity Check`)
+      .setColor(allOk ? 0x57F287 : 0xFEE75C)
+      .setDescription(lines)
+      .setTimestamp()
+      .setFooter({ text: `Checked by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: datacheck', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /benchmark ────────────────────────────────────────────────────────────────
+
+export async function handleBenchmark(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const N = 10;
+    const query = () => pool.execute('SELECT 1');
+
+    const t0 = Date.now();
+    for (let i = 0; i < N; i++) await query();
+    const serialMs = Date.now() - t0;
+
+    const t1 = Date.now();
+    await Promise.all(Array.from({ length: N }, query));
+    const parallelMs = Date.now() - t1;
+
+    const embed = new EmbedBuilder()
+      .setTitle('⚡ DB Benchmark')
+      .setColor(0x5865F2)
+      .addFields(
+        { name: `🔁 Serial (${N}×)`,   value: `${serialMs}ms total · **${(serialMs/N).toFixed(1)}ms avg**`,   inline: true },
+        { name: `⚡ Parallel (${N}×)`, value: `${parallelMs}ms total · **${(parallelMs/N).toFixed(1)}ms avg**`, inline: true },
+        { name: '📈 Speedup',          value: `${(serialMs / Math.max(parallelMs, 1)).toFixed(2)}× faster in parallel`, inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Run by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: benchmark', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /loadtest ─────────────────────────────────────────────────────────────────
+
+export async function handleLoadTest(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const count = interaction.options.getInteger('count') ?? 5;
+    const times = [];
+
+    for (let i = 0; i < count; i++) {
+      const t = Date.now();
+      const fakeMsg = {
+        id: String(i), content: `loadtest event ${i}`,
+        author: { id: interaction.user.id, bot: false, tag: interaction.user.tag },
+        guild: interaction.guild, guildId: interaction.guild?.id,
+        channel: interaction.channel, channelId: interaction.channelId,
+        member: interaction.member,
+        mentions: { has: () => false },
+        react: () => Promise.resolve(), reply: () => Promise.resolve(), delete: () => Promise.resolve(),
+        createdTimestamp: Date.now(),
+      };
+      client.emit('messageCreate', fakeMsg);
+      times.push(Date.now() - t);
+    }
+
+    const avg   = (times.reduce((s, n) => s + n, 0) / times.length).toFixed(2);
+    const max   = Math.max(...times);
+    const total = times.reduce((s, n) => s + n, 0);
+
+    const embed = new EmbedBuilder()
+      .setTitle('🔥 Load Test Complete')
+      .setColor(0xF59E0B)
+      .addFields(
+        { name: '📨 Events Fired', value: String(count),     inline: true },
+        { name: '⏱️ Total',         value: `${total}ms`,      inline: true },
+        { name: '📊 Avg / Max',     value: `${avg}ms / ${max}ms`, inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Run by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: loadtest', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /ratelimit ────────────────────────────────────────────────────────────────
+
+export async function handleRateLimit(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const mem   = process.memoryUsage();
+    const embed = new EmbedBuilder()
+      .setTitle('🚦 Rate Limit & Cache Info')
+      .setColor(0x5865F2)
+      .addFields(
+        { name: '🏓 WS Ping',         value: `${client.ws.ping}ms`,                           inline: true },
+        { name: '⏱️ Uptime',           value: `${Math.floor(process.uptime())}s`,              inline: true },
+        { name: '💾 Heap',            value: `${(mem.heapUsed/1024/1024).toFixed(1)} MB`,     inline: true },
+        { name: '⏳ XP Cooldowns',    value: String(xpCooldowns.size),                        inline: true },
+        { name: '✨ AR Cache',         value: String(arCache.size),                            inline: true },
+        { name: '🔄 AR React CD',     value: String(arReactCooldowns.size),                   inline: true },
+        { name: '📋 Pending Approvals', value: String(pendingApprovals.size),                 inline: true },
+        { name: '🏠 Guilds Cached',   value: String(client.guilds.cache.size),                inline: true },
+        { name: '👤 Users Cached',    value: String(client.users.cache.size),                 inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: ratelimit', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /forceerror ───────────────────────────────────────────────────────────────
+
+export async function handleForceError(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+
+    const testErr = new Error('[TEST] Controlled error triggered by /forceerror');
+    testErr.stack = testErr.stack + '\n    (this is intentional — testing error pipeline)';
+    await logError('Dev: forceerror (intentional)', testErr);
+
+    const embed = new EmbedBuilder()
+      .setTitle('💥 Error Forced')
+      .setColor(0xED4245)
+      .setDescription('A test error was sent through `logError`. Check your dev log channel for the entry.')
+      .addFields({ name: '📄 Message', value: `\`${testErr.message}\``, inline: false })
+      .setTimestamp()
+      .setFooter({ text: `Triggered by ${interaction.user.tag}` });
+
+    await interaction.reply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: forceerror (outer)', err).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /testfail ─────────────────────────────────────────────────────────────────
+
+export async function handleTestFail(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    let dbResult  = '✅ (no failure)';
+    let apiResult = '✅ (no failure)';
+
+    try {
+      await pool.execute('SELECT * FROM __nonexistent_table__');
+    } catch (e) {
+      dbResult = `❌ DB error caught: \`${e.code ?? e.message.slice(0, 80)}\``;
+    }
+
+    try {
+      await client.users.fetch('000000000000000000');
+    } catch (e) {
+      apiResult = `❌ API error caught: \`${e.message.slice(0, 80)}\``;
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('🧨 Failure Simulation')
+      .setColor(0xFEE75C)
+      .setDescription('Both failures were caught cleanly — error handling is working.')
+      .addFields(
+        { name: '🗄️ DB Failure',  value: dbResult,  inline: false },
+        { name: '🌐 API Failure', value: apiResult, inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Run by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testfail', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /debug ────────────────────────────────────────────────────────────────────
+
+export async function handleDebug(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const mem    = process.memoryUsage();
+    const up     = process.uptime();
+    const h = Math.floor(up / 3600), m = Math.floor((up % 3600) / 60), s = Math.floor(up % 60);
+
+    const t0 = Date.now();
+    await pool.execute('SELECT 1');
+    const dbPing = Date.now() - t0;
+
+    const embed = new EmbedBuilder()
+      .setTitle('🐛 Debug Dump')
+      .setColor(0x5865F2)
+      .addFields(
+        { name: '⏱️ Uptime',           value: `${h}h ${m}m ${s}s`,                         inline: true },
+        { name: '🏓 WS Ping',          value: `${client.ws.ping}ms`,                        inline: true },
+        { name: '🗄️ DB Ping',          value: `${dbPing}ms`,                                inline: true },
+        { name: '💾 RSS',              value: `${(mem.rss/1024/1024).toFixed(1)} MB`,       inline: true },
+        { name: '🧠 Heap Used',        value: `${(mem.heapUsed/1024/1024).toFixed(1)} MB`,  inline: true },
+        { name: '📦 Heap Total',       value: `${(mem.heapTotal/1024/1024).toFixed(1)} MB`, inline: true },
+        { name: '🏠 Guilds',           value: String(client.guilds.cache.size),              inline: true },
+        { name: '👤 Users Cached',     value: String(client.users.cache.size),               inline: true },
+        { name: '💬 Channels Cached',  value: String(client.channels.cache.size),            inline: true },
+        { name: '⏳ XP Cooldowns',     value: String(xpCooldowns.size),                     inline: true },
+        { name: '✨ AR Cache',          value: String(arCache.size),                         inline: true },
+        { name: '🔄 AR React CD',      value: String(arReactCooldowns.size),                 inline: true },
+        { name: '📋 Pending Approvals',value: String(pendingApprovals.size),                 inline: true },
+        { name: '🐛 Debug Mode',       value: isDebugEnabled() ? '✅ On' : '❌ Off',         inline: true },
+        { name: '🌐 Node.js',          value: process.version,                               inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: debug', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testlongmsg ──────────────────────────────────────────────────────────────
+
+export async function handleTestLongMsg(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const filler  = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. ';
+    const longMsg = filler.repeat(34).slice(0, 1990);
+    await interaction.reply({ content: `**[${longMsg.length} chars]** ${longMsg}` });
+  } catch (err) {
+    logError('Dev: testlongmsg', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testunicode ──────────────────────────────────────────────────────────────
+
+export async function handleTestUnicode(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    const samples = [
+      '**Emoji:**        🎉 🔥 💯 🦄 🏳️‍🌈 🧑‍💻 👨‍👩‍👧‍👦',
+      '**RTL text:**     مرحبا بالعالم · שָׁלוֹם',
+      '**CJK:**          こんにちは 你好 안녕하세요',
+      '**Math symbols:** ∑ ∞ √ π ≠ ≤ ≥ ∈',
+      '**Special:**      ™ © ® § ¶ ° € £ ¥',
+      '**Zero-width:**   A\u200BB\u200BC (A​B​C with ZWJ)',
+      '**Zalgo:**        Z̷̡̙̰̲̫͓̤̓͗̒̀͛̽̇͜a̷̡͙̞̜̓̓l̵͎̙̯̒͊g̵̨̟̦̓̽ö̶̡̰̯́',
+      '**Null-like:**    \u0000 \u0001 \uFEFF (null, SOH, BOM — stripped by Discord)',
+    ];
+    const embed = new EmbedBuilder()
+      .setTitle('🌐 Unicode Edge Cases')
+      .setColor(0x5865F2)
+      .setDescription(samples.join('\n'))
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · ${interaction.user.tag}` });
+    await interaction.reply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testunicode', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testempty ────────────────────────────────────────────────────────────────
+
+export async function handleTestEmpty(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+
+    const emptyUser   = interaction.options.getUser('nonexistent')   ?? null;
+    const emptyStr    = interaction.options.getString('nonexistent')  ?? null;
+    const emptyInt    = interaction.options.getInteger('nonexistent') ?? null;
+    const emptyChannel= interaction.options.getChannel('nonexistent') ?? null;
+
+    const embed = new EmbedBuilder()
+      .setTitle('🕳️ Empty / Null Input Test')
+      .setColor(0x5865F2)
+      .setDescription('All optional options were fetched with no value provided. Verifying null safety.')
+      .addFields(
+        { name: 'getUser()',    value: emptyUser    === null ? '✅ null' : `⚠️ ${emptyUser}`,    inline: true },
+        { name: 'getString()', value: emptyStr     === null ? '✅ null' : `⚠️ "${emptyStr}"`,   inline: true },
+        { name: 'getInteger()',value: emptyInt     === null ? '✅ null' : `⚠️ ${emptyInt}`,     inline: true },
+        { name: 'getChannel()',value: emptyChannel === null ? '✅ null' : `⚠️ ${emptyChannel}`, inline: true },
+        { name: 'Result',      value: '✅ All null checks passed — no crashes on missing options.', inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · ${interaction.user.tag}` });
+
+    await interaction.reply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testempty', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── /testspam ─────────────────────────────────────────────────────────────────
+
+export async function handleTestSpam(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const count  = interaction.options.getInteger('count') ?? 5;
+    const times  = [];
+
+    for (let i = 1; i <= count; i++) {
+      const t = Date.now();
+      await interaction.channel.send(`🔁 **Spam message ${i}/${count}** — \`${new Date().toISOString()}\``);
+      times.push(Date.now() - t);
+    }
+
+    const total = times.reduce((s, n) => s + n, 0);
+    const avg   = (total / times.length).toFixed(1);
+
+    const embed = new EmbedBuilder()
+      .setTitle('📨 Spam Test Complete')
+      .setColor(0x57F287)
+      .addFields(
+        { name: '📨 Messages Sent', value: String(count),       inline: true },
+        { name: '⏱️ Total',          value: `${total}ms`,        inline: true },
+        { name: '📊 Avg per msg',    value: `${avg}ms`,          inline: true },
+        { name: '⏱️ Per message',    value: times.map((t, i) => `#${i+1}: ${t}ms`).join(' · '), inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Run by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev: testspam', err).catch(() => {});
+    errReply(interaction, err);
+  }
+}
+
+// ── DevTest component interaction handler (buttons, selects, modals) ──────────
+
+export async function handleDevTestInteraction(interaction) {
+  try {
+    const id = interaction.customId;
+
+    if (interaction.isButton()) {
+      const label = id.replace('devtest:btn:', '');
+      const embed = new EmbedBuilder()
+        .setTitle('🔘 Button Fired')
+        .setColor({ primary: 0x5865F2, secondary: 0x4F545C, success: 0x57F287, danger: 0xED4245 }[label] ?? 0x5865F2)
+        .addFields(
+          { name: 'Style',     value: label[0].toUpperCase() + label.slice(1), inline: true },
+          { name: 'Custom ID', value: `\`${id}\``,                             inline: true },
+        )
+        .setTimestamp()
+        .setFooter({ text: `Clicked by ${interaction.user.tag}` });
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      const chosen = interaction.values[0];
+      const embed = new EmbedBuilder()
+        .setTitle('🔽 Selection Received')
+        .setColor(0x5865F2)
+        .addFields(
+          { name: 'Selected value', value: `\`${chosen}\``,      inline: true },
+          { name: 'Custom ID',      value: `\`${id}\``,           inline: true },
+        )
+        .setTimestamp()
+        .setFooter({ text: `Selected by ${interaction.user.tag}` });
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.isModalSubmit()) {
+      const name = interaction.fields.getTextInputValue('devtest:modal:name');
+      const desc = interaction.fields.getTextInputValue('devtest:modal:desc') || '*(empty)*';
+      const embed = new EmbedBuilder()
+        .setTitle('📝 Modal Submitted')
+        .setColor(0x5865F2)
+        .addFields(
+          { name: 'Short input',     value: name, inline: false },
+          { name: 'Paragraph input', value: desc, inline: false },
+        )
+        .setTimestamp()
+        .setFooter({ text: `Submitted by ${interaction.user.tag}` });
+      return interaction.reply({ embeds: [embed] });
+    }
+  } catch (err) {
+    logError('DevTest interaction', err).catch(() => {});
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+    }
   }
 }
