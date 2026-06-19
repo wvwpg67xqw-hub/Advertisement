@@ -633,7 +633,7 @@ export async function handleDevCleanEmojis(interaction) {
 
 // ── /dev-lines Handler ────────────────────────────────────────────────────────
 
-const LINES_SKIP_DIRS  = new Set(['node_modules', '.git', 'dist', '.cache', '.agents', '.local', 'attached_assets']);
+const LINES_SKIP_DIRS  = new Set(['node_modules', '.git', 'dist', '.cache', '.agents', '.local', 'attached_assets', 'client']);
 const LINES_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json', '.css', '.html', '.sh', '.md']);
 
 function getAllProjectFiles(dir, root, results = []) {
@@ -673,8 +673,7 @@ function countLinesInFile(filePath) {
 
 function walkAndCount(dir, root) {
   let total = 0;
-  const botFiles    = [];
-  const clientFiles = [];
+  const breakdown = [];
   const byType = {};
 
   function recurse(current) {
@@ -693,22 +692,16 @@ function walkAndCount(dir, root) {
         const count = countLinesInFile(fullPath);
         if (count > 0) {
           total += count;
-          const rel = relative(root, fullPath);
-          const isClient = rel.startsWith('client' + require_sep());
-          const bucket = isClient ? clientFiles : botFiles;
-          bucket.push({ path: rel, lines: count });
+          breakdown.push({ path: relative(root, fullPath), lines: count });
           byType[ext] = (byType[ext] ?? 0) + count;
         }
       }
     }
   }
 
-  function require_sep() { return '/'; }
-
   recurse(dir);
-  botFiles.sort((a, b) => b.lines - a.lines);
-  clientFiles.sort((a, b) => b.lines - a.lines);
-  return { total, botFiles, clientFiles, byType };
+  breakdown.sort((a, b) => b.lines - a.lines);
+  return { total, breakdown, byType };
 }
 
 export async function handleDevLines(interaction) {
@@ -749,13 +742,11 @@ export async function handleDevLines(interaction) {
       return interaction.editReply({ embeds: [embed] });
     }
 
-    const { total, botFiles, clientFiles, byType } = walkAndCount(ROOT, ROOT);
-    const totalFiles = botFiles.length + clientFiles.length;
-    const clientTotal = clientFiles.reduce((s, f) => s + f.lines, 0);
-    const botTotal    = botFiles.reduce((s, f) => s + f.lines, 0);
+    const { total, breakdown, byType } = walkAndCount(ROOT, ROOT);
 
-    const fmtList = (files, max) =>
-      files.slice(0, max).map(f => `\`${f.path}\` — **${f.lines.toLocaleString()}**`).join('\n') || 'None';
+    const top = breakdown.slice(0, 15)
+      .map(f => `\`${f.path}\` — **${f.lines.toLocaleString()}**`)
+      .join('\n');
 
     const typeLines = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
@@ -763,18 +754,13 @@ export async function handleDevLines(interaction) {
       .join('\n') || 'None';
 
     const embed = new EmbedBuilder()
-      .setTitle('📊 Project Line Count')
+      .setTitle('📊 Bot Line Count')
       .setColor(0x5865F2)
       .addFields(
-        { name: '📁 Total Lines',    value: total.toLocaleString(),      inline: true },
-        { name: '📄 Total Files',    value: totalFiles.toLocaleString(), inline: true },
-        { name: '\u200b',            value: '\u200b',                    inline: true },
-        { name: '🤖 Bot Lines',      value: botTotal.toLocaleString(),   inline: true },
-        { name: '🌐 Website Lines',  value: clientTotal.toLocaleString(), inline: true },
-        { name: '\u200b',            value: '\u200b',                    inline: true },
-        { name: '🗂️ By File Type',   value: typeLines,                   inline: false },
-        { name: `🤖 Top Bot Files (${Math.min(10, botFiles.length)})`,        value: fmtList(botFiles, 10),    inline: false },
-        { name: `🌐 Website Files (${clientFiles.length} total)`,             value: fmtList(clientFiles, 25), inline: false },
+        { name: '📁 Total Lines',   value: total.toLocaleString(),             inline: true },
+        { name: '📄 Files Counted', value: breakdown.length.toLocaleString(),  inline: true },
+        { name: '🗂️ By File Type',  value: typeLines,                          inline: false },
+        { name: `📋 Top ${Math.min(15, breakdown.length)} Files`, value: top || 'None', inline: false },
       )
       .setTimestamp()
       .setFooter({ text: `Staff Portal · Dev Commands · requested by ${interaction.user.tag}` });
