@@ -673,7 +673,8 @@ function countLinesInFile(filePath) {
 
 function walkAndCount(dir, root) {
   let total = 0;
-  const breakdown = [];
+  const botFiles    = [];
+  const clientFiles = [];
   const byType = {};
 
   function recurse(current) {
@@ -692,16 +693,22 @@ function walkAndCount(dir, root) {
         const count = countLinesInFile(fullPath);
         if (count > 0) {
           total += count;
-          breakdown.push({ path: relative(root, fullPath), lines: count });
+          const rel = relative(root, fullPath);
+          const isClient = rel.startsWith('client' + require_sep());
+          const bucket = isClient ? clientFiles : botFiles;
+          bucket.push({ path: rel, lines: count });
           byType[ext] = (byType[ext] ?? 0) + count;
         }
       }
     }
   }
 
+  function require_sep() { return '/'; }
+
   recurse(dir);
-  breakdown.sort((a, b) => b.lines - a.lines);
-  return { total, breakdown, byType };
+  botFiles.sort((a, b) => b.lines - a.lines);
+  clientFiles.sort((a, b) => b.lines - a.lines);
+  return { total, botFiles, clientFiles, byType };
 }
 
 export async function handleDevLines(interaction) {
@@ -742,11 +749,13 @@ export async function handleDevLines(interaction) {
       return interaction.editReply({ embeds: [embed] });
     }
 
-    const { total, breakdown, byType } = walkAndCount(ROOT, ROOT);
+    const { total, botFiles, clientFiles, byType } = walkAndCount(ROOT, ROOT);
+    const totalFiles = botFiles.length + clientFiles.length;
+    const clientTotal = clientFiles.reduce((s, f) => s + f.lines, 0);
+    const botTotal    = botFiles.reduce((s, f) => s + f.lines, 0);
 
-    const top = breakdown.slice(0, 15)
-      .map(f => `\`${f.path}\` — **${f.lines.toLocaleString()}**`)
-      .join('\n');
+    const fmtList = (files, max) =>
+      files.slice(0, max).map(f => `\`${f.path}\` — **${f.lines.toLocaleString()}**`).join('\n') || 'None';
 
     const typeLines = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
@@ -757,10 +766,15 @@ export async function handleDevLines(interaction) {
       .setTitle('📊 Project Line Count')
       .setColor(0x5865F2)
       .addFields(
-        { name: '📁 Total Lines',   value: total.toLocaleString(),             inline: true },
-        { name: '📄 Files Counted', value: breakdown.length.toLocaleString(),  inline: true },
-        { name: '🗂️ By File Type',  value: typeLines,                          inline: false },
-        { name: `📋 Top ${Math.min(15, breakdown.length)} Files`, value: top || 'None', inline: false },
+        { name: '📁 Total Lines',    value: total.toLocaleString(),      inline: true },
+        { name: '📄 Total Files',    value: totalFiles.toLocaleString(), inline: true },
+        { name: '\u200b',            value: '\u200b',                    inline: true },
+        { name: '🤖 Bot Lines',      value: botTotal.toLocaleString(),   inline: true },
+        { name: '🌐 Website Lines',  value: clientTotal.toLocaleString(), inline: true },
+        { name: '\u200b',            value: '\u200b',                    inline: true },
+        { name: '🗂️ By File Type',   value: typeLines,                   inline: false },
+        { name: `🤖 Top Bot Files (${Math.min(10, botFiles.length)})`,        value: fmtList(botFiles, 10),    inline: false },
+        { name: `🌐 Website Files (${clientFiles.length} total)`,             value: fmtList(clientFiles, 25), inline: false },
       )
       .setTimestamp()
       .setFooter({ text: `Staff Portal · Dev Commands · requested by ${interaction.user.tag}` });
