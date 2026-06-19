@@ -431,6 +431,11 @@ export async function handleJail(interaction) {
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
 
+  // ─── SOAP PING ────────────────────────────────────
+  await interaction.followUp({
+    content: `<@${target.id}> don't drop the soap 🧼\nhttps://tenor.com/view/dont-drop-the-soap-prison-mike-gif-11313792`,
+  }).catch(() => {});
+
   // ─── ENV JAIL CHANNEL ─────────────────────────────
   const jailChannelId = process.env.JAIL_CHANNEL_ID;
 
