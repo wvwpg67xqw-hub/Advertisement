@@ -2642,11 +2642,13 @@ client.once('clientReady', async () => {
       await rest.put(Routes.applicationCommands(CLIENT_ID), { body: prodCommands.map(c => c.toJSON()) });
       console.log(`✅ Registered ${prodCommands.length} slash commands globally`);
 
-      // Register dev commands to the dev/main guild only (keeps them off the global limit)
-      const DEV_GUILD_ID = process.env.DEV_GUILD_ID || process.env.MAIN_GUILD_ID;
+      // Register dev/test commands only to the explicitly configured DEV_GUILD_ID
+      const DEV_GUILD_ID = process.env.DEV_GUILD_ID;
       if (DEV_GUILD_ID && devCommands.length > 0) {
         await rest.put(Routes.applicationGuildCommands(CLIENT_ID, DEV_GUILD_ID), { body: devCommands.map(c => c.toJSON()) });
-        console.log(`🔧 Registered ${devCommands.length} dev commands to guild ${DEV_GUILD_ID}`);
+        console.log(`🔧 Registered ${devCommands.length} dev commands to dev guild ${DEV_GUILD_ID}`);
+      } else if (!DEV_GUILD_ID) {
+        console.log(`ℹ️  DEV_GUILD_ID not set — ${devCommands.length} dev/test commands skipped`);
       }
     } catch (err) {
       console.error('❌ Failed to register commands:', err.message);
