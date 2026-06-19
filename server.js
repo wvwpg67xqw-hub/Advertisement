@@ -47,7 +47,7 @@ import {
   handleWhitelist, handleDevMaintenance, handleDevCleanEmojis,
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
   handleDevGuilds, handleDevGuildInfo, handleDevRestart, handleDevDebug,
-  handleDevLines,
+  handleDevLines, handleDevLinesAutocomplete,
 } from './src/commands/dev-commands.js';
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
@@ -2061,6 +2061,13 @@ if (id.startsWith('app_')) {
         await target.send({ embeds: [dmEmbed] }).catch(() => null);
         return;
       }
+    }
+
+    if (interaction.isAutocomplete()) {
+      if (interaction.commandName === 'dev-lines' && interaction.options.getFocused(true).name === 'file') {
+        await handleDevLinesAutocomplete(interaction);
+      }
+      return;
     }
 
     if (interaction.isCommand()) {

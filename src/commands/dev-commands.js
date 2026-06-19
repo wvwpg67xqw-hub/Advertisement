@@ -179,8 +179,9 @@ export const defs = [
     .setDescription('[Dev] Count lines of code in a specific file or the entire project')
     .addStringOption(o =>
       o.setName('file')
-        .setDescription('Relative file path (e.g. server.js) — omit to count the whole project')
-        .setRequired(false)),
+        .setDescription('Start typing a file name — omit to count the whole project')
+        .setRequired(false)
+        .setAutocomplete(true)),
 ];
 
 // ── /whitelist Handler ────────────────────────────────────────────────────────
@@ -634,6 +635,32 @@ export async function handleDevCleanEmojis(interaction) {
 
 const LINES_SKIP_DIRS  = new Set(['node_modules', '.git', 'dist', '.cache', '.agents', '.local', 'attached_assets']);
 const LINES_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json', '.css', '.html', '.sh', '.md']);
+
+function getAllProjectFiles(dir, root, results = []) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return results; }
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!LINES_SKIP_DIRS.has(entry.name)) getAllProjectFiles(fullPath, root, results);
+    } else if (entry.isFile()) {
+      const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop() : '';
+      if (LINES_EXTENSIONS.has(ext)) results.push(relative(root, fullPath));
+    }
+  }
+  return results;
+}
+
+export async function handleDevLinesAutocomplete(interaction) {
+  const focused = interaction.options.getFocused().toLowerCase();
+  const ROOT    = process.cwd();
+  const files   = getAllProjectFiles(ROOT, ROOT);
+  const matches = files
+    .filter(f => f.toLowerCase().includes(focused))
+    .slice(0, 25)
+    .map(f => ({ name: f, value: f }));
+  await interaction.respond(matches).catch(() => {});
+}
 
 function countLinesInFile(filePath) {
   try {
