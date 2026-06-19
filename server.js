@@ -59,6 +59,7 @@ import {
   handleTestEmpty, handleTestSpam, handleDevTestInteraction,
 } from './src/commands/dev-commands.js';
 import {
+  defs as honeypotDefs,
   handleHoneypot, honeypotCache, handleHoneypotTrigger, loadHoneypotConfigs,
 } from './src/commands/honeypot.js';
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
@@ -2618,7 +2619,7 @@ client.once('clientReady', async () => {
   if (CLIENT_ID) {
     try {
       const rest = new REST({ version: '10' }).setToken(TOKEN);
-      const allCommands = [...commandDefs, ...setupCommands];
+      const allCommands = [...commandDefs, ...setupCommands, ...honeypotDefs];
 
       // Discord global limit is 100 commands — split dev/test commands to guild-only
       const DEV_CMD_NAMES = new Set([
