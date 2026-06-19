@@ -674,6 +674,7 @@ function countLinesInFile(filePath) {
 function walkAndCount(dir, root) {
   let total = 0;
   const breakdown = [];
+  const byType = {};
 
   function recurse(current) {
     let entries;
@@ -692,6 +693,7 @@ function walkAndCount(dir, root) {
         if (count > 0) {
           total += count;
           breakdown.push({ path: relative(root, fullPath), lines: count });
+          byType[ext] = (byType[ext] ?? 0) + count;
         }
       }
     }
@@ -699,7 +701,7 @@ function walkAndCount(dir, root) {
 
   recurse(dir);
   breakdown.sort((a, b) => b.lines - a.lines);
-  return { total, breakdown };
+  return { total, breakdown, byType };
 }
 
 export async function handleDevLines(interaction) {
@@ -740,18 +742,24 @@ export async function handleDevLines(interaction) {
       return interaction.editReply({ embeds: [embed] });
     }
 
-    const { total, breakdown } = walkAndCount(ROOT, ROOT);
+    const { total, breakdown, byType } = walkAndCount(ROOT, ROOT);
 
     const top = breakdown.slice(0, 15)
       .map(f => `\`${f.path}\` — **${f.lines.toLocaleString()}**`)
       .join('\n');
 
+    const typeLines = Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .map(([ext, count]) => `\`${ext}\` — **${count.toLocaleString()}**`)
+      .join('\n') || 'None';
+
     const embed = new EmbedBuilder()
       .setTitle('📊 Project Line Count')
       .setColor(0x5865F2)
       .addFields(
-        { name: '📁 Total Lines',  value: total.toLocaleString(),      inline: true },
-        { name: '📄 Files Counted', value: breakdown.length.toLocaleString(), inline: true },
+        { name: '📁 Total Lines',   value: total.toLocaleString(),             inline: true },
+        { name: '📄 Files Counted', value: breakdown.length.toLocaleString(),  inline: true },
+        { name: '🗂️ By File Type',  value: typeLines,                          inline: false },
         { name: `📋 Top ${Math.min(15, breakdown.length)} Files`, value: top || 'None', inline: false },
       )
       .setTimestamp()
