@@ -2,24 +2,7 @@ import pkg from 'discord.js';
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits } = pkg;
 import { getGuild, getNetworkMembers } from '../database.js';
 
-export const defs = [
-  new SlashCommandBuilder()
-    .setName('setup-network-apply')
-    .setDescription('Configure the server application system — sets the review channel and roles given on acceptance')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addChannelOption(o => o.setName('log-channel').setDescription('Channel where applications are reviewed by admins').setRequired(true))
-    .addRoleOption(o => o.setName('role1').setDescription('Role to give on acceptance').setRequired(true))
-    .addRoleOption(o => o.setName('role2').setDescription('Role to give on acceptance (optional)'))
-    .addRoleOption(o => o.setName('role3').setDescription('Role to give on acceptance (optional)'))
-    .addRoleOption(o => o.setName('role4').setDescription('Role to give on acceptance (optional)'))
-    .addRoleOption(o => o.setName('role5').setDescription('Role to give on acceptance (optional)')),
-
-  new SlashCommandBuilder()
-    .setName('network-apply-post')
-    .setDescription('Post the server listing with Apply buttons for every server in the network')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addChannelOption(o => o.setName('channel').setDescription('Channel to post the server listing in').setRequired(true)),
-];
+export const defs = [];
 
 export async function handleSetupNetworkApply(interaction) {
   const logChannel = interaction.options.getChannel('log-channel');

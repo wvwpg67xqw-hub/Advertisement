@@ -6,7 +6,6 @@ export { defs as networkDefs } from './network.js';
 export { defs as utilityDefs } from './utility.js';
 export { defs as breaksDefs } from './breaks.js';
 export { defs as staffDefs } from './staff.js';
-export { defs as networkApplyDefs } from './network-apply.js';
 export { defs as levelingDefs } from './leveling.js';
 export { defs as modGuideDefs } from './modguide.js';
 export { defs as botSettingsDefs } from './botsettings.js';
@@ -23,7 +22,6 @@ import { defs as networkDefs } from './network.js';
 import { defs as utilityDefs } from './utility.js';
 import { defs as breaksDefs } from './breaks.js';
 import { defs as staffDefs } from './staff.js';
-import { defs as networkApplyDefs } from './network-apply.js';
 import { defs as levelingDefs } from './leveling.js';
 import { defs as modGuideDefs } from './modguide.js';
 import { defs as botSettingsDefs } from './botsettings.js';
@@ -42,7 +40,6 @@ export const commandDefs = [
   ...utilityDefs,
   ...breaksDefs,
   ...staffDefs,
-  ...networkApplyDefs,
   ...levelingDefs,
   ...modGuideDefs,
   ...botSettingsDefs,
@@ -61,7 +58,6 @@ export { handleNetworkBan, handleNetworkUnban } from './network.js';
 export { handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance, handleSnipe, handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel, handleAutoReact, handleAutoReactClear } from './utility.js';
 export { handleCurrentBreaks, handleBreakRequest, handleManageBreak } from './breaks.js';
 export { handleResignRequest, handleUpdate } from './staff.js';
-export { handleSetupNetworkApply, handleNetworkApplyPost } from './network-apply.js';
 export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel } from './leveling.js';
 export { handleModGuide, handleModGuideButton } from './modguide.js';
 export { handleStatus, handleActivity } from './botsettings.js';

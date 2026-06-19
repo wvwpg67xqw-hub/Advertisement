@@ -36,7 +36,6 @@ import {
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleUpdate,
   handleWarnUserContextMenu, handleAdWarnMessageContextMenu,
-  handleSetupNetworkApply, handleNetworkApplyPost,
   handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
   handleModGuide, handleModGuideButton,
   handleStatus, handleActivity,
@@ -69,11 +68,11 @@ import {
 } from './src/devLogger.js';
 
 import {
-  setupCommands, handleSetup, handleSetupRoles, handleSetupRolesExtra,
-  handleSetupStatus, handleSetupEdit, handleSetupRolesWizard,
+  setupCommands, handleSetup, handleSetupRoles,
+  handleSetupStatus, handleSetupEdit,
   handleSetupRequests, handleSetupNetworkHub, handleSetupNetworkJoin,
   handleSetupNetworkReset, handleNetworkStatus, handleSetupAdChannels,
-  handleSetupBreak, handleSetupRolesBulk, handleSetupResign, handleSetupBranding,
+  handleSetupBreak, handleSetupResign, handleSetupBranding,
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles, handleSetupGithub,
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
@@ -725,15 +724,15 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Staff Portal running on port
 // ── Discord Bot Setup ─────────────────────────────────────────────────────────
 
 const botHandlers = {
-  setup: handleSetup, 'setup-roles': handleSetupRoles, 'setup-roles-extra': handleSetupRolesExtra,
-  'setup-status': handleSetupStatus, 'setup-edit': handleSetupEdit, 'setup-roles-wizard': handleSetupRolesWizard,
+  setup: handleSetup, 'setup-roles': handleSetupRoles,
+  'setup-status': handleSetupStatus, 'setup-edit': handleSetupEdit,
   'setup-requests': handleSetupRequests, 'setup-ad-channels': handleSetupAdChannels,
   'setup-network-hub': handleSetupNetworkHub, 'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset, 'network-status': handleNetworkStatus,
   'setup-network-roles': handleSetupNetworkRoles,
   'setup-staff-roles': handleSetupStaffRoles,
   'setup-github': handleSetupGithub,
-  'setup-break': handleSetupBreak, 'setup-roles-bulk': handleSetupRolesBulk, 'setup-resign': handleSetupResign,
+  'setup-break': handleSetupBreak, 'setup-resign': handleSetupResign,
   'setup-branding': handleSetupBranding,
   'network-ban': handleNetworkBan, 'network-unban': handleNetworkUnban,
   warn: handleWarn, warns: handleWarns, 'warn-leaderboard': handleWarnLeaderboard,
@@ -756,8 +755,6 @@ const botHandlers = {
   'ar-clear': handleAutoReactClear,
   buy: handleBuy,
   'resign-request': handleResignRequest, update: handleUpdate,
-  'setup-network-apply': handleSetupNetworkApply,
-  'network-apply-post': handleNetworkApplyPost,
   level: handleLevel, 'level-leaderboard': handleLevelLeaderboard,
   'add-xp': handleAddXp, 'remove-xp': handleRemoveXp,
   'add-level': handleAddLevel, 'set-level': handleSetLevel,
@@ -933,7 +930,7 @@ client.on('interactionCreate', async (interaction) => {
               { name: '📨 Request Channels',     value: '`/setup-requests` — Set ban / blacklist / partnership / network-ban channels', inline: false },
               { name: '🌐 Network',              value: '`/setup-network-hub` — Mark as hub\n`/setup-network-join` — Join a hub\n`/setup-staff-server` — Mark as staff server', inline: false },
               { name: '🎨 Branding',             value: '`/setup-branding` — Set bot avatar & banner for this server', inline: false },
-              { name: '🔒 Permissions',          value: '`/setup-roles` — Set which roles can use each command\n`/setup-roles-bulk` — Set roles for a whole command group at once', inline: false },
+              { name: '🔒 Permissions',          value: '`/setup-roles` — Set which roles can use each command', inline: false },
               { name: '⚙️ Other',               value: '`/setup-status` — Raw config dump\n`/network-status` — Network overview\n`/setup-dm-command` — Disable commands in DMs', inline: false },
             )
             .setFooter({ text: 'Run /setup-wizard again or click Refresh to see updated progress.' })

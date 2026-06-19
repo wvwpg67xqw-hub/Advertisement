@@ -29,8 +29,7 @@ const COMMAND_MIN_RANK = {
   // ADMINISTRATION (3) ──────────────────────────────────
   ban: 3, fire: 3,
   'network-ban': 3, 'network-unban': 3, 'network-status': 3,
-  setup: 3, 'setup-roles': 3, 'setup-roles-extra': 3, 'setup-roles-wizard': 3,
-  'setup-roles-bulk': 3, 'setup-edit': 3, 'setup-status': 3,
+  setup: 3, 'setup-roles': 3, 'setup-edit': 3, 'setup-status': 3,
   'setup-ad-channels': 3, 'setup-requests': 3, 'setup-network-hub': 3,
   'setup-network-join': 3, 'setup-network-reset': 3, 'setup-break': 3,
   'setup-resign': 3, 'setup-branding': 3,

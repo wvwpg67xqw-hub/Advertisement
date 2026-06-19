@@ -48,19 +48,6 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('role5').setDescription('Role 5')),
 
   new SlashCommandBuilder()
-    .setName('setup-roles-extra')
-    .setDescription('Add extra roles to a command (appends, does not replace)')
-    .addStringOption(o =>
-      o.setName('command').setDescription('Command name').setRequired(true)
-        .addChoices(...ALL_COMMANDS.map(c => ({ name: c, value: c })))
-    )
-    .addRoleOption(o => o.setName('role1').setDescription('Role 1').setRequired(true))
-    .addRoleOption(o => o.setName('role2').setDescription('Role 2'))
-    .addRoleOption(o => o.setName('role3').setDescription('Role 3'))
-    .addRoleOption(o => o.setName('role4').setDescription('Role 4'))
-    .addRoleOption(o => o.setName('role5').setDescription('Role 5')),
-
-  new SlashCommandBuilder()
     .setName('setup-status')
     .setDescription('Show the current bot configuration'),
 
@@ -88,19 +75,6 @@ export const setupCommands = [
     )
     .addChannelOption(o => o.setName('channel').setDescription('New channel value'))
     .addRoleOption(o => o.setName('role').setDescription('New role value')),
-
-  new SlashCommandBuilder()
-    .setName('setup-roles-wizard')
-    .setDescription('Interactive wizard: set allowed roles for every command')
-    .addStringOption(o =>
-      o.setName('command').setDescription('Which command to configure').setRequired(true)
-        .addChoices(...ALL_COMMANDS.map(c => ({ name: c, value: c })))
-    )
-    .addRoleOption(o => o.setName('role1').setDescription('Allowed role 1').setRequired(true))
-    .addRoleOption(o => o.setName('role2').setDescription('Allowed role 2'))
-    .addRoleOption(o => o.setName('role3').setDescription('Allowed role 3'))
-    .addRoleOption(o => o.setName('role4').setDescription('Allowed role 4'))
-    .addRoleOption(o => o.setName('role5').setDescription('Allowed role 5')),
 
   new SlashCommandBuilder()
     .setName('setup-ad-channels')
@@ -193,25 +167,6 @@ export const setupCommands = [
     .setDescription('Enable or disable a slash command in this server')
     .addStringOption(o => o.setName('command').setDescription('Command name (e.g. warn, mute, add-xp)').setRequired(true))
     .addBooleanOption(o => o.setName('enabled').setDescription('true = enable, false = disable').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('setup-roles-bulk')
-    .setDescription('Set allowed roles for a whole group of commands at once')
-    .addStringOption(o =>
-      o.setName('group').setDescription('Which group of commands to configure').setRequired(true)
-        .addChoices(
-          { name: 'moderation  (warn, mute, unmute, ban, ad-warn)', value: 'moderation' },
-          { name: 'staff-management  (fire, promote, demote, strike, jail)', value: 'staff-management' },
-          { name: 'requests  (ban-req, blacklist-req, network-ban-req, partnership-req)', value: 'requests' },
-          { name: 'admin  (leaderboards, case-info, reset-messages)', value: 'admin' },
-          { name: 'all  (every command above)', value: 'all' },
-        )
-    )
-    .addRoleOption(o => o.setName('role1').setDescription('Allowed role 1').setRequired(true))
-    .addRoleOption(o => o.setName('role2').setDescription('Allowed role 2'))
-    .addRoleOption(o => o.setName('role3').setDescription('Allowed role 3'))
-    .addRoleOption(o => o.setName('role4').setDescription('Allowed role 4'))
-    .addRoleOption(o => o.setName('role5').setDescription('Allowed role 5')),
 
   new SlashCommandBuilder()
     .setName('setup-github')
