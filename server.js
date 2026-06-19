@@ -59,6 +59,9 @@ import {
   handleTestFail, handleDebug, handleTestLongMsg, handleTestUnicode,
   handleTestEmpty, handleTestSpam, handleDevTestInteraction,
 } from './src/commands/dev-commands.js';
+import {
+  handleHoneypot, honeypotCache, handleHoneypotTrigger, loadHoneypotConfigs,
+} from './src/commands/honeypot.js';
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
   setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
@@ -813,6 +816,7 @@ const botHandlers = {
   'testunicode':       handleTestUnicode,
   'testempty':         handleTestEmpty,
   'testspam':          handleTestSpam,
+  'honeypot':          handleHoneypot,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
@@ -2285,6 +2289,18 @@ client.on('messageDelete', async (msg) => {
 client.on('messageCreate', async (msg) => {
   if (msg.author.bot) return;
 
+  // ── Honeypot trap check ──────────────────────────────────────────────────────
+  if (msg.guild) {
+    const hp = honeypotCache.get(msg.guildId);
+    if (hp && msg.channelId === hp.channel_id) {
+      const guildCfg = await getBotGuild(msg.guildId).catch(() => null);
+      handleHoneypotTrigger(msg, hp, guildCfg).catch(err =>
+        logError('Honeypot trigger', err).catch(() => {}),
+      );
+      return;
+    }
+  }
+
   // ── Owner DM commands ───────────────────────────────────────────────────────
   if (!msg.guild && msg.author.id === OWNER_ID) {
     const parts = msg.content.trim().split(/\s+/);
@@ -2813,6 +2829,7 @@ client.once('ready', async () => {
     await setupDevServer(client);
     await logStartup(client);
     await startMetricsLoop(client);
+    await loadHoneypotConfigs();
   } catch (err) {
     console.error('[DevLogger] Ready handler error:', err.message);
   }

@@ -174,6 +174,29 @@ export async function initDatabase() {
     await pool.execute(sql);
   }
 
+  const honeypotTables = [
+    `CREATE TABLE IF NOT EXISTS honeypot_config (
+      guild_id         VARCHAR(20) PRIMARY KEY,
+      channel_id       VARCHAR(20) NOT NULL,
+      alert_channel_id VARCHAR(20),
+      action           VARCHAR(20) NOT NULL DEFAULT 'none',
+      created_at       INT NOT NULL,
+      created_by       VARCHAR(20) NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS honeypot_triggers (
+      id              INT AUTO_INCREMENT PRIMARY KEY,
+      guild_id        VARCHAR(20)  NOT NULL,
+      user_id         VARCHAR(20)  NOT NULL,
+      username        VARCHAR(200),
+      content_preview TEXT,
+      triggered_at    INT NOT NULL,
+      action_taken    VARCHAR(20)  NOT NULL DEFAULT 'none'
+    )`,
+  ];
+  for (const sql of honeypotTables) {
+    await pool.execute(sql).catch(() => {});
+  }
+
   const migrations = [
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS ad_warn_dm_log_channel_id VARCHAR(20)`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS level_log_channel_id VARCHAR(20)`,
