@@ -119,22 +119,50 @@ async function _setup(interaction) {
     ban:  'Ban',
   }[action] ?? action;
 
-  const embed = new EmbedBuilder()
+  // Post the decoy security embed into the trap channel
+  const trapEmbed = new EmbedBuilder()
+    .setTitle('🍯 Automated Security Verification System')
+    .setColor(0xFF6B35)
+    .setDescription(
+      'Welcome to the server security verification channel.\n\n' +
+      'This channel is part of our automated anti-abuse, anti-spam, and account integrity monitoring system. ' +
+      'It is used to detect compromised accounts, malicious automation, spam bots, selfbots, and unauthorized scripts attempting to interact with the server.\n\n' +
+      '**Please read carefully:**\n' +
+      '• Regular members should never send messages in this channel.\n' +
+      '• No verification, commands, or actions are required here.\n' +
+      '• Any message, command, link, attachment, emoji reaction, or automated interaction may be treated as suspicious activity.\n\n' +
+      'For security reasons, all activity in this channel is logged and analyzed in real time.\n\n' +
+      'Accounts detected sending unsolicited advertisements, scam links, mass mentions, phishing attempts, malicious content, or automated spam will be subject to immediate enforcement, including:\n\n' +
+      '• Automatic account flagging\n' +
+      '• Instant server ban\n' +
+      '• Moderator review and evidence logging\n' +
+      '• Cross-server threat reporting\n\n' +
+      'If your account has been compromised, remove any malicious applications, reset your password, enable two-factor authentication, and secure your connected devices immediately.\n\n' +
+      '**Warning:**\n' +
+      'Posting in this channel indicates either unauthorized automation or deliberate misuse. Any interaction may trigger automatic moderation actions without further warning.\n\n' +
+      '*No legitimate user should post here.*',
+    )
+    .setTimestamp();
+
+  await channel.send({ embeds: [trapEmbed] }).catch(() => {});
+
+  // Confirm back to the admin
+  const confirmEmbed = new EmbedBuilder()
     .setTitle('🍯 Honeypot Activated')
     .setColor(0xFF6B35)
     .setDescription(
-      `Any non-bot member who sends a message in <#${channel.id}> will be **caught and logged** immediately.` +
-      `\n\n⚠️ Do **not** link or mention this channel anywhere. Leave it sitting silently in your channel list.`,
+      `The trap embed has been posted in <#${channel.id}>.\n\n` +
+      `⚠️ Do **not** link or mention this channel anywhere. Leave it sitting silently in your channel list.`,
     )
     .addFields(
-      { name: '📍 Trap Channel',  value: `<#${channel.id}>`,                                 inline: true },
-      { name: '⚡ Action',        value: actionLabel,                                         inline: true },
+      { name: '📍 Trap Channel',  value: `<#${channel.id}>`,                                          inline: true },
+      { name: '⚡ Action',        value: actionLabel,                                                  inline: true },
       { name: '🔔 Alert Channel', value: alertChannel ? `<#${alertChannel.id}>` : 'Default log channel', inline: true },
     )
     .setTimestamp()
     .setFooter({ text: `Configured by ${interaction.user.tag}` });
 
-  await interaction.editReply({ embeds: [embed] });
+  await interaction.editReply({ embeds: [confirmEmbed] });
 }
 
 async function _disable(interaction) {
