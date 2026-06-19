@@ -19,6 +19,8 @@ import {
 } from '../devLogger.js';
 import { listAppEmojis, deleteAppEmoji } from '../appEmoji.js';
 import { getAllAutoReactEmojiIds } from '../database.js';
+import pool from '../../mysqldb.js';
+import { pendingApprovals, xpCooldowns, arCache, arReactCooldowns } from '../caches.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -182,6 +184,60 @@ export const defs = [
         .setDescription('Start typing a file name — omit to count the whole project')
         .setRequired(false)
         .setAutocomplete(true)),
+
+  // ── Database commands ────────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('db-status')
+    .setDescription('[Dev] Show database connection health and row counts for every table'),
+
+  new SlashCommandBuilder()
+    .setName('cache-clear')
+    .setDescription('[Dev] Wipe all in-memory caches (XP cooldowns, AR cache, pending approvals)'),
+
+  new SlashCommandBuilder()
+    .setName('backup')
+    .setDescription('[Dev] Show a full row-count snapshot of every database table'),
+
+  new SlashCommandBuilder()
+    .setName('userinfo')
+    .setDescription('[Dev] Look up a user by Discord ID — Discord profile + DB records')
+    .addStringOption(o =>
+      o.setName('id')
+        .setDescription('Discord user ID')
+        .setRequired(true)),
+
+  // ── Simulation commands ──────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('fakejoin')
+    .setDescription('[Dev] Simulate a member joining this server — fires guildMemberAdd')
+    .addUserOption(o =>
+      o.setName('user')
+        .setDescription('The member to simulate joining')
+        .setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('fakeleave')
+    .setDescription('[Dev] Simulate a member leaving this server — fires guildMemberRemove')
+    .addUserOption(o =>
+      o.setName('user')
+        .setDescription('The member to simulate leaving')
+        .setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('simulate-message')
+    .setDescription('[Dev] Emit a fake messageCreate event as any user — tests XP, auto-react, sticky, etc.')
+    .addUserOption(o =>
+      o.setName('user')
+        .setDescription('User to impersonate (defaults to you)')
+        .setRequired(false))
+    .addStringOption(o =>
+      o.setName('content')
+        .setDescription('Message content')
+        .setRequired(false))
+    .addChannelOption(o =>
+      o.setName('channel')
+        .setDescription('Channel to fire the event in (defaults to this channel)')
+        .setRequired(false)),
 ];
 
 // ── /whitelist Handler ────────────────────────────────────────────────────────
@@ -773,5 +829,308 @@ export async function handleDevLines(interaction) {
     } else {
       await interaction.editReply({ content: `❌ Error: ${err.message}` }).catch(() => {});
     }
+  }
+}
+
+// ── Database & Cache Helpers ───────────────────────────────────────────────────
+
+const DB_TABLES = [
+  'guilds', 'warns', 'ad_warns', 'strikes', 'jailed_users',
+  'message_counts', 'snipe_cache', 'balances', 'breaks', 'applications',
+  'levels', 'disabled_commands', 'bot_blacklist', 'network_applications',
+  'ad_channels', 'ad_posts', 'auto_reacts', 'sticky_messages',
+  'sticky_channel_state', 'hall_of_shame',
+];
+
+async function getTableCounts() {
+  const results = await Promise.all(
+    DB_TABLES.map(async t => {
+      try {
+        const [rows] = await pool.execute(`SELECT COUNT(*) AS c FROM \`${t}\``);
+        return { table: t, count: rows[0].c };
+      } catch {
+        return { table: t, count: null };
+      }
+    })
+  );
+  return results;
+}
+
+// ── /db-status ────────────────────────────────────────────────────────────────
+
+export async function handleDbStatus(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const start = Date.now();
+    await pool.execute('SELECT 1');
+    const pingMs = Date.now() - start;
+
+    const counts = await getTableCounts();
+    const rows = counts
+      .map(r => `\`${r.table.padEnd(26)}\` ${r.count === null ? '❌' : r.count.toLocaleString()}`)
+      .join('\n');
+
+    const embed = new EmbedBuilder()
+      .setTitle('🗄️ Database Status')
+      .setColor(0x57F287)
+      .addFields(
+        { name: '🏓 Ping',   value: `${pingMs}ms`, inline: true },
+        { name: '📋 Tables', value: String(DB_TABLES.length), inline: true },
+        { name: '📊 Row Counts', value: rows, inline: false },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · requested by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: db-status', err).catch(() => {});
+    if (!interaction.deferred) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+    else await interaction.editReply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /cache-clear ──────────────────────────────────────────────────────────────
+
+export async function handleCacheClear(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+
+    const sizes = {
+      xpCooldowns:      xpCooldowns.size,
+      arCache:          arCache.size,
+      arReactCooldowns: arReactCooldowns.size,
+      pendingApprovals: pendingApprovals.size,
+    };
+
+    xpCooldowns.clear();
+    arCache.clear();
+    arReactCooldowns.clear();
+    pendingApprovals.clear();
+
+    const total = Object.values(sizes).reduce((s, n) => s + n, 0);
+
+    const embed = new EmbedBuilder()
+      .setTitle('🧹 Cache Cleared')
+      .setColor(0x57F287)
+      .addFields(
+        { name: '⏱️ XP Cooldowns',      value: String(sizes.xpCooldowns),      inline: true },
+        { name: '✨ AR Cache',           value: String(sizes.arCache),           inline: true },
+        { name: '⏳ AR React Cooldowns', value: String(sizes.arReactCooldowns),  inline: true },
+        { name: '📋 Pending Approvals',  value: String(sizes.pendingApprovals),  inline: true },
+        { name: '🗑️ Total Evicted',      value: String(total),                   inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Cleared by ${interaction.user.tag}` });
+
+    await interaction.reply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: cache-clear', err).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /backup ───────────────────────────────────────────────────────────────────
+
+export async function handleBackup(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const counts = await getTableCounts();
+    const total  = counts.reduce((s, r) => s + (r.count ?? 0), 0);
+
+    const lines = counts
+      .map(r => `\`${r.table.padEnd(26)}\` **${r.count === null ? 'error' : r.count.toLocaleString()}**`)
+      .join('\n');
+
+    const embed = new EmbedBuilder()
+      .setTitle('💾 Database Snapshot')
+      .setColor(0x5865F2)
+      .setDescription(lines)
+      .addFields(
+        { name: '🔢 Total Rows', value: total.toLocaleString(), inline: true },
+        { name: '📋 Tables',     value: String(DB_TABLES.length), inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Snapshot by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: backup', err).catch(() => {});
+    if (!interaction.deferred) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+    else await interaction.editReply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /userinfo ─────────────────────────────────────────────────────────────────
+
+export async function handleUserInfo(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply();
+
+    const userId = interaction.options.getString('id').trim();
+    const guildId = interaction.guildId;
+
+    const discordUser = await client.users.fetch(userId).catch(() => null);
+    if (!discordUser) {
+      return interaction.editReply({ content: `❌ No Discord user found with ID \`${userId}\`.` });
+    }
+
+    const [warns, strikes, balanceRows, levelRows] = await Promise.all([
+      pool.execute('SELECT COUNT(*) AS c FROM warns WHERE user_id = ?', [userId]).then(([r]) => r[0].c).catch(() => '?'),
+      pool.execute('SELECT COUNT(*) AS c FROM strikes WHERE user_id = ?', [userId]).then(([r]) => r[0].c).catch(() => '?'),
+      guildId ? pool.execute('SELECT balance FROM balances WHERE guild_id = ? AND user_id = ?', [guildId, userId]).then(([r]) => r[0]?.balance ?? 0).catch(() => '?') : Promise.resolve('N/A'),
+      guildId ? pool.execute('SELECT total_xp FROM levels WHERE guild_id = ? AND user_id = ?', [guildId, userId]).then(([r]) => r[0]?.total_xp ?? 0).catch(() => '?') : Promise.resolve('N/A'),
+    ]);
+
+    const member = guildId ? await interaction.guild.members.fetch(userId).catch(() => null) : null;
+    const joinedAt = member ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : 'Not in server';
+    const roles = member
+      ? member.roles.cache.filter(r => r.id !== interaction.guild.id).map(r => `<@&${r.id}>`).join(' ') || 'None'
+      : 'N/A';
+
+    const embed = new EmbedBuilder()
+      .setTitle(`👤 ${discordUser.tag}`)
+      .setThumbnail(discordUser.displayAvatarURL({ size: 256 }))
+      .setColor(0x5865F2)
+      .addFields(
+        { name: '🆔 User ID',      value: `\`${discordUser.id}\``,                                     inline: true },
+        { name: '📅 Created',      value: `<t:${Math.floor(discordUser.createdTimestamp / 1000)}:R>`,   inline: true },
+        { name: '📥 Joined',       value: joinedAt,                                                     inline: true },
+        { name: '⚠️ Warns',        value: String(warns),   inline: true },
+        { name: '🔴 Strikes',      value: String(strikes), inline: true },
+        { name: '💰 Balance',      value: String(balanceRows), inline: true },
+        { name: '⭐ XP',           value: String(levelRows),   inline: true },
+        { name: '🤖 Bot',          value: discordUser.bot ? 'Yes' : 'No', inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: `Staff Portal · Dev Commands · requested by ${interaction.user.tag}` });
+
+    if (roles !== 'N/A') embed.addFields({ name: '🎭 Roles', value: roles.slice(0, 1024), inline: false });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: userinfo', err).catch(() => {});
+    if (!interaction.deferred) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+    else await interaction.editReply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /fakejoin ─────────────────────────────────────────────────────────────────
+
+export async function handleFakeJoin(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    if (!interaction.guild) return interaction.reply({ content: '❌ Must be used in a server.' });
+    await interaction.deferReply();
+
+    const user   = interaction.options.getUser('user');
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+
+    if (!member) {
+      return interaction.editReply({ content: `❌ ${user.tag} is not in this server — can't simulate join.` });
+    }
+
+    client.emit('guildMemberAdd', member);
+
+    const embed = new EmbedBuilder()
+      .setTitle('📥 Fake Join Fired')
+      .setColor(0x57F287)
+      .setThumbnail(user.displayAvatarURL({ size: 128 }))
+      .setDescription(`Emitted \`guildMemberAdd\` for **${user.tag}** (\`${user.id}\`).`)
+      .setTimestamp()
+      .setFooter({ text: `Triggered by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: fakejoin', err).catch(() => {});
+    if (!interaction.deferred) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+    else await interaction.editReply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /fakeleave ────────────────────────────────────────────────────────────────
+
+export async function handleFakeLeave(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    if (!interaction.guild) return interaction.reply({ content: '❌ Must be used in a server.' });
+    await interaction.deferReply();
+
+    const user   = interaction.options.getUser('user');
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+
+    if (!member) {
+      return interaction.editReply({ content: `❌ ${user.tag} is not in this server — can't simulate leave.` });
+    }
+
+    client.emit('guildMemberRemove', member);
+
+    const embed = new EmbedBuilder()
+      .setTitle('📤 Fake Leave Fired')
+      .setColor(0xED4245)
+      .setThumbnail(user.displayAvatarURL({ size: 128 }))
+      .setDescription(`Emitted \`guildMemberRemove\` for **${user.tag}** (\`${user.id}\`).`)
+      .setTimestamp()
+      .setFooter({ text: `Triggered by ${interaction.user.tag}` });
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: fakeleave', err).catch(() => {});
+    if (!interaction.deferred) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
+    else await interaction.editReply({ content: `❌ ${err.message}` }).catch(() => {});
+  }
+}
+
+// ── /simulate-message ─────────────────────────────────────────────────────────
+
+export async function handleSimulateMessage(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    if (!interaction.guild) return interaction.reply({ content: '❌ Must be used in a server.' });
+
+    const targetUser    = interaction.options.getUser('user')    ?? interaction.user;
+    const content       = interaction.options.getString('content') ?? '(no content)';
+    const targetChannel = interaction.options.getChannel('channel') ?? interaction.channel;
+
+    const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+
+    const fakeMsg = {
+      id:        '000000000000000001',
+      content,
+      author:    { id: targetUser.id, bot: false, tag: targetUser.tag },
+      guild:     interaction.guild,
+      guildId:   interaction.guild.id,
+      channel:   targetChannel,
+      channelId: targetChannel.id,
+      member,
+      mentions:  { has: () => false },
+      react:     () => Promise.resolve(),
+      reply:     () => Promise.resolve(),
+      delete:    () => Promise.resolve(),
+      createdTimestamp: Date.now(),
+    };
+
+    client.emit('messageCreate', fakeMsg);
+
+    const embed = new EmbedBuilder()
+      .setTitle('💬 Message Event Fired')
+      .setColor(0x5865F2)
+      .addFields(
+        { name: '👤 As User',   value: `${targetUser.tag} (\`${targetUser.id}\`)`, inline: true },
+        { name: '📍 Channel',   value: `<#${targetChannel.id}>`,                   inline: true },
+        { name: '💬 Content',   value: `\`${content.slice(0, 200)}\``,             inline: false },
+      )
+      .setDescription('`messageCreate` emitted — XP, auto-react, sticky, and ad-channel handlers all fired.')
+      .setTimestamp()
+      .setFooter({ text: `Triggered by ${interaction.user.tag}` });
+
+    await interaction.reply({ embeds: [embed] });
+  } catch (err) {
+    logError('Dev Command: simulate-message', err).catch(() => {});
+    if (!interaction.replied) await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
   }
 }

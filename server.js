@@ -13,6 +13,7 @@ const { REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle
 
 import client from './botClient.js';
 import db from './db.js';
+import { pendingApprovals, xpCooldowns, arCache, arReactCooldowns } from './src/caches.js';
 import { sendDM } from './dmRest.js';
 import { getClientIp, ipBlacklistMiddleware, rateLimit, checkVpn, isDiscordBot, sendBreachAlert } from './security.js';
 import applicationRoutes from './routes/applications.js';
@@ -48,6 +49,8 @@ import {
   handleDevStatus, handleDevLogs, handleDevReload, handleSetupDev,
   handleDevGuilds, handleDevGuildInfo, handleDevRestart, handleDevDebug,
   handleDevLines, handleDevLinesAutocomplete,
+  handleDbStatus, handleCacheClear, handleBackup, handleUserInfo,
+  handleFakeJoin, handleFakeLeave, handleSimulateMessage,
 } from './src/commands/dev-commands.js';
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
@@ -75,13 +78,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Register process-level error & shutdown handlers as early as possible
 registerProcessHandlers();
 
-// In-memory state for pending application approvals (role selection before confirm)
-const pendingApprovals = new Map(); // key: `GUILDID_APPROVERID` → { applicantId, staffRoleId, teamRoleId }
-const xpCooldowns = new Map(); // key: `${guildId}-${userId}` → last XP gain timestamp
-
 // ── Auto-react rate-limit infrastructure ──────────────────────────────────────
-const arCache           = new Map(); // userId → { ar, fetchedAt }
-const arReactCooldowns  = new Map(); // userId → last reaction timestamp
 const AR_CACHE_TTL      = 5 * 60 * 1000; // 5 min — re-fetch from DB after this
 const AR_REACT_COOLDOWN = 3_000;          // ms — max 1 reaction per user per 3 s
 const AR_QUEUE_MAX      = 20;             // drop silently if queue is this long
@@ -775,7 +772,14 @@ const botHandlers = {
   'dev-guild-info': handleDevGuildInfo,
   'dev-restart':    handleDevRestart,
   'dev-debug':      handleDevDebug,
-  'dev-lines':      handleDevLines,
+  'dev-lines':         handleDevLines,
+  'db-status':         handleDbStatus,
+  'cache-clear':       handleCacheClear,
+  'backup':            handleBackup,
+  'userinfo':          handleUserInfo,
+  'fakejoin':          handleFakeJoin,
+  'fakeleave':         handleFakeLeave,
+  'simulate-message':  handleSimulateMessage,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
