@@ -65,7 +65,7 @@ import {
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
   setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
-  logWarning, startMetricsLoop, registerProcessHandlers,
+  logWarning, logError, startMetricsLoop, registerProcessHandlers,
 } from './src/devLogger.js';
 
 import {
@@ -2621,9 +2621,33 @@ client.once('clientReady', async () => {
   if (CLIENT_ID) {
     try {
       const rest = new REST({ version: '10' }).setToken(TOKEN);
-      const allCommands = [...commandDefs, ...setupCommands].map(c => c.toJSON());
-      await rest.put(Routes.applicationCommands(CLIENT_ID), { body: allCommands });
-      console.log(`✅ Registered ${allCommands.length} slash commands globally`);
+      const allCommands = [...commandDefs, ...setupCommands];
+
+      // Discord global limit is 100 commands — split dev/test commands to guild-only
+      const DEV_CMD_NAMES = new Set([
+        'whitelist','dev-status','dev-logs','dev-reload','setup-dev','dev-guilds',
+        'dev-guild-info','dev-restart','dev-maintenance','dev-clean-emojis','dev-debug',
+        'dev-lines','db-status','cache-clear','backup','userinfo','fakejoin','fakeleave',
+        'simulate-message','testmessage','testreply','testembed','testbutton','testmodal',
+        'testselect','testjoin','testleave','testreaction','testtyping','testperms',
+        'testroles','testadmin','seeddata','cleartestdata','datacheck','benchmark',
+        'loadtest','ratelimit','forceerror','testfail','debug','testlongmsg',
+        'testunicode','testempty','testspam',
+      ]);
+
+      const prodCommands = allCommands.filter(c => !DEV_CMD_NAMES.has(c.name));
+      const devCommands  = allCommands.filter(c =>  DEV_CMD_NAMES.has(c.name));
+
+      // Register prod commands globally
+      await rest.put(Routes.applicationCommands(CLIENT_ID), { body: prodCommands.map(c => c.toJSON()) });
+      console.log(`✅ Registered ${prodCommands.length} slash commands globally`);
+
+      // Register dev commands to the dev/main guild only (keeps them off the global limit)
+      const DEV_GUILD_ID = process.env.DEV_GUILD_ID || process.env.MAIN_GUILD_ID;
+      if (DEV_GUILD_ID && devCommands.length > 0) {
+        await rest.put(Routes.applicationGuildCommands(CLIENT_ID, DEV_GUILD_ID), { body: devCommands.map(c => c.toJSON()) });
+        console.log(`🔧 Registered ${devCommands.length} dev commands to guild ${DEV_GUILD_ID}`);
+      }
     } catch (err) {
       console.error('❌ Failed to register commands:', err.message);
       logError('Slash Command Registration Failed', err).catch(() => {});
