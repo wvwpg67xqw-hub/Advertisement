@@ -541,9 +541,32 @@ export async function handleDevReload(interaction) {
         const { commandDefs }  = await import('./index.js');
         const { setupCommands } = await import('../setup.js');
         const rest = new REST({ version: '10' }).setToken(TOKEN);
-        const all  = [...commandDefs, ...setupCommands].map(c => c.toJSON());
-        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: all });
-        cmdResult = `✅ Re-registered **${all.length}** slash commands`;
+
+        const DEV_CMD_NAMES = new Set([
+          'whitelist','dev-status','dev-logs','dev-reload','setup-dev','dev-guilds',
+          'dev-guild-info','dev-restart','dev-maintenance','dev-clean-emojis','dev-debug',
+          'dev-lines','db-status','cache-clear','backup','userinfo','fakejoin','fakeleave',
+          'simulate-message','testmessage','testreply','testembed','testbutton','testmodal',
+          'testselect','testjoin','testleave','testreaction','testtyping','testperms',
+          'testroles','testadmin','seeddata','cleartestdata','datacheck','benchmark',
+          'loadtest','ratelimit','forceerror','testfail','debug','testlongmsg',
+          'testunicode','testempty','testspam',
+        ]);
+
+        const all         = [...commandDefs, ...setupCommands];
+        const prodCmds    = all.filter(c => !DEV_CMD_NAMES.has(c.name)).map(c => c.toJSON());
+        const devCmds     = all.filter(c =>  DEV_CMD_NAMES.has(c.name)).map(c => c.toJSON());
+        const DEV_GUILD_ID = process.env.DEV_GUILD_ID;
+
+        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: prodCmds });
+        cmdResult = `✅ Re-registered **${prodCmds.length}** global commands`;
+
+        if (DEV_GUILD_ID && devCmds.length > 0) {
+          await rest.put(Routes.applicationGuildCommands(CLIENT_ID, DEV_GUILD_ID), { body: devCmds });
+          cmdResult += ` + **${devCmds.length}** dev commands → guild \`${DEV_GUILD_ID}\``;
+        } else if (!DEV_GUILD_ID) {
+          cmdResult += ` (${devCmds.length} dev commands skipped — DEV_GUILD_ID not set)`;
+        }
       } catch (err) {
         cmdResult = `❌ ${err.message}`;
         logError('Dev Reload: command registration', err).catch(() => {});
