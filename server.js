@@ -37,7 +37,6 @@ import {
   handleResignRequest, handleUpdate,
   handleWarnUserContextMenu, handleAdWarnMessageContextMenu,
   handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel,
-  handleModGuide, handleModGuideButton,
   handleStatus, handleActivity,
   handleUnblockAll,
   handleSticky,
@@ -768,7 +767,6 @@ const botHandlers = {
   'setup-staff-server': handleSetupStaffServer,
   'setup-dm-command': handleSetupDmCommand,
   'setup-wizard': handleSetupWizard,
-  modguide: handleModGuide,
   status: handleStatus,
   activity: handleActivity,
   'unblock-all': handleUnblockAll,
@@ -2142,9 +2140,6 @@ if (id.startsWith('app_')) {
       await handleRequestButton(interaction);
     }
 
-    if (interaction.isButton() && interaction.customId?.startsWith('modguide:')) {
-      await handleModGuideButton(interaction);
-    }
 
     if (interaction.isButton() && interaction.customId?.startsWith('report:')) {
       await handleReportButton(interaction);

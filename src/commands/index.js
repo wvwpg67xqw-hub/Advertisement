@@ -7,7 +7,6 @@ export { defs as utilityDefs } from './utility.js';
 export { defs as breaksDefs } from './breaks.js';
 export { defs as staffDefs } from './staff.js';
 export { defs as levelingDefs } from './leveling.js';
-export { defs as modGuideDefs } from './modguide.js';
 export { defs as botSettingsDefs } from './botsettings.js';
 export { defs as devtoolsDefs } from './devtools.js';
 export { defs as devCommandDefs } from './dev-commands.js';
@@ -23,7 +22,6 @@ import { defs as utilityDefs } from './utility.js';
 import { defs as breaksDefs } from './breaks.js';
 import { defs as staffDefs } from './staff.js';
 import { defs as levelingDefs } from './leveling.js';
-import { defs as modGuideDefs } from './modguide.js';
 import { defs as botSettingsDefs } from './botsettings.js';
 import { defs as devtoolsDefs } from './devtools.js';
 import { defs as devCommandDefs } from './dev-commands.js';
@@ -41,7 +39,6 @@ export const commandDefs = [
   ...breaksDefs,
   ...staffDefs,
   ...levelingDefs,
-  ...modGuideDefs,
   ...botSettingsDefs,
   ...devtoolsDefs,
   ...devCommandDefs,
@@ -59,7 +56,6 @@ export { handleMessages, handleMessageLeaderboard, handleCaseInfo, handleBalance
 export { handleCurrentBreaks, handleBreakRequest, handleManageBreak } from './breaks.js';
 export { handleResignRequest, handleUpdate } from './staff.js';
 export { handleToggleLeveling, handleLevel, handleLevelLeaderboard, handleAddXp, handleRemoveXp, handleAddLevel, handleSetLevel } from './leveling.js';
-export { handleModGuide, handleModGuideButton } from './modguide.js';
 export { handleStatus, handleActivity } from './botsettings.js';
 export { handleUnblockAll } from './devtools.js';
 export { handleWhitelist, handleDevMaintenance, handleDevCleanEmojis } from './dev-commands.js';
