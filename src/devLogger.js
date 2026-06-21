@@ -13,6 +13,7 @@ const CHANNEL_DEFS = [
   { name: 'metrics',      publicView: true  },
   { name: 'warnings',     publicView: false },
   { name: 'dev-chat',     publicView: false },
+  { name: 'bug-reports',  publicView: false },
 ];
 
 // ── Internal State ────────────────────────────────────────────────────────────
@@ -118,6 +119,10 @@ export async function setupDevServer(client) {
     console.error('[DevLogger] Setup failed:', err.message);
   }
 }
+
+// ── Public Channel Accessor ───────────────────────────────────────────────────
+
+export function getBugReportChannel() { return ch['bug-reports'] ?? null; }
 
 // ── Internal Send ─────────────────────────────────────────────────────────────
 

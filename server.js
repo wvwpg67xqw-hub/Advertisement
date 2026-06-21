@@ -62,6 +62,10 @@ import {
   defs as honeypotDefs,
   handleHoneypot, honeypotCache, handleHoneypotTrigger, loadHoneypotConfigs,
 } from './src/commands/honeypot.js';
+import {
+  defs as reportDefs,
+  handleReport, handleReportModal, handleReportButton,
+} from './src/commands/report.js';
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
 import {
   setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
@@ -815,6 +819,7 @@ const botHandlers = {
   'testempty':         handleTestEmpty,
   'testspam':          handleTestSpam,
   'honeypot':          handleHoneypot,
+  'report':            handleReport,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
@@ -2140,6 +2145,14 @@ if (id.startsWith('app_')) {
     if (interaction.isButton() && interaction.customId?.startsWith('modguide:')) {
       await handleModGuideButton(interaction);
     }
+
+    if (interaction.isButton() && interaction.customId?.startsWith('report:')) {
+      await handleReportButton(interaction);
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId === 'report:modal') {
+      await handleReportModal(interaction);
+    }
   } catch (err) {
     console.error('Interaction error:', err);
     logError(`Interaction Error — /${interaction.commandName ?? interaction.customId ?? '?'}`, err).catch(() => {});
@@ -2619,7 +2632,7 @@ client.once('clientReady', async () => {
   if (CLIENT_ID) {
     try {
       const rest = new REST({ version: '10' }).setToken(TOKEN);
-      const allCommands = [...commandDefs, ...setupCommands, ...honeypotDefs];
+      const allCommands = [...commandDefs, ...setupCommands, ...honeypotDefs, ...reportDefs];
 
       // Discord global limit is 100 commands — split dev/test commands to guild-only
       const DEV_CMD_NAMES = new Set([
