@@ -1,0 +1,39 @@
+v22.23.0
+:/home/container$ if [ ! -d .git ]; then git clone https://github.com/wvwpg67xqw-hub/Advertisement .; fi; if [[ "${AUTO_UPDATE}" == "1" ]]; then git pull; fi; if [ -f /home/container/package.json ]; then npm install; fi; if [[ "${MAIN_FILE}" == "*.js" ]]; then node index.js; else node index.js; fi # Added by FeatherPanel (Server Startup)
+remote: Enumerating objects: 41, done.[K
+remote: Counting objects:   2% (1/41)[Kremote: Counting objects:   4% (2/41)[Kremote: Counting objects:   7% (3/41)[Kremote: Counting objects:   9% (4/41)[Kremote: Counting objects:  12% (5/41)[Kremote: Counting objects:  14% (6/41)[Kremote: Counting objects:  17% (7/41)[Kremote: Counting objects:  19% (8/41)[Kremote: Counting objects:  21% (9/41)[Kremote: Counting objects:  24% (10/41)[Kremote: Counting objects:  26% (11/41)[Kremote: Counting objects:  29% (12/41)[Kremote: Counting objects:  31% (13/41)[Kremote: Counting objects:  34% (14/41)[Kremote: Counting objects:  36% (15/41)[Kremote: Counting objects:  39% (16/41)[Kremote: Counting objects:  41% (17/41)[Kremote: Counting objects:  43% (18/41)[Kremote: Counting objects:  46% (19/41)[Kremote: Counting objects:  48% (20/41)[Kremote: Counting objects:  51% (21/41)[Kremote: Counting objects:  53% (22/41)[Kremote: Counting objects:  56% (23/41)[Kremote: Counting objects:  58% (24/41)[Kremote: Counting objects:  60% (25/41)[Kremote: Counting objects:  63% (26/41)[Kremote: Counting objects:  65% (27/41)[Kremote: Counting objects:  68% (28/41)[Kremote: Counting objects:  70% (29/41)[Kremote: Counting objects:  73% (30/41)[Kremote: Counting objects:  75% (31/41)[Kremote: Counting objects:  78% (32/41)[Kremote: Counting objects:  80% (33/41)[Kremote: Counting objects:  82% (34/41)[Kremote: Counting objects:  85% (35/41)[Kremote: Counting objects:  87% (36/41)[Kremote: Counting objects:  90% (37/41)[Kremote: Counting objects:  92% (38/41)[Kremote: Counting objects:  95% (39/41)[Kremote: Counting objects:  97% (40/41)[Kremote: Counting objects: 100% (41/41)[Kremote: Counting objects: 100% (41/41), done.[K
+remote: Compressing objects:  16% (1/6)[Kremote: Compressing objects:  33% (2/6)[Kremote: Compressing objects:  50% (3/6)[Kremote: Compressing objects:  66% (4/6)[Kremote: Compressing objects:  83% (5/6)[Kremote: Compressing objects: 100% (6/6)[Kremote: Compressing objects: 100% (6/6), done.[K
+remote: Total 33 (delta 27), reused 33 (delta 27), pack-reused 0 (from 0)[K
+Unpacking objects:   3% (1/33)Unpacking objects:   6% (2/33)Unpacking objects:   9% (3/33)Unpacking objects:  12% (4/33)Unpacking objects:  15% (5/33)Unpacking objects:  18% (6/33)Unpacking objects:  21% (7/33)Unpacking objects:  24% (8/33)Unpacking objects:  27% (9/33)Unpacking objects:  30% (10/33)Unpacking objects:  33% (11/33)Unpacking objects:  36% (12/33)Unpacking objects:  39% (13/33)Unpacking objects:  42% (14/33)Unpacking objects:  45% (15/33)Unpacking objects:  48% (16/33)Unpacking objects:  51% (17/33)Unpacking objects:  54% (18/33)Unpacking objects:  57% (19/33)Unpacking objects:  60% (20/33)Unpacking objects:  63% (21/33)Unpacking objects:  66% (22/33)Unpacking objects:  69% (23/33)Unpacking objects:  72% (24/33)Unpacking objects:  75% (25/33)Unpacking objects:  78% (26/33)Unpacking objects:  81% (27/33)Unpacking objects:  84% (28/33)Unpacking objects:  87% (29/33)Unpacking objects:  90% (30/33)Unpacking objects:  93% (31/33)Unpacking objects:  96% (32/33)Unpacking objects: 100% (33/33)Unpacking objects: 100% (33/33), 8.37 KiB | 69.00 KiB/s, done.
+From https://github.com/wvwpg67xqw-hub/Advertisement
+   38342dd..51148f4  main       -> origin/main
+Updating 38342dd..51148f4
+Fast-forward
+ mysqldb.js                       |  13 [32m++[m
+ server.js                        |   8 [32m+[m[31m-[m
+ src/commands/index.js            |   3 [32m+[m
+ src/commands/invite-blacklist.js | 340 [32m+++++++++++++++++++++++++++++++++++++++[m
+ src/setup.js                     |  16 [32m+[m[31m-[m
+ src/utils.js                     |  15 [32m+[m[31m-[m
+ 6 files changed, 381 insertions(+), 14 deletions(-)
+ create mode 100644 src/commands/invite-blacklist.js
+\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K
+up to date, audited 121 packages in 14s
+|[1G[0K
+|[1G[0K31 packages are looking for funding
+|[1G[0K  run `npm fund` for details
+|[1G[0K
+[31m[1m4[22m[39m vulnerabilities (3 [33m[1mmoderate[22m[39m, 1 [31m[1mhigh[22m[39m)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+/[1G[0K🚀 Staff Portal running on port 25742
+🤖 Logged in as Eclipse Moderation#7062
+✅ MySQL tables initialized
+✅ Registered 79 slash commands globally
+🔧 Registered 45 dev commands to dev guild 1472759140232204551
+🌐 Auto-linked 6 servers to network hub (1487744336908124190)
+✅ [DevLogger] Dev server setup complete
+✅ [DevLogger] Dev server setup complete
