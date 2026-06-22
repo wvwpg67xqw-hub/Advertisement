@@ -32,28 +32,8 @@ export async function loadHoneypotConfigs() {
 export const defs = [
   new SlashCommandBuilder()
     .setName('honeypot')
-    .setDescription('Trap channel that silently catches and acts on unauthorized message senders')
+    .setDescription('Manage the honeypot trap channel for this server')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand(s =>
-      s.setName('setup')
-        .setDescription('Enable the honeypot in a channel')
-        .addChannelOption(o =>
-          o.setName('channel').setDescription('The trap channel (leave this blank and unlinked in your server)').setRequired(true))
-        .addStringOption(o =>
-          o.setName('action')
-            .setDescription('What to do when someone triggers the trap')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Log only — record and alert, no punishment',   value: 'none' },
-              { name: 'DM — warn the user via direct message',        value: 'dm' },
-              { name: 'Timeout — 24-hour Discord timeout',            value: 'timeout' },
-              { name: 'Kick — remove from server',                    value: 'kick' },
-              { name: 'Ban — permanently ban',                        value: 'ban' },
-            ))
-        .addChannelOption(o =>
-          o.setName('alert_channel')
-            .setDescription('Where to post trigger alerts (defaults to your configured log channel)')
-            .setRequired(false)))
     .addSubcommand(s =>
       s.setName('disable')
         .setDescription('Disable and remove the honeypot for this server'))
@@ -77,7 +57,6 @@ export async function handleHoneypot(interaction) {
     await interaction.deferReply();
     const sub = interaction.options.getSubcommand();
 
-    if (sub === 'setup')   return await _setup(interaction);
     if (sub === 'disable') return await _disable(interaction);
     if (sub === 'status')  return await _status(interaction);
     if (sub === 'list')    return await _list(interaction);
@@ -90,34 +69,25 @@ export async function handleHoneypot(interaction) {
   }
 }
 
-async function _setup(interaction) {
-  const channel      = interaction.options.getChannel('channel');
-  const action       = interaction.options.getString('action');
-  const alertChannel = interaction.options.getChannel('alert_channel') ?? null;
-  const now          = Math.floor(Date.now() / 1000);
+// ── Shared setup helper — called from /setup command ─────────────────────────
+
+export async function configureHoneypot({ guildId, channel, action, alertChannel, userId }) {
+  const now = Math.floor(Date.now() / 1000);
 
   await pool.execute(
     `INSERT INTO honeypot_config (guild_id, channel_id, alert_channel_id, action, created_at, created_by)
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id), alert_channel_id = VALUES(alert_channel_id),
        action = VALUES(action), created_at = VALUES(created_at), created_by = VALUES(created_by)`,
-    [interaction.guildId, channel.id, alertChannel?.id ?? null, action, now, interaction.user.id],
+    [guildId, channel.id, alertChannel?.id ?? null, action, now, userId],
   );
 
-  honeypotCache.set(interaction.guildId, {
-    guild_id:         interaction.guildId,
+  honeypotCache.set(guildId, {
+    guild_id:         guildId,
     channel_id:       channel.id,
     alert_channel_id: alertChannel?.id ?? null,
     action,
   });
-
-  const actionLabel = {
-    none: 'Log only',
-    dm:   'DM warning',
-    timeout: '24h timeout',
-    kick: 'Kick',
-    ban:  'Ban',
-  }[action] ?? action;
 
   // Post the decoy security embed into the trap channel
   const trapEmbed = new EmbedBuilder()
@@ -146,23 +116,11 @@ async function _setup(interaction) {
 
   await channel.send({ embeds: [trapEmbed] }).catch(() => {});
 
-  // Confirm back to the admin
-  const confirmEmbed = new EmbedBuilder()
-    .setTitle('🍯 Honeypot Activated')
-    .setColor(0xFF6B35)
-    .setDescription(
-      `The trap embed has been posted in <#${channel.id}>.\n\n` +
-      `⚠️ Do **not** link or mention this channel anywhere. Leave it sitting silently in your channel list.`,
-    )
-    .addFields(
-      { name: '📍 Trap Channel',  value: `<#${channel.id}>`,                                          inline: true },
-      { name: '⚡ Action',        value: actionLabel,                                                  inline: true },
-      { name: '🔔 Alert Channel', value: alertChannel ? `<#${alertChannel.id}>` : 'Default log channel', inline: true },
-    )
-    .setTimestamp()
-    .setFooter({ text: `Configured by ${interaction.user.tag}` });
-
-  await interaction.editReply({ embeds: [confirmEmbed] });
+  return {
+    channelId:       channel.id,
+    alertChannelId:  alertChannel?.id ?? null,
+    action,
+  };
 }
 
 async function _disable(interaction) {
@@ -184,7 +142,7 @@ async function _disable(interaction) {
 async function _status(interaction) {
   const cfg = honeypotCache.get(interaction.guildId);
   if (!cfg) {
-    return interaction.editReply({ content: '❌ No honeypot is configured in this server. Use `/honeypot setup` to activate one.' });
+    return interaction.editReply({ content: '❌ No honeypot is configured in this server. Use `/setup honeypot-channel:` to activate one.' });
   }
 
   const [[{ total }]] = await pool.execute(

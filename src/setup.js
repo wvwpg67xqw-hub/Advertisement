@@ -2,6 +2,7 @@ import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, ButtonBuilder, ActionRowBuilder, ButtonStyle } = pkg;
 import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo, setAsStaffServer, unsetStaffServer, getStaffServer, disableDmCommand, enableDmCommand, getDmDisabledCommands } from './database.js';
 import { hasCommandPermission } from './utils.js';
+import { configureHoneypot } from './commands/honeypot.js';
 
 const ALL_COMMANDS = [
   'warn',
@@ -32,7 +33,19 @@ export const setupCommands = [
     .addRoleOption(o => o.setName('break-role').setDescription('Role given to staff on break in this server'))
     .addRoleOption(o => o.setName('main-break-role').setDescription('Role given to staff on break in the main server'))
     .addChannelOption(o => o.setName('level-log').setDescription('Channel where level-up announcements are posted'))
-    .addChannelOption(o => o.setName('level-channel').setDescription('Channel where messages earn XP (leave blank = all channels)')),
+    .addChannelOption(o => o.setName('level-channel').setDescription('Channel where messages earn XP (leave blank = all channels)'))
+    .addChannelOption(o => o.setName('honeypot-channel').setDescription('Honeypot trap channel — leave it unlisted and unlinked'))
+    .addStringOption(o =>
+      o.setName('honeypot-action')
+        .setDescription('What to do when someone triggers the honeypot')
+        .addChoices(
+          { name: 'Log only — record and alert, no punishment', value: 'none' },
+          { name: 'DM — warn the user via direct message',      value: 'dm' },
+          { name: 'Timeout — 24-hour Discord timeout',          value: 'timeout' },
+          { name: 'Kick — remove from server',                  value: 'kick' },
+          { name: 'Ban — permanently ban',                      value: 'ban' },
+        ))
+    .addChannelOption(o => o.setName('honeypot-alert-channel').setDescription('Where to post honeypot trigger alerts (defaults to log channel)')),
 
   new SlashCommandBuilder()
     .setName('setup-roles')
@@ -219,6 +232,9 @@ export async function handleSetup(interaction) {
   const breakRequestChannel = interaction.options.getChannel('break-request-channel');
   const breakRole = interaction.options.getRole('break-role');
   const mainBreakRole = interaction.options.getRole('main-break-role');
+  const honeypotChannel = interaction.options.getChannel('honeypot-channel');
+  const honeypotAction = interaction.options.getString('honeypot-action');
+  const honeypotAlertChannel = interaction.options.getChannel('honeypot-alert-channel');
 
   if (logChannel) fields.log_channel_id = logChannel.id;
   if (warnLog) fields.warn_log_channel_id = warnLog.id;
@@ -235,24 +251,52 @@ export async function handleSetup(interaction) {
   if (breakRole) fields.break_role_id = breakRole.id;
   if (mainBreakRole) fields.main_break_role_id = mainBreakRole.id;
 
-  if (Object.keys(fields).length === 0) {
+  // Honeypot — handled separately (own table), requires both channel + action
+  let honeypotResult = null;
+  if (honeypotChannel && honeypotAction) {
+    honeypotResult = await configureHoneypot({
+      guildId:      interaction.guildId,
+      channel:      honeypotChannel,
+      action:       honeypotAction,
+      alertChannel: honeypotAlertChannel ?? null,
+      userId:       interaction.user.id,
+    });
+  } else if (honeypotChannel && !honeypotAction) {
+    return interaction.reply({ content: '❌ Please also provide `honeypot-action` when setting a honeypot channel.', flags: 64 });
+  }
+
+  if (Object.keys(fields).length === 0 && !honeypotResult) {
     return interaction.reply({ content: '❌ You must provide at least one option to configure.', flags: 64 });
   }
 
-  await setGuildConfig(interaction.guildId, fields);
+  if (Object.keys(fields).length > 0) await setGuildConfig(interaction.guildId, fields);
+
+  const actionLabel = { none: 'Log only', dm: 'DM warning', timeout: '24h timeout', kick: 'Kick', ban: 'Ban' };
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
     .setTitle('✅ Bot Configured')
     .setDescription('The following settings have been saved:')
-    .addFields(
+    .setTimestamp();
+
+  if (Object.keys(fields).length > 0) {
+    embed.addFields(
       Object.entries(fields).map(([k, v]) => ({
         name: k.replace(/_/g, ' ').replace(/\bid\b/, '').trim(),
         value: k.includes('role') ? `<@&${v}>` : `<#${v}>`,
         inline: true,
       }))
-    )
-    .setTimestamp();
+    );
+  }
+
+  if (honeypotResult) {
+    embed.addFields(
+      { name: '🍯 Honeypot Channel',  value: `<#${honeypotResult.channelId}>`,                                                         inline: true },
+      { name: '⚡ Honeypot Action',   value: actionLabel[honeypotResult.action] ?? honeypotResult.action,                               inline: true },
+      { name: '🔔 Honeypot Alerts',   value: honeypotResult.alertChannelId ? `<#${honeypotResult.alertChannelId}>` : 'Default log channel', inline: true },
+    );
+    embed.setFooter({ text: '⚠️ Do not link or mention the trap channel anywhere.' });
+  }
 
   await interaction.reply({ embeds: [embed] });
 }
