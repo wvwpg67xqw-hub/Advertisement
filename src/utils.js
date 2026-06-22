@@ -57,6 +57,9 @@ export function getStaffRank(member, roleIds = null) {
 
   const hierarchyEnabled = !!(modRoleId || teamLeadRoleId || adminRoleId);
 
+  // Discord Administrator always gets rank 3 regardless of configured roles
+  if (member.permissions.has('Administrator')) return 3;
+
   if (hierarchyEnabled) {
     if (adminRoleId      && member.roles.cache.has(adminRoleId))      return 3;
     if (teamLeadRoleId   && member.roles.cache.has(teamLeadRoleId))   return 2;
@@ -64,7 +67,6 @@ export function getStaffRank(member, roleIds = null) {
     return 0;
   }
 
-  if (member.permissions.has('Administrator')) return 3;
   return 0;
 }
 
@@ -144,6 +146,9 @@ export async function hasCommandPermission(member, commandName) {
   if (!member) return false;
   const OWNER_IDS = ['1453592157607825595', process.env.OWNER_ID].filter(Boolean);
   if (OWNER_IDS.includes(member.user.id)) return true;
+
+  // Discord Administrator permission always grants full access
+  if (member.permissions.has('Administrator')) return true;
 
   const networkRoleIds = await resolveNetworkRoleIds(member.guild.id);
   const networkEnabled = !!(networkRoleIds.ownerRoleId || networkRoleIds.modRoleId || networkRoleIds.teamLeadRoleId || networkRoleIds.adminRoleId);
