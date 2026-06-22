@@ -255,6 +255,7 @@ export async function handleMassBlacklist(interaction) {
 const INVITE_RE = /discord(?:\.gg|(?:app)?\.com\/invite)\/([a-zA-Z0-9\-]{2,32})/gi;
 
 export async function checkInviteBlacklist(msg) {
+  // Only skip other bots — no bypass for admins, staff, server owner, or any role
   if (!msg.guild || msg.author.bot) return;
 
   const content = msg.content;
