@@ -323,17 +323,19 @@ export async function checkInviteBlacklist(msg) {
     if (blocked.has(targetGuildId)) {
       await msg.delete().catch(() => {});
 
-      const warn = await msg.channel.send({
+      await msg.author.send({
         embeds: [
           new EmbedBuilder()
             .setColor(0xED4245)
             .setTitle('🚫 Invite Blocked')
-            .setDescription(`${msg.author}, that server's invite link is not allowed here.`)
+            .setDescription(
+              `Your message in **${msg.guild.name}** was removed because it contained an invite link to a server that is not allowed there.\n\n` +
+              `If you believe this is a mistake, please contact a staff member.`,
+            )
             .setTimestamp(),
         ],
-      }).catch(() => null);
+      }).catch(() => {});
 
-      if (warn) setTimeout(() => warn.delete().catch(() => {}), 8000);
       return;
     }
   }
