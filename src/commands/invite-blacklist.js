@@ -2,6 +2,7 @@ import discordPkg from 'discord.js';
 const { SlashCommandBuilder, EmbedBuilder } = discordPkg;
 
 import pool from '../../mysqldb.js';
+import client from '../../botClient.js';
 import { getStaffRank } from '../utils.js';
 import { deny } from './shared.js';
 
@@ -190,7 +191,7 @@ export async function handleBlacklistServer(interaction) {
   }
 }
 
-// ── /mass-blacklist handler ───────────────────────────────────────────────────
+// ── /mass-blacklist handler — applies to ALL guilds the bot is in ─────────────
 
 export async function handleMassBlacklist(interaction) {
   if (!guard(interaction)) return;
@@ -203,30 +204,45 @@ export async function handleMassBlacklist(interaction) {
     return interaction.editReply({ content: '❌ No valid server IDs found. IDs must be 17–20 digit snowflakes.' });
   }
 
-  const guildId = interaction.guildId;
-  if (!cache.has(guildId)) await loadCache(guildId);
+  const allGuildIds = [...client.guilds.cache.keys()];
+  const addedBy     = interaction.user.id;
+  const now         = Math.floor(Date.now() / 1000);
 
-  const already = [];
+  // Track which IDs are genuinely new vs already everywhere
   const added   = [];
+  const already = [];
 
-  for (const id of ids) {
-    if (cache.get(guildId).has(id)) {
-      already.push(id);
-    } else {
-      await addBlocked(guildId, id, interaction.user.id);
-      added.push(id);
+  for (const blockedId of ids) {
+    let newInAny = false;
+
+    for (const gId of allGuildIds) {
+      if (!cache.has(gId)) await loadCache(gId);
+
+      if (!cache.get(gId).has(blockedId)) {
+        await pool.execute(
+          `INSERT IGNORE INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at)
+           VALUES (?, ?, ?, ?)`,
+          [gId, blockedId, addedBy, now],
+        );
+        cache.get(gId).add(blockedId);
+        newInAny = true;
+      }
     }
+
+    if (newInAny) added.push(blockedId);
+    else already.push(blockedId);
   }
 
   const fields = [];
-  if (added.length)   fields.push({ name: `✅ Added (${added.length})`,           value: added.map(id => `\`${id}\``).join('\n').slice(0, 1024),   inline: false });
-  if (already.length) fields.push({ name: `⚠️ Already blacklisted (${already.length})`, value: already.map(id => `\`${id}\``).join('\n').slice(0, 1024), inline: false });
+  if (added.length)   fields.push({ name: `✅ Added to ${allGuildIds.length} servers (${added.length} IDs)`,   value: added.map(id => `\`${id}\``).join('\n').slice(0, 1024),   inline: false });
+  if (already.length) fields.push({ name: `⚠️ Already fully blacklisted (${already.length})`, value: already.map(id => `\`${id}\``).join('\n').slice(0, 1024), inline: false });
 
   return interaction.editReply({
     embeds: [
       new EmbedBuilder()
-        .setTitle('🚫 Mass Blacklist Complete')
+        .setTitle('🚫 Network Mass Blacklist Complete')
         .setColor(added.length > 0 ? 0xED4245 : 0xFEE75C)
+        .setDescription(`Applied across **${allGuildIds.length}** servers in the network.`)
         .addFields(...fields)
         .setFooter({ text: `Run by ${interaction.user.tag}` })
         .setTimestamp(),
