@@ -174,6 +174,19 @@ export async function initDatabase() {
     await pool.execute(sql);
   }
 
+  const inviteBlacklistTable = [
+    `CREATE TABLE IF NOT EXISTS invite_blacklist (
+      guild_id         VARCHAR(20),
+      blocked_guild_id VARCHAR(20),
+      added_by         VARCHAR(20),
+      added_at         INT,
+      PRIMARY KEY (guild_id, blocked_guild_id)
+    )`,
+  ];
+  for (const sql of inviteBlacklistTable) {
+    await pool.execute(sql).catch(() => {});
+  }
+
   const honeypotTables = [
     `CREATE TABLE IF NOT EXISTS honeypot_config (
       guild_id         VARCHAR(20) PRIMARY KEY,

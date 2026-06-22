@@ -33,6 +33,7 @@ import {
   handleBreakRequest, handleManageBreak,
   handleResetMessages, handleResetMessagesAll, handleReleaseNotes, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel,
   handleAutoReact, handleAutoReactClear, handleBuy,
+  handleBlacklistServer, handleMassBlacklist, checkInviteBlacklist,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleUpdate,
   handleWarnUserContextMenu, handleAdWarnMessageContextMenu,
@@ -758,6 +759,8 @@ const botHandlers = {
   ar: handleAutoReact,
   'ar-clear': handleAutoReactClear,
   buy: handleBuy,
+  blacklist:       handleBlacklistServer,
+  'mass-blacklist': handleMassBlacklist,
   'resign-request': handleResignRequest, update: handleUpdate,
   level: handleLevel, 'level-leaderboard': handleLevelLeaderboard,
   'add-xp': handleAddXp, 'remove-xp': handleRemoveXp,
@@ -2345,6 +2348,9 @@ client.on('messageCreate', async (msg) => {
   }
 
   if (!msg.guild) return;
+
+  // ── Invite blacklist filter ──────────────────────────────────────────────────
+  checkInviteBlacklist(msg).catch(() => {});
 
   await incrementMessageCount(msg.guild.id, msg.author.id);
   if (await isAdChannel(msg.guild.id, msg.channel.id)) await trackAdPost(msg.guild.id, msg.channel.id, msg.id, msg.author.id);
