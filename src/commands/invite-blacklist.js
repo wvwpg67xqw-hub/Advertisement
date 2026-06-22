@@ -84,11 +84,17 @@ export const defs = [
 
   new SlashCommandBuilder()
     .setName('mass-blacklist')
-    .setDescription('Blacklist multiple servers at once by ID')
-    .addStringOption(o =>
-      o.setName('ids')
-        .setDescription('Space or comma-separated server IDs')
-        .setRequired(true)),
+    .setDescription('Add or remove multiple servers from the invite blacklist across the entire network')
+    .addSubcommand(sub =>
+      sub.setName('add')
+        .setDescription('Blacklist multiple servers across every guild in the network')
+        .addStringOption(o =>
+          o.setName('ids').setDescription('Space or comma-separated server IDs').setRequired(true)))
+    .addSubcommand(sub =>
+      sub.setName('remove')
+        .setDescription('Remove multiple servers from the blacklist across every guild in the network')
+        .addStringOption(o =>
+          o.setName('ids').setDescription('Space or comma-separated server IDs').setRequired(true))),
 ];
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
@@ -197,6 +203,7 @@ export async function handleMassBlacklist(interaction) {
   if (!guard(interaction)) return;
   await interaction.deferReply({ ephemeral: true });
 
+  const sub = interaction.options.getSubcommand();
   const raw = interaction.options.getString('ids');
   const ids = [...new Set(raw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{17,20}$/.test(s)))];
 
@@ -205,49 +212,83 @@ export async function handleMassBlacklist(interaction) {
   }
 
   const allGuildIds = [...client.guilds.cache.keys()];
-  const addedBy     = interaction.user.id;
   const now         = Math.floor(Date.now() / 1000);
 
-  // Track which IDs are genuinely new vs already everywhere
-  const added   = [];
-  const already = [];
+  if (sub === 'add') {
+    const added   = [];
+    const already = [];
 
-  for (const blockedId of ids) {
-    let newInAny = false;
-
-    for (const gId of allGuildIds) {
-      if (!cache.has(gId)) await loadCache(gId);
-
-      if (!cache.get(gId).has(blockedId)) {
-        await pool.execute(
-          `INSERT IGNORE INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at)
-           VALUES (?, ?, ?, ?)`,
-          [gId, blockedId, addedBy, now],
-        );
-        cache.get(gId).add(blockedId);
-        newInAny = true;
+    for (const blockedId of ids) {
+      let newInAny = false;
+      for (const gId of allGuildIds) {
+        if (!cache.has(gId)) await loadCache(gId);
+        if (!cache.get(gId).has(blockedId)) {
+          await pool.execute(
+            `INSERT IGNORE INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at) VALUES (?, ?, ?, ?)`,
+            [gId, blockedId, interaction.user.id, now],
+          );
+          cache.get(gId).add(blockedId);
+          newInAny = true;
+        }
       }
+      if (newInAny) added.push(blockedId);
+      else already.push(blockedId);
     }
 
-    if (newInAny) added.push(blockedId);
-    else already.push(blockedId);
+    const fields = [];
+    if (added.length)   fields.push({ name: `✅ Blacklisted across ${allGuildIds.length} servers (${added.length} IDs)`, value: added.map(id => `\`${id}\``).join('\n').slice(0, 1024),   inline: false });
+    if (already.length) fields.push({ name: `⚠️ Already fully blacklisted (${already.length})`,                          value: already.map(id => `\`${id}\``).join('\n').slice(0, 1024), inline: false });
+
+    return interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle('🚫 Network Mass Blacklist — Added')
+          .setColor(added.length > 0 ? 0xED4245 : 0xFEE75C)
+          .setDescription(`Applied across **${allGuildIds.length}** servers in the network.`)
+          .addFields(...fields)
+          .setFooter({ text: `Run by ${interaction.user.tag}` })
+          .setTimestamp(),
+      ],
+    });
   }
 
-  const fields = [];
-  if (added.length)   fields.push({ name: `✅ Added to ${allGuildIds.length} servers (${added.length} IDs)`,   value: added.map(id => `\`${id}\``).join('\n').slice(0, 1024),   inline: false });
-  if (already.length) fields.push({ name: `⚠️ Already fully blacklisted (${already.length})`, value: already.map(id => `\`${id}\``).join('\n').slice(0, 1024), inline: false });
+  if (sub === 'remove') {
+    const removed   = [];
+    const notFound  = [];
 
-  return interaction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setTitle('🚫 Network Mass Blacklist Complete')
-        .setColor(added.length > 0 ? 0xED4245 : 0xFEE75C)
-        .setDescription(`Applied across **${allGuildIds.length}** servers in the network.`)
-        .addFields(...fields)
-        .setFooter({ text: `Run by ${interaction.user.tag}` })
-        .setTimestamp(),
-    ],
-  });
+    for (const blockedId of ids) {
+      let removedFromAny = false;
+      for (const gId of allGuildIds) {
+        if (!cache.has(gId)) await loadCache(gId);
+        if (cache.get(gId).has(blockedId)) {
+          await pool.execute(
+            'DELETE FROM invite_blacklist WHERE guild_id = ? AND blocked_guild_id = ?',
+            [gId, blockedId],
+          );
+          cache.get(gId).delete(blockedId);
+          removedFromAny = true;
+        }
+      }
+      if (removedFromAny) removed.push(blockedId);
+      else notFound.push(blockedId);
+    }
+
+    const fields = [];
+    if (removed.length)  fields.push({ name: `✅ Removed from ${allGuildIds.length} servers (${removed.length} IDs)`, value: removed.map(id => `\`${id}\``).join('\n').slice(0, 1024),   inline: false });
+    if (notFound.length) fields.push({ name: `⚠️ Not found in blacklist (${notFound.length})`,                        value: notFound.map(id => `\`${id}\``).join('\n').slice(0, 1024), inline: false });
+
+    return interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle('✅ Network Mass Blacklist — Removed')
+          .setColor(removed.length > 0 ? 0x57F287 : 0xFEE75C)
+          .setDescription(`Cleared across **${allGuildIds.length}** servers in the network.`)
+          .addFields(...fields)
+          .setFooter({ text: `Run by ${interaction.user.tag}` })
+          .setTimestamp(),
+      ],
+    });
+  }
 }
 
 // ── Message filter — call this from messageCreate ─────────────────────────────
