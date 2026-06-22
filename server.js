@@ -929,7 +929,7 @@ client.on('interactionCreate', async (interaction) => {
             .setTitle('📖 All Setup Commands')
             .setDescription('Run these commands in your server to configure each section.')
             .addFields(
-              { name: '👑 Staff Ranks',         value: '`/setup-staff-roles` — Set Mod / Team Lead / Admin / Owner roles', inline: false },
+              { name: '👑 Staff Ranks',         value: '`/setup-staff-roles` — Set Mod / Team Lead / Board of Directors / Owner roles', inline: false },
               { name: '📋 Log Channels',         value: '`/setup` — Set log channels, jail role, muted role, break role', inline: false },
               { name: '🔨 Moderation',           value: '`/setup` — Add `jail-role` and `muted-role` options', inline: false },
               { name: '☕ Break System',          value: '`/setup-break` — Set break request channel and break role', inline: false },

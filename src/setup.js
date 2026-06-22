@@ -547,7 +547,7 @@ export async function handleNetworkStatus(interaction) {
       .addFields(
         { name: '🔹 Mod Role',       value: config.hub_mod_role_id       ? `<@&${config.hub_mod_role_id}>` : '`Not set`', inline: true },
         { name: '🔸 Team Lead Role', value: config.hub_team_lead_role_id ? `<@&${config.hub_team_lead_role_id}>` : '`Not set`', inline: true },
-        { name: '🔴 Admin Role',     value: config.hub_admin_role_id     ? `<@&${config.hub_admin_role_id}>` : '`Not set`', inline: true },
+        { name: '🔴 Board of Directors Role', value: config.hub_admin_role_id ? `<@&${config.hub_admin_role_id}>` : '`Not set`', inline: true },
         { name: '👑 Owner Role',     value: config.hub_owner_role_id     ? `<@&${config.hub_owner_role_id}>` : '`Not set`', inline: true },
       )
       .setTimestamp();
@@ -668,9 +668,9 @@ export async function handleSetupStaffRoles(interaction) {
         .setTitle('🏷️ Staff Role Configuration')
         .setDescription('Current staff rank roles for this server. Run this command with options to update them.')
         .addFields(
-          { name: '🟡 Mod (Rank 1)',       value: rl(config.hub_mod_role_id),       inline: true },
-          { name: '🟠 Team Lead (Rank 2)', value: rl(config.hub_team_lead_role_id), inline: true },
-          { name: '🔴 Admin (Rank 3)',     value: rl(config.hub_admin_role_id),     inline: true },
+          { name: '🟡 Mod (Rank 1)',                   value: rl(config.hub_mod_role_id),       inline: true },
+          { name: '🟠 Team Lead (Rank 2)',             value: rl(config.hub_team_lead_role_id), inline: true },
+          { name: '🔴 Board of Directors (Rank 3)',    value: rl(config.hub_admin_role_id),     inline: true },
         )
         .setFooter({ text: 'These override MOD_ROLE_ID / TEAM_LEAD_ROLE_ID / ADMIN_ROLE_ID env vars.' })
         .setTimestamp()],
@@ -695,9 +695,9 @@ export async function handleSetupStaffRoles(interaction) {
       .setTitle('✅ Staff Roles Configured')
       .setDescription('Staff ranks for this server are now set. No env vars needed.')
       .addFields(
-        { name: '🟡 Mod (Rank 1)',       value: rl(saved.hub_mod_role_id),       inline: true },
-        { name: '🟠 Team Lead (Rank 2)', value: rl(saved.hub_team_lead_role_id), inline: true },
-        { name: '🔴 Admin (Rank 3)',     value: rl(saved.hub_admin_role_id),     inline: true },
+        { name: '🟡 Mod (Rank 1)',                value: rl(saved.hub_mod_role_id),       inline: true },
+        { name: '🟠 Team Lead (Rank 2)',          value: rl(saved.hub_team_lead_role_id), inline: true },
+        { name: '🔴 Board of Directors (Rank 3)', value: rl(saved.hub_admin_role_id),     inline: true },
       )
       .setTimestamp()],
   });
@@ -946,7 +946,7 @@ export function buildWizardEmbed(config, guildName) {
       items: [
         { label: 'Mod Role',       value: config.hub_mod_role_id,       type: 'role' },
         { label: 'Team Lead Role', value: config.hub_team_lead_role_id, type: 'role' },
-        { label: 'Admin Role',     value: config.hub_admin_role_id,     type: 'role' },
+        { label: 'Board of Directors Role', value: config.hub_admin_role_id, type: 'role' },
         { label: 'Owner Role',     value: config.hub_owner_role_id,     type: 'role' },
       ],
       cmd: '`/setup-staff-roles`',

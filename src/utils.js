@@ -3,7 +3,7 @@ import { getCommandRoles, resolveNetworkRoleIds } from './database.js';
 
 // ─── Staff Hierarchy ──────────────────────────────────────────────────────────
 
-const RANK_LABELS = { 5: 'Owner', 4: 'Server Owner', 3: 'Administration', 2: 'Team Lead', 1: 'Mod', 0: 'Non-Staff' };
+const RANK_LABELS = { 5: 'Owner', 4: 'Server Owner', 3: 'Board of Directors', 2: 'Team Lead', 1: 'Mod', 0: 'Non-Staff' };
 
 const COMMAND_MIN_RANK = {
   // MOD (1) ─────────────────────────────────────────────
@@ -26,7 +26,7 @@ const COMMAND_MIN_RANK = {
   addbalance: 2,
   setbalance: 3,
 
-  // ADMINISTRATION (3) ──────────────────────────────────
+  // BOARD OF DIRECTORS (3) ─────────────────────────────
   ban: 3, fire: 3,
   'network-ban': 3, 'network-unban': 3, 'network-status': 3,
   setup: 3, 'setup-roles': 3, 'setup-edit': 3, 'setup-status': 3,
@@ -38,7 +38,7 @@ const COMMAND_MIN_RANK = {
 
 /**
  * Returns the staff rank (0–3) of a guild member based on role ID env vars.
- * 3 = ADMINISTRATION, 2 = TEAM LEAD, 1 = MOD, 0 = non-staff.
+ * 3 = BOARD OF DIRECTORS, 2 = TEAM LEAD, 1 = MOD, 0 = non-staff.
  *
  * Falls back to Discord Administrator = rank 3 when no hierarchy env vars are set,
  * so the system keeps working out-of-the-box before roles are configured.
@@ -153,7 +153,7 @@ export async function hasCommandPermission(member, commandName) {
   if (hierarchyEnabled) {
     const roleIds  = networkEnabled ? networkRoleIds : null;
     const userRank = getStaffRank(member, roleIds);
-    if (userRank >= 3) return true; // Admin and above can use any command
+    if (userRank >= 3) return true; // Board of Directors and above can use any command
     const minRank  = COMMAND_MIN_RANK[commandName] ?? 3;
     return userRank >= minRank;
   }
