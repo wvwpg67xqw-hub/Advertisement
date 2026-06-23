@@ -188,14 +188,6 @@ export async function initDatabase() {
     await pool.execute(sql).catch(() => {});
   }
 
-  // ── Column migrations (safe: ignore if already exists) ─────────────────────
-  const migrations = [
-    `ALTER TABLE guilds ADD COLUMN abuse_log_channel_id VARCHAR(20)`,
-  ];
-  for (const sql of migrations) {
-    await pool.execute(sql).catch(() => {}); // ignore "Duplicate column" errors
-  }
-
   const honeypotTables = [
     `CREATE TABLE IF NOT EXISTS honeypot_config (
       guild_id         VARCHAR(20) PRIMARY KEY,
@@ -250,6 +242,7 @@ export async function initDatabase() {
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS is_staff_server TINYINT(1) DEFAULT 0`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS staff_guild_id VARCHAR(20)`,
     `ALTER TABLE auto_reacts ADD COLUMN IF NOT EXISTS ar_expires_at DATETIME NULL`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS abuse_log_channel_id VARCHAR(20)`,
   ];
 
   const extraTables = [

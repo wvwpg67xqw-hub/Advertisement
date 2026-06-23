@@ -579,7 +579,7 @@ export async function handleDevReload(interaction) {
           'testselect','testjoin','testleave','testreaction','testtyping','testperms',
           'testroles','testadmin','seeddata','cleartestdata','datacheck','benchmark',
           'loadtest','ratelimit','forceerror','testfail','debug','testlongmsg',
-          'testunicode','testempty','testspam','dev-test-abuse',
+          'testunicode','testempty','testspam','dev-test-abuse','setup-logging',
         ]);
 
         const all         = [...commandDefs, ...setupCommands];
