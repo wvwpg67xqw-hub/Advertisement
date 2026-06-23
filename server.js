@@ -82,7 +82,7 @@ import {
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds, clearNetworkHub, clearHubGuildId, getNetworkMembers } from './src/database.js';
 import { initDatabase } from './mysqldb.js';
 import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
@@ -2723,10 +2723,76 @@ client.on('guildCreate', async (guild) => {
   }
 });
 
-client.on('guildDelete', (guild) => {
+client.on('guildDelete', async (guild) => {
   logGuildLeave(guild).catch(() => {});
   db.setApplyServerActive(guild.id, false);
   console.log(`🖥️  Marked server "${guild.name}" (${guild.id}) as inactive in apply_servers (bot removed)`);
+
+  try {
+    const guildRecord = await getBotGuild(guild.id).catch(() => null);
+    if (!guildRecord) return;
+
+    if (guildRecord.is_hub) {
+      // This server WAS the network hub — clear hub status and unlink all members
+      await clearNetworkHub(guild.id);
+      const members = await getNetworkMembers(guild.id).catch(() => []);
+      for (const m of members) {
+        await clearHubGuildId(m.guild_id).catch(() => {});
+      }
+      console.log(`🌐 Bot left hub "${guild.name}" (${guild.id}) — cleared hub status and unlinked ${members.length} member server(s) from the network.`);
+
+      // Notify the hub server's owner if possible via any remaining reachable guild
+      const hubGuild = client.guilds.cache.get(guild.id);
+      if (!hubGuild) {
+        // Try to DM the guild owner through Discord REST
+        try {
+          const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+          const guildData = await rest.get(Routes.guild(guild.id)).catch(() => null);
+          if (guildData?.owner_id) {
+            await sendDM(guildData.owner_id,
+              `⚠️ **Network Disconnected** — The bot was removed from your network hub **${guild.name}**. ` +
+              `All ${members.length} linked server(s) have been automatically unlinked from the network to prevent routing errors. ` +
+              `Re-add the bot and run \`/setup-network-hub\` then \`/setup-network-join\` in each server to restore the network.`
+            ).catch(() => {});
+          }
+        } catch { /* best effort */ }
+      }
+    } else if (guildRecord.hub_guild_id) {
+      // This server WAS a network member — unlink it from the hub
+      const hubGuildId = guildRecord.hub_guild_id;
+      await clearHubGuildId(guild.id);
+      console.log(`🌐 Bot left member server "${guild.name}" (${guild.id}) — automatically unlinked from network hub ${hubGuildId}.`);
+
+      // Notify the hub if it's still reachable
+      try {
+        const hubGuild = client.guilds.cache.get(hubGuildId);
+        if (hubGuild) {
+          const hubConfig = await getBotGuild(hubGuildId).catch(() => null);
+          const logChannelId = hubConfig?.log_channel_id || hubConfig?.request_log_channel_id;
+          if (logChannelId) {
+            const logChannel = hubGuild.channels.cache.get(logChannelId);
+            if (logChannel?.isTextBased()) {
+              await logChannel.send({
+                embeds: [
+                  new EmbedBuilder()
+                    .setColor(0xFF4444)
+                    .setTitle('🌐 Network Member Disconnected')
+                    .setDescription(
+                      `**${guild.name}** (\`${guild.id}\`) was removed from the network because the bot left that server.\n\n` +
+                      `It has been automatically unlinked to prevent unreachable routing errors. ` +
+                      `Re-add the bot to that server and run \`/setup-network-join\` there to restore the connection.`
+                    )
+                    .setTimestamp()
+                ]
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch { /* best effort */ }
+    }
+  } catch (err) {
+    console.error(`❌ Error during network auto-disconnect for guild ${guild.id}:`, err.message);
+  }
 });
 
 // ── Break Auto-Expiry ─────────────────────────────────────────────────────────
