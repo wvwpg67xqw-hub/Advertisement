@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilde
 import { addBlacklist, getNetworkMembers, getGuild } from '../database.js';
 import { hasCommandPermission, getStaffRank, sendLog, buildRequestEmbed } from '../utils.js';
 import { resolveNetworkRoleIds } from '../database.js';
+import { addBlocked } from './invite-blacklist.js';
 
 export const defs = [
   new SlashCommandBuilder()
@@ -13,10 +14,10 @@ export const defs = [
 
   new SlashCommandBuilder()
     .setName('blacklist-request')
-    .setDescription('Submit a blacklist request')
-    .addUserOption(o => o.setName('user').setDescription('User to blacklist').setRequired(true))
-    .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true))
-    .addStringOption(o => o.setName('proof').setDescription('Image URL or description of proof')),
+    .setDescription('Submit a request to blacklist a server\'s invites')
+    .addStringOption(o => o.setName('server_id').setDescription('Discord Server ID to blacklist').setRequired(true))
+    .addStringOption(o => o.setName('reason').setDescription('Reason for the blacklist').setRequired(true))
+    .addStringOption(o => o.setName('proof').setDescription('Image URL or description of proof').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('network-ban-request')
@@ -46,17 +47,28 @@ function buildRequestButtons(type, targetId, originGuildId, disabled = false) {
 
 async function handleRequest(interaction, type) {
   if (!await hasCommandPermission(interaction.member, `${type}-request`)) return deny(interaction);
-  const target = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
-  const proof = interaction.options.getString('proof');
-  const embed = buildRequestEmbed({ type, requesterId: interaction.user.id, targetId: target.id, reason, proof });
+  const proof  = interaction.options.getString('proof');
   const config = await getGuild(interaction.guildId);
+
+  if (type === 'blacklist') {
+    const serverId = interaction.options.getString('server_id').trim();
+    if (!/^\d{17,20}$/.test(serverId)) {
+      return interaction.reply({ content: '❌ Invalid server ID. Must be a 17–20 digit Discord snowflake.', flags: 64 });
+    }
+    const embed = buildRequestEmbed({ type, requesterId: interaction.user.id, targetServerId: serverId, reason, proof });
+    await sendLog(interaction.guild, config, 'blacklist-request', embed, [buildRequestButtons('blacklist', serverId, interaction.guildId)]);
+    return interaction.reply({ content: '✅ Blacklist request submitted.', flags: 64 });
+  }
+
+  const target = interaction.options.getUser('user');
+  const embed  = buildRequestEmbed({ type, requesterId: interaction.user.id, targetId: target.id, reason, proof });
   await sendLog(interaction.guild, config, `${type}-request`, embed, [buildRequestButtons(type, target.id, interaction.guildId)]);
   await interaction.reply({ content: '✅ Request submitted.', flags: 64 });
 }
 
-export const handleBanRequest = i => handleRequest(i, 'ban');
-export const handleBlacklistRequest = i => handleRequest(i, 'blacklist');
+export const handleBanRequest        = i => handleRequest(i, 'ban');
+export const handleBlacklistRequest  = i => handleRequest(i, 'blacklist');
 export const handleNetworkBanRequest = i => handleRequest(i, 'network-ban');
 export const handlePartnershipRequest = i => handleRequest(i, 'partnership');
 
@@ -84,8 +96,8 @@ export async function handleRequestButton(interaction) {
           resultText = `Banned from **${targetGuild.name}**`;
         } else { resultText = '⚠️ Origin server unreachable — ban was NOT applied'; resultColor = 0xFEE75C; }
       } else if (type === 'blacklist') {
-        await addBlacklist(originGuildId, targetId, interaction.user.id, reason);
-        resultText = 'Added to blacklist';
+        await addBlocked(originGuildId, targetId, interaction.user.id);
+        resultText = `Server \`${targetId}\` invite-blacklisted in <#${originGuildId}> — invites to that server will now be auto-deleted`;
       } else if (type === 'network-ban') {
         const members = await getNetworkMembers(interaction.guildId);
         const results = [];

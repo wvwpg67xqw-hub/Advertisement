@@ -280,12 +280,16 @@ export function buildRequestEmbed(fields) {
     'network-ban': '🌐 Network Ban Request',
     partnership: '🤝 Partnership Request',
   };
+  const targetField = fields.targetServerId
+    ? { name: 'Target Server ID', value: `\`${fields.targetServerId}\``, inline: true }
+    : { name: 'Target User', value: `<@${fields.targetId}> (${fields.targetId})`, inline: true };
+
   const embed = new EmbedBuilder()
     .setColor(colors[fields.type] || 0x5865F2)
     .setTitle(titles[fields.type] || 'Request')
     .addFields(
       { name: 'Requested By', value: `<@${fields.requesterId}>`, inline: true },
-      { name: 'Target User', value: `<@${fields.targetId}> (${fields.targetId})`, inline: true },
+      targetField,
       { name: 'Reason', value: fields.reason }
     )
     .setTimestamp();

@@ -31,7 +31,7 @@ export async function preloadInviteBlacklist(guilds) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function addBlocked(guildId, blockedGuildId, addedBy) {
+export async function addBlocked(guildId, blockedGuildId, addedBy) {
   await pool.execute(
     `INSERT IGNORE INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at)
      VALUES (?, ?, ?, ?)`,
