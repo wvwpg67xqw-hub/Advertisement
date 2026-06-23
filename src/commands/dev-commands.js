@@ -386,7 +386,26 @@ export const defs = [
         .setDescription('Show all active abuse-tracker entries in memory'))
     .addSubcommand(sub =>
       sub.setName('reset')
-        .setDescription('Clear all in-memory abuse tracker counters')),
+        .setDescription('Clear all in-memory abuse tracker counters'))
+    .addSubcommand(sub =>
+      sub.setName('simulate')
+        .setDescription('Send a fake abuse alert directly to #abuse-alerts to test channel routing')
+        .addStringOption(o =>
+          o.setName('action')
+            .setDescription('Action type to fake (default: warn)')
+            .setRequired(false)
+            .addChoices(
+              { name: 'mute',    value: 'mute'    },
+              { name: 'warn',    value: 'warn'    },
+              { name: 'ad-warn', value: 'ad-warn' },
+              { name: 'strike',  value: 'strike'  },
+              { name: 'ban',     value: 'ban'     },
+              { name: 'jail',    value: 'jail'    },
+            ))
+        .addUserOption(o =>
+          o.setName('target')
+            .setDescription('Fake target user (defaults to you)')
+            .setRequired(false))),
 ];
 
 // ── /whitelist Handler ────────────────────────────────────────────────────────
@@ -2236,6 +2255,63 @@ export async function handleTestAbuse(interaction) {
         .setTimestamp();
 
       return interaction.editReply({ embeds: [embed] });
+    }
+
+    // ── simulate ─────────────────────────────────────────────────────────────
+    if (sub === 'simulate') {
+      const action = interaction.options.getString('action') || 'warn';
+      const target = interaction.options.getUser('target') || interaction.user;
+
+      const { getGuild } = await import('../database.js');
+      const config = await getGuild(interaction.guildId);
+
+      const channelId = config?.abuse_log_channel_id || config?.log_channel_id;
+      if (!channelId) {
+        return interaction.editReply({ content: '❌ No abuse log or general log channel configured. Run `/setup-logging` or `/setup-edit` first.' });
+      }
+
+      const logChannel = interaction.guild.channels.cache.get(channelId);
+      if (!logChannel) {
+        return interaction.editReply({ content: `❌ Channel <#${channelId}> not found in this server. Was it deleted?` });
+      }
+
+      const actionLabels = {
+        mute: '🔇 Mute', warn: '⚠️ Warn', 'ad-warn': '📢 Ad-Warn',
+        strike: '❗ Strike', ban: '🔨 Ban', jail: '🔒 Jail',
+      };
+
+      const alertEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('🚨 [SIMULATED] Staff Abuse Alert')
+        .setDescription(
+          `**${actionLabels[action] || action}** was used repeatedly in a short window.\n` +
+          `This is a **simulated** alert fired by <@${interaction.user.id}> via \`/dev-test-abuse simulate\`.`
+        )
+        .addFields(
+          { name: '👮 Moderator',   value: `<@${interaction.user.id}>`, inline: true },
+          { name: '🎯 Target',      value: `<@${target.id}>`,           inline: true },
+          { name: '⚡ Action',      value: `\`${action}\``,              inline: true },
+          { name: '📍 Channel',     value: channelId === config?.abuse_log_channel_id ? '✅ Routed to #abuse-alerts' : '⚠️ Fell back to general log (no abuse_log_channel_id set)', inline: false },
+        )
+        .setFooter({ text: 'SIMULATED — no real action was taken' })
+        .setTimestamp();
+
+      await logChannel.send({
+        content: `<@&1518775422836539442>`,
+        embeds: [alertEmbed],
+      });
+
+      return interaction.editReply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('✅ Simulation Sent')
+          .setDescription(`Fake abuse alert posted to <#${channelId}>.`)
+          .addFields(
+            { name: 'Channel', value: `<#${channelId}>`, inline: true },
+            { name: 'Routing', value: channelId === config?.abuse_log_channel_id ? '`abuse_log_channel_id`' : '`log_channel_id` (fallback)', inline: true },
+          )
+          .setTimestamp()],
+      });
     }
   } catch (err) {
     logError('Dev: test-abuse', err).catch(() => {});
