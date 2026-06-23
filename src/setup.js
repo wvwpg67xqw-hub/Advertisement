@@ -614,26 +614,41 @@ export async function handleNetworkStatus(interaction) {
 
   const members = await getNetworkMembers(hubGuildId);
 
-  const memberLines = members.map(({ guild_id }) => {
+  const reachable = [];
+  const purged = [];
+
+  for (const { guild_id } of members) {
     const g = interaction.client.guilds.cache.get(guild_id);
-    if (g) return `✅ **${g.name}** (${guild_id})`;
-    return `⚠️ **Unreachable** (${guild_id}) — bot may have left`;
-  });
+    if (g) {
+      reachable.push(`✅ **${g.name}** (\`${guild_id}\`)`);
+    } else {
+      // Bot is no longer in this server — remove it from the network automatically
+      await clearHubGuildId(guild_id).catch(() => {});
+      purged.push(`\`${guild_id}\``);
+    }
+  }
 
   const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
+    .setColor(purged.length ? 0xFEE75C : 0x5865F2)
     .setTitle('🌐 Network Status')
     .addFields(
       {
         name: 'Hub Server',
-        value: `${hubReachable ? '✅' : '⚠️'} **${hubName}** (${hubGuildId})${viewingAsHub ? ' — **(this server)**' : ''}`,
+        value: `${hubReachable ? '✅' : '⚠️'} **${hubName}** (\`${hubGuildId}\`)${viewingAsHub ? ' — **(this server)**' : ''}`,
       },
       {
-        name: `Linked Servers (${members.length})`,
-        value: memberLines.length ? memberLines.join('\n') : '*No servers linked yet. Run `/setup-network-join` in each main server.*',
+        name: `Linked Servers (${reachable.length})`,
+        value: reachable.length ? reachable.join('\n') : '*No servers linked yet. Run `/setup-network-join` in each main server.*',
       }
     )
     .setTimestamp();
+
+  if (purged.length) {
+    embed.addFields({
+      name: `🧹 Auto-Removed (${purged.length})`,
+      value: `The following servers were unreachable (bot was removed) and have been automatically unlinked:\n${purged.join(', ')}\n\nRe-add the bot and run \`/setup-network-join\` to reconnect them.`,
+    });
+  }
 
   await interaction.reply({ embeds: [embed] });
 }
