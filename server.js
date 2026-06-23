@@ -57,6 +57,7 @@ import {
   handleBenchmark, handleLoadTest, handleRateLimit, handleForceError,
   handleTestFail, handleDebug, handleTestLongMsg, handleTestUnicode,
   handleTestEmpty, handleTestSpam, handleDevTestInteraction,
+  handleTestAbuse,
 } from './src/commands/dev-commands.js';
 import {
   defs as honeypotDefs,
@@ -819,6 +820,7 @@ const botHandlers = {
   'testunicode':       handleTestUnicode,
   'testempty':         handleTestEmpty,
   'testspam':          handleTestSpam,
+  'dev-test-abuse':    handleTestAbuse,
   'honeypot':          handleHoneypot,
   'report':            handleReport,
 };

@@ -358,6 +358,35 @@ export const defs = [
     .setDescription('[Dev] Send N messages in rapid succession to test rate limiting')
     .addIntegerOption(o =>
       o.setName('count').setDescription('Number of messages (1–10, default 5)').setMinValue(1).setMaxValue(10).setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('dev-test-abuse')
+    .setDescription('[Dev] Test the command-abuse detection system')
+    .addSubcommand(sub =>
+      sub.setName('trigger')
+        .setDescription('Simulate repeated actions to fire an abuse alert')
+        .addStringOption(o =>
+          o.setName('action')
+            .setDescription('Action to simulate')
+            .setRequired(true)
+            .addChoices(
+              { name: 'mute',    value: 'mute'    },
+              { name: 'warn',    value: 'warn'    },
+              { name: 'ad-warn', value: 'ad-warn' },
+              { name: 'strike',  value: 'strike'  },
+              { name: 'ban',     value: 'ban'     },
+              { name: 'jail',    value: 'jail'    },
+            ))
+        .addStringOption(o =>
+          o.setName('target_id')
+            .setDescription('Fake target user ID (defaults to your own ID)')
+            .setRequired(false)))
+    .addSubcommand(sub =>
+      sub.setName('status')
+        .setDescription('Show all active abuse-tracker entries in memory'))
+    .addSubcommand(sub =>
+      sub.setName('reset')
+        .setDescription('Clear all in-memory abuse tracker counters')),
 ];
 
 // ── /whitelist Handler ────────────────────────────────────────────────────────
@@ -550,7 +579,7 @@ export async function handleDevReload(interaction) {
           'testselect','testjoin','testleave','testreaction','testtyping','testperms',
           'testroles','testadmin','seeddata','cleartestdata','datacheck','benchmark',
           'loadtest','ratelimit','forceerror','testfail','debug','testlongmsg',
-          'testunicode','testempty','testspam',
+          'testunicode','testempty','testspam','dev-test-abuse',
         ]);
 
         const all         = [...commandDefs, ...setupCommands];
@@ -2121,5 +2150,95 @@ export async function handleDevTestInteraction(interaction) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: `❌ ${err.message}` }).catch(() => {});
     }
+  }
+}
+
+// ── /dev-test-abuse ────────────────────────────────────────────────────────────
+
+export async function handleTestAbuse(interaction) {
+  try {
+    if (!await devGuard(interaction)) return;
+    await interaction.deferReply({ ephemeral: true });
+
+    const { trackAbuse, _store, RULES: _rules } = await import('../abuseDetector.js');
+    const sub = interaction.options.getSubcommand();
+
+    // ── status ──────────────────────────────────────────────────────────────
+    if (sub === 'status') {
+      if (_store.size === 0) {
+        return interaction.editReply({ content: '📭 Abuse tracker is empty — no active counters.' });
+      }
+
+      const now = Date.now();
+      const lines = [];
+      for (const [key, times] of _store.entries()) {
+        const live = times.filter(t => t > now - 10 * 60_000);
+        if (live.length === 0) continue;
+        const oldest = Math.round((now - Math.min(...live)) / 1000);
+        lines.push(`\`${key}\` — **${live.length}** hit(s), oldest **${oldest}s** ago`);
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('🔍 Abuse Tracker — Live State')
+        .setDescription(lines.length ? lines.join('\n') : '*(all entries expired)*')
+        .setFooter({ text: `${_store.size} key(s) total in store` })
+        .setTimestamp();
+
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    // ── reset ────────────────────────────────────────────────────────────────
+    if (sub === 'reset') {
+      const count = _store.size;
+      _store.clear();
+      return interaction.editReply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('🧹 Abuse Tracker Reset')
+          .setDescription(`Cleared **${count}** key(s) from the in-memory store.`)
+          .setTimestamp()],
+      });
+    }
+
+    // ── trigger ──────────────────────────────────────────────────────────────
+    if (sub === 'trigger') {
+      const action   = interaction.options.getString('action');
+      const targetId = interaction.options.getString('target_id') || interaction.user.id;
+
+      // Rules lookup (re-import exposes RULES array)
+      const { default: abuseModule } = await import('../abuseDetector.js').catch(() => ({}));
+
+      // Fire enough times to guarantee a threshold breach
+      const FIRE_COUNT = 5;
+      const results = [];
+      for (let i = 1; i <= FIRE_COUNT; i++) {
+        await trackAbuse({ guild: interaction.guild, action, moderatorId: interaction.user.id, targetId });
+        const key = [..._store.keys()].find(k => k.includes(action) && k.includes(interaction.user.id)) ?? '(fired)';
+        const hits = _store.get(key)?.length ?? 0;
+        results.push(`Run **${i}** — tracker hits: **${hits === 0 ? '0 (alert fired & reset)' : hits}**`);
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0xFF4444)
+        .setTitle(`🚨 Abuse Test — \`${action}\``)
+        .setDescription(
+          `Fired \`trackAbuse\` **${FIRE_COUNT}×** as <@${interaction.user.id}> targeting <@${targetId}>.\n` +
+          `An alert embed should have posted to your server log channel and pinged <@&1518775422836539442>.\n\n` +
+          results.join('\n')
+        )
+        .addFields(
+          { name: '👮 Simulated Moderator', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '🎯 Simulated Target',    value: `<@${targetId}>`,            inline: true },
+          { name: '⚡ Action',              value: `\`${action}\``,              inline: true },
+        )
+        .setFooter({ text: 'Check your log channel for the abuse alert embed.' })
+        .setTimestamp();
+
+      return interaction.editReply({ embeds: [embed] });
+    }
+  } catch (err) {
+    logError('Dev: test-abuse', err).catch(() => {});
+    errReply(interaction, err);
   }
 }

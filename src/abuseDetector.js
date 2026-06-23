@@ -4,7 +4,7 @@ import { getGuild } from './database.js';
 const ABUSE_ROLE_ID = '1518775422836539442';
 
 // in-memory store: key → array of timestamps (ms)
-const _store = new Map();
+export const _store = new Map();
 
 // Rules — threshold actions within windowMs trigger an alert
 // scope 'target' = per moderator+target combo, 'mod' = per moderator only
