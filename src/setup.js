@@ -84,10 +84,19 @@ export const setupCommands = [
           { name: 'break-request-channel', value: 'break_request_channel_id' },
           { name: 'break-role', value: 'break_role_id' },
           { name: 'main-break-role', value: 'main_break_role_id' },
+          { name: 'abuse-log', value: 'abuse_log_channel_id' },
         )
     )
     .addChannelOption(o => o.setName('channel').setDescription('New channel value'))
     .addRoleOption(o => o.setName('role').setDescription('New role value')),
+
+  new SlashCommandBuilder()
+    .setName('setup-logging')
+    .setDescription('Auto-create a Logs category with all standard log channels including #abuse-alerts')
+    .addStringOption(o =>
+      o.setName('category-name')
+        .setDescription('Name for the category (default: 📋 Logs)')
+        .setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('setup-ad-channels')
@@ -363,6 +372,7 @@ export async function handleSetupStatus(interaction) {
       { name: 'Level Log', value: ch(config.level_log_channel_id), inline: true },
       { name: 'Level XP Channel', value: ch(config.level_xp_channel_id) + (config.level_xp_channel_id ? '' : ' *(all channels)*'), inline: true },
       { name: 'Staff Updates', value: ch(config.staff_updates_channel_id), inline: true },
+      { name: '🚨 Abuse Alerts', value: ch(config.abuse_log_channel_id), inline: true },
       { name: 'Jail Role', value: rl(config.jail_role_id), inline: true },
       { name: 'Muted Role', value: rl(config.muted_role_id), inline: true },
       { name: 'Break Request Channel', value: ch(config.break_request_channel_id), inline: true },
@@ -916,6 +926,77 @@ export async function handleSetupRequests(interaction) {
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     console.error('setup-requests error:', err);
+    await interaction.editReply({ content: `❌ Failed to create channels: ${err.message}` });
+  }
+}
+
+export async function handleSetupLogging(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
+  await interaction.deferReply();
+
+  const categoryName = interaction.options.getString('category-name') || '📋 Logs';
+  const guild = interaction.guild;
+
+  const channels = [
+    { key: 'log_channel_id',         name: 'general-log',    label: '📋 General Log' },
+    { key: 'warn_log_channel_id',    name: 'warn-log',       label: '⚠️ Warn Log' },
+    { key: 'strike_log_channel_id',  name: 'strike-log',     label: '❗ Strike Log' },
+    { key: 'ad_warn_log_channel_id', name: 'ad-warn-log',    label: '📢 Ad-Warn Log' },
+    { key: 'staff_updates_channel_id', name: 'staff-updates', label: '👤 Staff Updates' },
+    { key: 'abuse_log_channel_id',   name: 'abuse-alerts',   label: '🚨 Abuse Alerts' },
+  ];
+
+  try {
+    // Reuse existing category if name matches
+    let category = guild.channels.cache.find(
+      c => c.type === ChannelType.GuildCategory && c.name === categoryName,
+    );
+    if (!category) {
+      category = await guild.channels.create({ name: categoryName, type: ChannelType.GuildCategory });
+    }
+
+    const created = [];
+    const existing = [];
+    const dbFields = {};
+
+    for (const def of channels) {
+      // Reuse channel if it already exists in this category
+      let channel = guild.channels.cache.find(
+        c => c.isTextBased() && c.name === def.name && c.parentId === category.id,
+      );
+      if (!channel) {
+        channel = await guild.channels.create({
+          name: def.name,
+          type: ChannelType.GuildText,
+          parent: category.id,
+          permissionOverwrites: [
+            { id: guild.roles.everyone.id, deny: ['SendMessages', 'ViewChannel'] },
+            { id: guild.members.me.id,     allow: ['SendMessages', 'ViewChannel', 'EmbedLinks', 'ReadMessageHistory'] },
+          ],
+        });
+        created.push({ label: def.label, channel });
+      } else {
+        existing.push({ label: def.label, channel });
+      }
+      dbFields[def.key] = channel.id;
+    }
+
+    await setGuildConfig(interaction.guildId, dbFields);
+
+    const embed = new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('✅ Log Channels Set Up')
+      .setDescription(`Category **${categoryName}** is ready with all log channels:`)
+      .addFields(
+        ...created.map(c => ({ name: `${c.label} *(new)*`, value: `<#${c.channel.id}>`, inline: true })),
+        ...existing.map(c => ({ name: `${c.label} *(existing)*`, value: `<#${c.channel.id}>`, inline: true })),
+      )
+      .setFooter({ text: 'All channels saved to config. Run /setup-status to verify.' })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    console.error('setup-logging error:', err);
     await interaction.editReply({ content: `❌ Failed to create channels: ${err.message}` });
   }
 }

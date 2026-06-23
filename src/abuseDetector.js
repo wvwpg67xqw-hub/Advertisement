@@ -30,7 +30,8 @@ async function sendAbuseAlert(guild, rule, moderatorId, targetId, count) {
     const config = await getGuild(guild.id).catch(() => null);
     if (!config) return;
 
-    const logChannelId = config.log_channel_id || config.request_log_channel_id || config.general_log_channel_id;
+    // Prefer the dedicated abuse-alerts channel; fall back to general log
+    const logChannelId = config.abuse_log_channel_id || config.log_channel_id || config.request_log_channel_id;
     if (!logChannelId) return;
 
     const logChannel = guild.channels.cache.get(logChannelId);

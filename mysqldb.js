@@ -45,7 +45,8 @@ export async function initDatabase() {
       pfp_url                      TEXT,
       banner_url                   TEXT,
       network_apply_log_channel_id VARCHAR(20),
-      network_apply_roles          TEXT
+      network_apply_roles          TEXT,
+      abuse_log_channel_id         VARCHAR(20)
     )`,
     `CREATE TABLE IF NOT EXISTS warns (
       id           INT AUTO_INCREMENT PRIMARY KEY,
@@ -185,6 +186,14 @@ export async function initDatabase() {
   ];
   for (const sql of inviteBlacklistTable) {
     await pool.execute(sql).catch(() => {});
+  }
+
+  // ── Column migrations (safe: ignore if already exists) ─────────────────────
+  const migrations = [
+    `ALTER TABLE guilds ADD COLUMN abuse_log_channel_id VARCHAR(20)`,
+  ];
+  for (const sql of migrations) {
+    await pool.execute(sql).catch(() => {}); // ignore "Duplicate column" errors
   }
 
   const honeypotTables = [

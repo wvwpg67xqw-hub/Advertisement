@@ -81,6 +81,7 @@ import {
   handleSetupBreak, handleSetupResign, handleSetupBranding,
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles, handleSetupGithub,
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
+  handleSetupLogging,
 } from './src/setup.js';
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds, clearNetworkHub, clearHubGuildId, getNetworkMembers } from './src/database.js';
@@ -732,7 +733,7 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Staff Portal running on port
 const botHandlers = {
   setup: handleSetup, 'setup-roles': handleSetupRoles,
   'setup-status': handleSetupStatus, 'setup-edit': handleSetupEdit,
-  'setup-requests': handleSetupRequests, 'setup-ad-channels': handleSetupAdChannels,
+  'setup-requests': handleSetupRequests, 'setup-logging': handleSetupLogging, 'setup-ad-channels': handleSetupAdChannels,
   'setup-network-hub': handleSetupNetworkHub, 'setup-network-join': handleSetupNetworkJoin,
   'setup-network-reset': handleSetupNetworkReset, 'network-status': handleNetworkStatus,
   'setup-network-roles': handleSetupNetworkRoles,

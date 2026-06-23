@@ -47,6 +47,7 @@ export async function setGuildConfig(guildId, fields) {
     'network_apply_log_channel_id', 'network_apply_roles',
     'hub_mod_role_id', 'hub_team_lead_role_id', 'hub_admin_role_id', 'hub_owner_role_id',
     'level_log_channel_id', 'level_xp_channel_id', 'leveling_enabled',
+    'abuse_log_channel_id',
   ];
   const sets = [];
   const params = [];
