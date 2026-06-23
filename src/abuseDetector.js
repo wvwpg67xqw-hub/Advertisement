@@ -11,7 +11,7 @@ export const _store = new Map();
 const RULES = [
   { action: 'mute',    scope: 'target', windowMs: 10 * 60_000, threshold: 2, label: '🔇 Mute Spam',    desc: 'The same user was muted multiple times in a short period.' },
   { action: 'warn',    scope: 'target', windowMs: 10 * 60_000, threshold: 3, label: '⚠️ Warn Spam',    desc: 'Multiple warns issued against the same user in a short period.' },
-  { action: 'ad-warn', scope: 'mod',    windowMs:  5 * 60_000, threshold: 3, label: '📢 Ad-Warn Spam', desc: 'Multiple ad-warns issued in a short period.' },
+  { action: 'ad-warn', scope: 'mod',    windowMs:  5 * 60_000, threshold: 12, label: '📢 Ad-Warn Spam', desc: 'Multiple ad-warns issued in a short period.' },
   { action: 'strike',  scope: 'target', windowMs: 10 * 60_000, threshold: 2, label: '❗ Strike Spam',  desc: 'The same user was struck multiple times in a short period.' },
   { action: 'ban',     scope: 'mod',    windowMs:  5 * 60_000, threshold: 3, label: '🔨 Ban Spam',     desc: 'Multiple bans issued in a short period.' },
   { action: 'jail',    scope: 'target', windowMs: 10 * 60_000, threshold: 2, label: '🔒 Jail Spam',    desc: 'The same user was jailed multiple times in a short period.' },
