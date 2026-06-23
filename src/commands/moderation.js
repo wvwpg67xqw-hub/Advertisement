@@ -9,6 +9,7 @@ import {
   hasCommandPermission, canModerateInGuild, sendLog,
   buildWarnEmbed, buildAdWarnEmbed, buildModEmbed, buildStaffUpdateEmbed,
 } from '../utils.js';
+import { trackAbuse } from '../abuseDetector.js';
 
 const RANK_ERR = '❌ You cannot use this command on a user of equal or higher rank.';
 const WARN_COOLDOWN_MS = 60 * 60 * 1000;
@@ -106,6 +107,7 @@ export async function handleWarn(interaction) {
   embed.setFooter({ text: `Total warnings: ${totalWarns}` });
   await interaction.reply({ embeds: [embed], flags: 64 });
   await sendLog(interaction.guild, await getGuild(interaction.guildId), 'ad_warn', embed);
+  trackAbuse({ guild: interaction.guild, action: 'warn', moderatorId: interaction.user.id, targetId: target.id }).catch(() => {});
 
   const dmEmbed = new EmbedBuilder()
     .setColor(0xFFAA00)
@@ -289,6 +291,7 @@ export async function handleAdWarn(interaction) {
     )
     .setTimestamp();
   await sendLog(interaction.guild, guildConfig, 'ad_warn_dm', dmLogEmbed);
+  trackAbuse({ guild: interaction.guild, action: 'ad-warn', moderatorId: interaction.user.id, targetId: target.id }).catch(() => {});
 }
 
 export async function handleRemoveAdWarn(interaction) {
@@ -325,6 +328,7 @@ export async function handleMute(interaction) {
   const embed = buildModEmbed('mute', { userId: target.id, moderatorId: interaction.user.id, reason, duration: formatDuration(seconds) });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
+  trackAbuse({ guild: interaction.guild, action: 'mute', moderatorId: interaction.user.id, targetId: target.id }).catch(() => {});
 }
 
 export async function handleUnmute(interaction) {
@@ -367,6 +371,7 @@ export async function handleBan(interaction) {
   const embed = buildModEmbed('ban', { userId: target.id, moderatorId: interaction.user.id, reason });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, await getGuild(interaction.guildId), 'general', embed);
+  trackAbuse({ guild: interaction.guild, action: 'ban', moderatorId: interaction.user.id, targetId: target.id }).catch(() => {});
 }
 
 export async function handleFire(interaction) {
@@ -430,6 +435,7 @@ export async function handleJail(interaction) {
 
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'general', embed);
+  trackAbuse({ guild: interaction.guild, action: 'jail', moderatorId: interaction.user.id, targetId: target.id }).catch(() => {});
 
   // ─── SOAP PING ────────────────────────────────────
   await interaction.followUp({

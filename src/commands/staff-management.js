@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, deny } from './shared.js';
 import { addStrike, getStrikeCount, removeStrike, getGuild } from '../database.js';
 import { safeFetchMember, hasCommandPermission, canModerateInGuild, sendLog, buildModEmbed, buildStrikeEmbed, buildStaffUpdateEmbed } from '../utils.js';
+import { trackAbuse } from '../abuseDetector.js';
 
 const RANK_ERR = '❌ You cannot use this command on a user of equal or higher rank.';
 
@@ -88,6 +89,7 @@ export async function handleStrike(interaction) {
   embed.setFooter({ text: `Total strikes: ${total}${total >= 3 ? ' — AUTO-FIRE TRIGGERED' : ''}` });
   await interaction.reply({ embeds: [embed] });
   await sendLog(interaction.guild, config, 'strike', embed);
+  trackAbuse({ guild: interaction.guild, action: 'strike', moderatorId: interaction.user.id, targetId: target.id }).catch(() => {});
 
   if (total >= 3) {
     const member = targetMember || await safeFetchMember(interaction.guild, target.id);
