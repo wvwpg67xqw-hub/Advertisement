@@ -146,7 +146,7 @@ export async function handleBlacklistServer(interaction) {
 
     const logChannelId = process.env.BLACKLIST_LOG_CHANNEL_ID;
     if (logChannelId) {
-      const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
+      const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
       if (logChannel?.isTextBased()) {
         await logChannel.send({ embeds: [blacklistEmbed] }).catch(() => {});
       }
@@ -256,7 +256,7 @@ export async function handleMassBlacklist(interaction) {
 
     const logChannelId = process.env.BLACKLIST_LOG_CHANNEL_ID;
     if (logChannelId && added.length > 0) {
-      const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
+      const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
       if (logChannel?.isTextBased()) {
         await logChannel.send({ embeds: [massAddEmbed] }).catch(() => {});
       }
