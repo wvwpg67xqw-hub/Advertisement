@@ -132,20 +132,27 @@ export async function handleBlacklistServer(interaction) {
 
     await addBlocked(guildId, id, interaction.user.id);
 
-    return interaction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('🚫 Server Blacklisted')
-          .setColor(0xED4245)
-          .addFields(
-            { name: '🆔 Server ID', value: `\`${id}\``,            inline: true },
-            { name: '📝 Reason',    value: reason,                  inline: true },
-            { name: '👤 Added by',  value: `${interaction.user}`,   inline: true },
-          )
-          .setDescription('Any invite link to this server will now be automatically deleted.')
-          .setTimestamp(),
-      ],
-    });
+    const blacklistEmbed = new EmbedBuilder()
+      .setTitle('🚫 Server Blacklisted')
+      .setColor(0xED4245)
+      .addFields(
+        { name: '🆔 Server ID', value: `\`${id}\``,            inline: true },
+        { name: '📝 Reason',    value: reason,                  inline: true },
+        { name: '👤 Added by',  value: `${interaction.user}`,   inline: true },
+        { name: '🏠 Guild',     value: `\`${guildId}\``,        inline: true },
+      )
+      .setDescription('Any invite link to this server will now be automatically deleted.')
+      .setTimestamp();
+
+    const logChannelId = process.env.BLACKLIST_LOG_CHANNEL_ID;
+    if (logChannelId) {
+      const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
+      if (logChannel?.isTextBased()) {
+        await logChannel.send({ embeds: [blacklistEmbed] }).catch(() => {});
+      }
+    }
+
+    return interaction.editReply({ embeds: [blacklistEmbed] });
   }
 
   if (sub === 'remove') {
@@ -239,17 +246,23 @@ export async function handleMassBlacklist(interaction) {
     if (added.length)   fields.push({ name: `✅ Blacklisted across ${allGuildIds.length} servers (${added.length} IDs)`, value: added.map(id => `\`${id}\``).join('\n').slice(0, 1024),   inline: false });
     if (already.length) fields.push({ name: `⚠️ Already fully blacklisted (${already.length})`,                          value: already.map(id => `\`${id}\``).join('\n').slice(0, 1024), inline: false });
 
-    return interaction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('🚫 Network Mass Blacklist — Added')
-          .setColor(added.length > 0 ? 0xED4245 : 0xFEE75C)
-          .setDescription(`Applied across **${allGuildIds.length}** servers in the network.`)
-          .addFields(...fields)
-          .setFooter({ text: `Run by ${interaction.user.tag}` })
-          .setTimestamp(),
-      ],
-    });
+    const massAddEmbed = new EmbedBuilder()
+      .setTitle('🚫 Network Mass Blacklist — Added')
+      .setColor(added.length > 0 ? 0xED4245 : 0xFEE75C)
+      .setDescription(`Applied across **${allGuildIds.length}** servers in the network.`)
+      .addFields(...fields)
+      .setFooter({ text: `Run by ${interaction.user.tag}` })
+      .setTimestamp();
+
+    const logChannelId = process.env.BLACKLIST_LOG_CHANNEL_ID;
+    if (logChannelId && added.length > 0) {
+      const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
+      if (logChannel?.isTextBased()) {
+        await logChannel.send({ embeds: [massAddEmbed] }).catch(() => {});
+      }
+    }
+
+    return interaction.editReply({ embeds: [massAddEmbed] });
   }
 
   if (sub === 'remove') {
