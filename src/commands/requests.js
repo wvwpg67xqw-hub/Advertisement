@@ -98,6 +98,28 @@ export async function handleRequestButton(interaction) {
       } else if (type === 'blacklist') {
         await addBlocked(originGuildId, targetId, interaction.user.id);
         resultText = `Server \`${targetId}\` invite-blacklisted in <#${originGuildId}> — invites to that server will now be auto-deleted`;
+
+        const logChannelId = process.env.BLACKLIST_LOG_CHANNEL_ID;
+        if (logChannelId) {
+          const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
+          if (logChannel?.isTextBased()) {
+            await logChannel.send({
+              embeds: [
+                new EmbedBuilder()
+                  .setTitle('🚫 Server Blacklisted via Request')
+                  .setColor(0xED4245)
+                  .addFields(
+                    { name: '🆔 Server ID',   value: `\`${targetId}\``,          inline: true },
+                    { name: '📝 Reason',       value: reason,                      inline: true },
+                    { name: '✅ Accepted by',  value: `${interaction.user}`,       inline: true },
+                    { name: '🏠 Origin Guild', value: `\`${originGuildId}\``,      inline: true },
+                  )
+                  .setDescription('Blacklisted after a staff request was accepted. Invites to this server will be auto-deleted.')
+                  .setTimestamp(),
+              ],
+            }).catch(() => {});
+          }
+        }
       } else if (type === 'network-ban') {
         const members = await getNetworkMembers(interaction.guildId);
         const results = [];
