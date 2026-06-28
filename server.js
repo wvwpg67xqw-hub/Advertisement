@@ -85,7 +85,7 @@ import {
 } from './src/setup.js';
 
 import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds, clearNetworkHub, clearHubGuildId, getNetworkMembers } from './src/database.js';
-import { initDatabase } from './mysqldb.js';
+import { initDb as initDatabase } from './src/dbState.js';
 import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
 
@@ -93,6 +93,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Register process-level error & shutdown handlers as early as possible
 registerProcessHandlers();
+
+// ── Database: attempt MySQL connection immediately, retry in background ────────
+initDatabase().catch(() => {});
+
 
 // ── Auto-react rate-limit infrastructure ──────────────────────────────────────
 const AR_CACHE_TTL      = 5 * 60 * 1000; // 5 min — re-fetch from DB after this
