@@ -13,3 +13,6 @@ if (existsSync('./client/package.json') && !existsSync(distPath)) {
 }
 
 await import('./server.js');
+
+import { startModmailBot } from './modmail/bot.js';
+startModmailBot();

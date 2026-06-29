@@ -1,0 +1,138 @@
+# 📬 Modmail Bot
+
+A Discord modmail bot that lets users contact your staff team via DMs. Messages are forwarded into private channels in your Staff Server, enabling clean, organized support threads.
+
+---
+
+## Features
+
+- **Category-based threads** — users pick a topic (e.g. Modmail, Partnerships, Appeals) before a thread opens
+- **Bidirectional message forwarding** — DMs ↔ staff channel, including attachments
+- **Anonymous replies** — reply as a role label (e.g. "Management") instead of your username
+- **Canned responses (snippets)** — save and reuse common replies
+- **Blocklist** — prevent specific users from opening threads
+- **Escalation** — move threads to higher-level staff categories
+- **Subscriber pings** — staff can opt in to be pinged when a user replies
+- **Interactive menu editor** — configure DM categories without touching config files
+
+---
+
+## Requirements
+
+- Node.js 18+
+- pnpm
+- A Discord bot token with the following intents enabled:
+  - `MESSAGE_CONTENT`
+  - `GUILD_MESSAGES`
+  - `DIRECT_MESSAGES`
+
+---
+
+## Setup
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/wvwpg67xqw-hub/Modmails
+cd Modmails
+```
+
+### 2. Install dependencies
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+### 3. Configure environment variables
+
+Create a `.env` file in the root:
+
+```env
+DISCORD_TOKEN=your_bot_token_here
+STAFF_SERVER_ID=your_staff_server_id
+MAIN_SERVER_ID=your_main_community_server_id
+```
+
+### 4. Build and start
+
+```bash
+pnpm --filter @workspace/api-server run build
+node artifacts/api-server/dist/index.mjs
+```
+
+Or use the included startup script:
+
+```bash
+bash start.sh
+```
+
+---
+
+## Staff Commands
+
+All commands are used inside a modmail thread channel (prefix: `.`)
+
+| Command | Description |
+|---|---|
+| `.r <message>` | Reply to the user (shows your username) |
+| `.ar <message>` | Anonymous reply (shows your role label) |
+| `.close` | Close the thread and notify the user |
+| `.sub` | Toggle ping notifications for your own replies |
+| `.move <category>` | Move thread to a different category by name or ID |
+| `.block` | Block a user from opening new threads |
+| `.unblock` | Unblock a user |
+| `.escalate` | Escalate the thread to a higher-level category |
+| `.<snippet name>` | Send a saved snippet to the user |
+| `.s <snippet name>` | Preview a snippet without sending it |
+| `.snippet add <name> <text>` | Save a new snippet |
+| `.snippet remove <name>` | Delete a snippet |
+| `.snippet list` | List all saved snippets |
+| `.menu edit` | Interactively edit the DM category menu |
+
+---
+
+## Data & Persistence
+
+All bot state is stored locally in:
+
+```
+artifacts/api-server/data/modmail.json
+```
+
+This file contains:
+- Open thread states
+- Snippets
+- Blocklist
+- DM category menu configuration
+
+---
+
+## Hosting
+
+### Recommended server specs
+
+| Resource | Minimum |
+|---|---|
+| RAM | 512 MB |
+| CPU | 40% |
+| Disk | 2 GB |
+
+> The startup scripts are configured to cap Node.js heap usage at **384 MB** to stay within 512 MB RAM limits.
+
+### Using the startup script
+
+```bash
+bash start.sh
+```
+
+Set `AUTO_UPDATE=1` as an environment variable to automatically pull the latest code on each start:
+
+```bash
+AUTO_UPDATE=1 bash start.sh
+```
+
+---
+
+## License
+
+MIT
