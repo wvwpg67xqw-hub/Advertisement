@@ -1,4 +1,12 @@
-import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
+let createCanvas, loadImage;
+try {
+  const canvasPkg = await import('@napi-rs/canvas');
+  createCanvas = canvasPkg.createCanvas;
+  loadImage    = canvasPkg.loadImage;
+} catch {
+  createCanvas = null;
+  loadImage    = null;
+}
 
 const DISCORD_BG       = '#313338';
 const CARD_BG          = '#2b2d31';
@@ -44,6 +52,7 @@ function formatTimestamp(date) {
 }
 
 export async function buildMessageCard(msgData) {
+  if (!createCanvas || !loadImage) return null;
   const {
     avatarUrl,
     username,
