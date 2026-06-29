@@ -68,7 +68,7 @@ export const defs = [
 
   new SlashCommandBuilder()
     .setName('fire')
-    .setDescription('Fire a staff member (remove staff role and ban)')
+    .setDescription('Fire a staff member (remove staff role and kick)')
     .addUserOption(o => o.setName('user').setDescription('User to fire').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true)),
 
@@ -386,7 +386,7 @@ export async function handleFire(interaction) {
 
   const staffRole = member.roles.cache.get(STAFF_ROLE_ID);
   if (staffRole?.editable) await member.roles.remove(STAFF_ROLE_ID, reason).catch(() => {});
-  await interaction.guild.members.ban(target.id, { reason }).catch(() => {});
+  await interaction.guild.members.kick(target.id, reason).catch(() => {});
 
   const config = await getGuild(interaction.guildId);
   const embed = buildModEmbed('fire', { userId: target.id, moderatorId: interaction.user.id, reason });
