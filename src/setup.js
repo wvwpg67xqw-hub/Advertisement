@@ -191,11 +191,6 @@ export const setupCommands = [
     .addBooleanOption(o => o.setName('enabled').setDescription('true = enable, false = disable').setRequired(true)),
 
   new SlashCommandBuilder()
-    .setName('setup-github')
-    .setDescription('Link a GitHub repository so /release-notes auto-fills commit history')
-    .addStringOption(o => o.setName('repo').setDescription('Repository in owner/repo format (e.g. myname/mybot)').setRequired(true)),
-
-  new SlashCommandBuilder()
     .setName('setup-wizard')
     .setDescription('Interactive setup wizard — see what\'s configured and what still needs attention'),
 
@@ -1287,28 +1282,3 @@ export async function handleSetupDmCommand(interaction) {
   await interaction.reply({ embeds: [embed], flags: 64 });
 }
 
-export async function handleSetupGithub(interaction) {
-  if (!await hasCommandPermission(interaction.member, 'setup')) return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
-  const raw = interaction.options.getString('repo').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
-  if (!/^[\w.-]+\/[\w.-]+$/.test(raw)) {
-    return interaction.reply({ content: '❌ Invalid format. Use `owner/repo` (e.g. `myname/mybot`).', flags: 64 });
-  }
-
-  const testRes = await fetch(`https://api.github.com/repos/${raw}`, {
-    headers: { 'User-Agent': 'discord-bot', ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) },
-  }).catch(() => null);
-
-  if (!testRes || testRes.status === 404) {
-    return interaction.reply({ content: `❌ Repository \`${raw}\` not found. Make sure it's public, or add a \`GITHUB_TOKEN\` secret for private repos.`, flags: 64 });
-  }
-
-  await setGithubRepo(interaction.guildId, raw);
-
-  const embed = new EmbedBuilder()
-    .setColor(0x57F287)
-    .setTitle('✅ GitHub Repository Linked')
-    .setDescription(`\`${raw}\` is now linked to this server.\n\n\`/release-notes\` will automatically pull your latest commit messages when you don't provide a \`changes\` value.`)
-    .setTimestamp();
-
-  await interaction.reply({ embeds: [embed] });
-}
