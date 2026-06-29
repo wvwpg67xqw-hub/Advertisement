@@ -118,6 +118,12 @@ export function startModmailBot() {
   });
 
   client.login(TOKEN).catch(err => {
-    console.error('[Modmail] Failed to login:', err.message);
+    console.error('[Modmail] Failed to login (invalid token or no network):', err.message);
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    if (String(reason).includes('TOKEN_INVALID') || String(reason).includes('DISALLOWED_INTENTS')) {
+      console.error('[Modmail] Bot error (check token/intents):', reason);
+    }
   });
 }

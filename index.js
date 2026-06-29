@@ -14,5 +14,9 @@ if (existsSync('./client/package.json') && !existsSync(distPath)) {
 
 await import('./server.js');
 
-import { startModmailBot } from './modmail/bot.js';
-startModmailBot();
+try {
+  const { startModmailBot } = await import('./modmail/bot.js');
+  startModmailBot();
+} catch (err) {
+  console.warn('[Modmail] Failed to load modmail bot — main app will continue:', err.message);
+}
