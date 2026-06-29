@@ -1,0 +1,55 @@
+v22.23.0
+:/home/container$ if [ ! -d .git ]; then git clone https://github.com/wvwpg67xqw-hub/Advertisement .; fi; if [[ "${AUTO_UPDATE}" == "1" ]]; then git pull; fi; if [ -f /home/container/package.json ]; then npm install; fi; if [[ "${MAIN_FILE}" == "*.js" ]]; then node index.js; else node index.js; fi # Added by FeatherPanel (Server Startup)
+remote: Enumerating objects: 7, done.[K
+remote: Counting objects:  14% (1/7)[Kremote: Counting objects:  28% (2/7)[Kremote: Counting objects:  42% (3/7)[Kremote: Counting objects:  57% (4/7)[Kremote: Counting objects:  71% (5/7)[Kremote: Counting objects:  85% (6/7)[Kremote: Counting objects: 100% (7/7)[Kremote: Counting objects: 100% (7/7), done.[K
+remote: Compressing objects: 100% (1/1)[Kremote: Compressing objects: 100% (1/1), done.[K
+remote: Total 4 (delta 3), reused 4 (delta 3), pack-reused 0 (from 0)[K
+Unpacking objects:  25% (1/4)Unpacking objects:  50% (2/4)Unpacking objects:  75% (3/4)Unpacking objects: 100% (4/4)Unpacking objects: 100% (4/4), 1.18 KiB | 242.00 KiB/s, done.
+From https://github.com/wvwpg67xqw-hub/Advertisement
+   bce7905..763993e  main       -> origin/main
+Updating bce7905..763993e
+Fast-forward
+ src/dbState.js | 26 [32m++++++++++++++++++++++++[m[31m--[m
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K|[1G[0K/[1G[0K-[1G[0K\[1G[0K
+up to date, audited 125 packages in 9s
+\[1G[0K
+\[1G[0K28 packages are looking for funding
+\[1G[0K  run `npm fund` for details
+\[1G[0K
+[31m[1m4[22m[39m vulnerabilities (3 [33m[1mmoderate[22m[39m, 1 [31m[1mhigh[22m[39m)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+|[1G[0K🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+[Modmail] MODMAIL_BOT_TOKEN is not set — modmail bot will not start.
+🚀 Staff Portal running on port 5000
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async initDb (file:///home/container/src/dbState.js:520:14)
+🤖 Logged in as Eclipse Moderation#7062
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async initDb (file:///home/container/src/dbState.js:520:14)
+    at async Client.<anonymous> (file:///home/container/server.js:2636:3)
+✅ Registered 79 slash commands globally
+🔧 Registered 45 dev commands to dev guild 1472759140232204551
+🌐 Auto-linked 5 servers to network hub (1487744336908124190)
+✅ [DevLogger] Dev server setup complete
