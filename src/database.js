@@ -3,13 +3,22 @@ import * as fb from './jsonFallback.js';
 
 function ts() { return Math.floor(Date.now() / 1000); }
 
+function toPg(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
 async function q(sql, params = []) {
-  const [rows] = await getPool().execute(sql, params);
+  const { rows } = await getPool().query(toPg(sql), params);
   return rows;
 }
 
 async function q1(sql, params = []) {
   return (await q(sql, params))[0] ?? null;
+}
+
+async function qr(sql, params = []) {
+  return getPool().query(toPg(sql), params);
 }
 
 function parseJson(val, fallback) {
@@ -24,7 +33,7 @@ export async function getGuild(guildId) {
   if (!isConnected()) return fb.getGuild(guildId);
   let row = await q1('SELECT * FROM guilds WHERE guild_id = ?', [guildId]);
   if (!row) {
-    await q('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [guildId]);
+    await q('INSERT INTO guilds (guild_id) VALUES (?) ON CONFLICT (guild_id) DO NOTHING', [guildId]);
     row = await q1('SELECT * FROM guilds WHERE guild_id = ?', [guildId]);
   }
   row.command_roles       = parseJson(row.command_roles, {});
@@ -52,14 +61,15 @@ export async function setGuildConfig(guildId, fields) {
     'abuse_log_channel_id',
   ];
   const sets = []; const params = [];
+  let idx = 1;
   for (const [key, val] of Object.entries(fields)) {
     if (!allowed.includes(key)) continue;
-    sets.push(`\`${key}\` = ?`);
+    sets.push(`"${key}" = $${idx++}`);
     params.push(key === 'network_apply_roles' ? JSON.stringify(val) : val);
   }
   if (sets.length === 0) return;
   params.push(guildId);
-  await q(`UPDATE guilds SET ${sets.join(', ')} WHERE guild_id = ?`, params);
+  await getPool().query(`UPDATE guilds SET ${sets.join(', ')} WHERE guild_id = $${idx}`, params);
 }
 
 export async function setCommandRoles(guildId, command, roleIds) {
@@ -119,7 +129,7 @@ export async function setAutoReact(_guildId, userId, emojiId, emojiName, animate
   await q(
     `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated)
      VALUES ('global', ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE emoji_id = VALUES(emoji_id), emoji_name = VALUES(emoji_name), animated = VALUES(animated)`,
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET emoji_id = EXCLUDED.emoji_id, emoji_name = EXCLUDED.emoji_name, animated = EXCLUDED.animated`,
     [userId, emojiId, emojiName, animated ? 1 : 0]
   );
 }
@@ -127,7 +137,7 @@ export async function setAutoReact(_guildId, userId, emojiId, emojiName, animate
 export async function getAutoReact(_guildId, userId) {
   if (!isConnected()) return fb.getAutoReact(_guildId, userId);
   return q1(
-    `SELECT * FROM auto_reacts WHERE user_id = ? ORDER BY (guild_id = 'global') DESC LIMIT 1`,
+    `SELECT * FROM auto_reacts WHERE user_id = ? ORDER BY (CASE WHEN guild_id = 'global' THEN 0 ELSE 1 END) ASC LIMIT 1`,
     [userId]
   );
 }
@@ -148,7 +158,7 @@ export async function blockAutoReact(_guildId, userId) {
   await q(
     `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated)
      VALUES ('global', ?, NULL, '__blocked__', 0)
-     ON DUPLICATE KEY UPDATE emoji_id = NULL, emoji_name = '__blocked__', animated = 0`,
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET emoji_id = NULL, emoji_name = '__blocked__', animated = 0`,
     [userId]
   );
 }
@@ -156,7 +166,7 @@ export async function blockAutoReact(_guildId, userId) {
 export async function isAutoReactBlocked(_guildId, userId) {
   if (!isConnected()) return fb.isAutoReactBlocked(_guildId, userId);
   const row = await q1(
-    `SELECT emoji_name FROM auto_reacts WHERE user_id = ? ORDER BY (guild_id = 'global') DESC LIMIT 1`,
+    `SELECT emoji_name FROM auto_reacts WHERE user_id = ? ORDER BY (CASE WHEN guild_id = 'global' THEN 0 ELSE 1 END) ASC LIMIT 1`,
     [userId]
   );
   return row?.emoji_name === '__blocked__';
@@ -165,7 +175,7 @@ export async function isAutoReactBlocked(_guildId, userId) {
 export async function getArExpiry(userId) {
   if (!isConnected()) return fb.getArExpiry(userId);
   const row = await q1(
-    `SELECT ar_expires_at FROM auto_reacts WHERE user_id = ? ORDER BY (guild_id = 'global') DESC LIMIT 1`,
+    `SELECT ar_expires_at FROM auto_reacts WHERE user_id = ? ORDER BY (CASE WHEN guild_id = 'global' THEN 0 ELSE 1 END) ASC LIMIT 1`,
     [userId]
   );
   return row?.ar_expires_at ?? null;
@@ -173,16 +183,17 @@ export async function getArExpiry(userId) {
 
 export async function renewArSubscription(userId) {
   if (!isConnected()) return fb.renewArSubscription(userId);
-  const result = await q(
+  const result = await qr(
     `UPDATE auto_reacts
-     SET ar_expires_at = DATE_ADD(GREATEST(COALESCE(ar_expires_at, NOW()), NOW()), INTERVAL 7 DAY)
+     SET ar_expires_at = GREATEST(COALESCE(ar_expires_at, NOW()), NOW()) + INTERVAL '7 days'
      WHERE user_id = ?`,
     [userId]
   );
-  if (result.affectedRows === 0) {
+  if (result.rowCount === 0) {
     await q(
-      `INSERT IGNORE INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated, ar_expires_at)
-       VALUES ('global', ?, '', '__pending__', 0, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
+      `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated, ar_expires_at)
+       VALUES ('global', ?, '', '__pending__', 0, NOW() + INTERVAL '7 days')
+       ON CONFLICT (guild_id, user_id) DO NOTHING`,
       [userId]
     );
   }
@@ -247,13 +258,13 @@ export async function getNetworkApplyConfig(guildId) {
 
 export async function addAdChannel(guildId, channelId) {
   if (!isConnected()) return fb.addAdChannel(guildId, channelId);
-  await q('INSERT IGNORE INTO ad_channels (guild_id, channel_id) VALUES (?, ?)', [guildId, channelId]);
+  await q('INSERT INTO ad_channels (guild_id, channel_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [guildId, channelId]);
 }
 
 export async function removeAdChannel(guildId, channelId) {
   if (!isConnected()) return fb.removeAdChannel(guildId, channelId);
-  const result = await q('DELETE FROM ad_channels WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
-  return result.affectedRows > 0;
+  const result = await qr('DELETE FROM ad_channels WHERE guild_id = ? AND channel_id = ?', [guildId, channelId]);
+  return result.rowCount > 0;
 }
 
 export async function getAdChannels(guildId) {
@@ -272,7 +283,7 @@ export async function isAdChannel(guildId, channelId) {
 
 export async function trackAdPost(guildId, channelId, messageId, userId) {
   if (!isConnected()) return fb.trackAdPost(guildId, channelId, messageId, userId);
-  await q('INSERT IGNORE INTO ad_posts (guild_id, channel_id, message_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)',
+  await q('INSERT INTO ad_posts (guild_id, channel_id, message_id, user_id, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING',
     [guildId, channelId, messageId, userId, ts()]);
 }
 
@@ -324,8 +335,8 @@ export async function getWarnCount(guildId, userId) {
 
 export async function removeWarn(guildId, caseId) {
   if (!isConnected()) return fb.removeWarn(guildId, caseId);
-  const result = await q('DELETE FROM warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
-  return result.affectedRows > 0;
+  const result = await qr('DELETE FROM warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  return result.rowCount > 0;
 }
 
 export async function getLastWarnTime(guildId, userId) {
@@ -357,8 +368,8 @@ export async function getAdWarns(guildId, userId) {
 
 export async function removeAdWarn(guildId, caseId) {
   if (!isConnected()) return fb.removeAdWarn(guildId, caseId);
-  const result = await q('DELETE FROM ad_warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
-  return result.affectedRows > 0;
+  const result = await qr('DELETE FROM ad_warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  return result.rowCount > 0;
 }
 
 export async function getAdWarnCountByModerator(guildId, moderatorId) {
@@ -385,17 +396,17 @@ export async function getStrikeCount(guildId, userId) {
 
 export async function removeStrike(guildId, caseId) {
   if (!isConnected()) return fb.removeStrike(guildId, caseId);
-  const result = await q('DELETE FROM strikes WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
-  return result.affectedRows > 0;
+  const result = await qr('DELETE FROM strikes WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  return result.rowCount > 0;
 }
 
 // ── Case Info ─────────────────────────────────────────────────────────────────
 
 export async function getCaseInfo(guildId, caseId) {
   if (!isConnected()) return fb.getCaseInfo(guildId, caseId);
-  let row = await q1('SELECT *, "warn" AS type FROM warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
-  if (!row) row = await q1('SELECT *, "ad_warn" AS type FROM ad_warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
-  if (!row) row = await q1('SELECT *, "strike" AS type FROM strikes WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  let row = await q1('SELECT *, \'warn\' AS type FROM warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  if (!row) row = await q1('SELECT *, \'ad_warn\' AS type FROM ad_warns WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
+  if (!row) row = await q1('SELECT *, \'strike\' AS type FROM strikes WHERE guild_id = ? AND case_id = ?', [guildId, caseId]);
   return row ?? null;
 }
 
@@ -404,8 +415,8 @@ export async function getCaseInfo(guildId, caseId) {
 export async function jailUser(guildId, userId, originalRoles) {
   if (!isConnected()) return fb.jailUser(guildId, userId, originalRoles);
   await q(
-    'INSERT INTO jailed_users (guild_id, user_id, original_roles, jailed_at) VALUES (?, ?, ?, ?) ' +
-    'ON DUPLICATE KEY UPDATE original_roles = VALUES(original_roles), jailed_at = VALUES(jailed_at)',
+    `INSERT INTO jailed_users (guild_id, user_id, original_roles, jailed_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET original_roles = EXCLUDED.original_roles, jailed_at = EXCLUDED.jailed_at`,
     [guildId, userId, JSON.stringify(originalRoles), ts()]
   );
 }
@@ -429,8 +440,8 @@ export async function isJailed(guildId, userId) {
 export async function incrementMessageCount(guildId, userId) {
   if (!isConnected()) return fb.incrementMessageCount(guildId, userId);
   await q(
-    'INSERT INTO message_counts (guild_id, user_id, count) VALUES (?, ?, 1) ' +
-    'ON DUPLICATE KEY UPDATE count = count + 1',
+    `INSERT INTO message_counts (guild_id, user_id, count) VALUES (?, ?, 1)
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET count = message_counts.count + 1`,
     [guildId, userId]
   );
 }
@@ -461,10 +472,10 @@ export async function resetMessagesAll(guildId) {
 export async function setSnipeCache(guildId, channelId, content, authorId, authorName, authorAvatar) {
   if (!isConnected()) return fb.setSnipeCache(guildId, channelId, content, authorId, authorName, authorAvatar);
   await q(
-    'INSERT INTO snipe_cache (guild_id, channel_id, content, author_id, author_name, author_avatar, deleted_at) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?) ' +
-    'ON DUPLICATE KEY UPDATE content = VALUES(content), author_id = VALUES(author_id), ' +
-    'author_name = VALUES(author_name), author_avatar = VALUES(author_avatar), deleted_at = VALUES(deleted_at)',
+    `INSERT INTO snipe_cache (guild_id, channel_id, content, author_id, author_name, author_avatar, deleted_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (guild_id, channel_id) DO UPDATE SET content = EXCLUDED.content, author_id = EXCLUDED.author_id,
+     author_name = EXCLUDED.author_name, author_avatar = EXCLUDED.author_avatar, deleted_at = EXCLUDED.deleted_at`,
     [guildId, channelId, content, authorId, authorName, authorAvatar, ts()]
   );
 }
@@ -485,8 +496,8 @@ export async function getBalance(guildId, userId) {
 export async function setBalance(guildId, userId, amount) {
   if (!isConnected()) return fb.setBalance(guildId, userId, amount);
   await q(
-    'INSERT INTO balances (guild_id, user_id, balance) VALUES (?, ?, ?) ' +
-    'ON DUPLICATE KEY UPDATE balance = VALUES(balance)',
+    `INSERT INTO balances (guild_id, user_id, balance) VALUES (?, ?, ?)
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET balance = EXCLUDED.balance`,
     [guildId, userId, amount]
   );
 }
@@ -622,7 +633,8 @@ export async function getUserLevel(guildId, userId) {
 export async function addUserXp(guildId, userId, amount) {
   if (!isConnected()) return fb.addUserXp(guildId, userId, amount);
   await q(
-    'INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE total_xp = total_xp + ?',
+    `INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?)
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET total_xp = levels.total_xp + ?`,
     [guildId, userId, amount, amount]
   );
   const row = await q1('SELECT total_xp FROM levels WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
@@ -632,8 +644,9 @@ export async function addUserXp(guildId, userId, amount) {
 export async function setUserXp(guildId, userId, xp) {
   if (!isConnected()) return fb.setUserXp(guildId, userId, xp);
   await q(
-    'INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE total_xp = ?',
-    [guildId, userId, xp, xp]
+    `INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?)
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET total_xp = EXCLUDED.total_xp`,
+    [guildId, userId, xp]
   );
 }
 
@@ -646,7 +659,7 @@ export async function getLevelLeaderboard(guildId, limit = 10) {
 
 export async function disableCommand(guildId, commandName) {
   if (!isConnected()) return fb.disableCommand(guildId, commandName);
-  await q('INSERT IGNORE INTO disabled_commands (guild_id, command_name) VALUES (?, ?)', [guildId, commandName]);
+  await q('INSERT INTO disabled_commands (guild_id, command_name) VALUES (?, ?) ON CONFLICT DO NOTHING', [guildId, commandName]);
 }
 
 export async function enableCommand(guildId, commandName) {
@@ -670,7 +683,7 @@ const DM_SENTINEL = '__DM__';
 
 export async function disableDmCommand(commandName) {
   if (!isConnected()) return fb.disableDmCommand(commandName);
-  await q('INSERT IGNORE INTO disabled_commands (guild_id, command_name) VALUES (?, ?)', [DM_SENTINEL, commandName]);
+  await q('INSERT INTO disabled_commands (guild_id, command_name) VALUES (?, ?) ON CONFLICT DO NOTHING', [DM_SENTINEL, commandName]);
 }
 
 export async function enableDmCommand(commandName) {
@@ -695,7 +708,11 @@ export async function getDmDisabledCommands() {
 export async function setAsStaffServer(guildId) {
   if (!isConnected()) return fb.setAsStaffServer(guildId);
   await q('UPDATE guilds SET is_staff_server = 0', []);
-  await q('INSERT INTO guilds (guild_id, is_staff_server) VALUES (?, 1) ON DUPLICATE KEY UPDATE is_staff_server = 1', [guildId]);
+  await q(
+    `INSERT INTO guilds (guild_id, is_staff_server) VALUES (?, 1)
+     ON CONFLICT (guild_id) DO UPDATE SET is_staff_server = 1`,
+    [guildId]
+  );
 }
 
 export async function unsetStaffServer(guildId) {
@@ -710,19 +727,23 @@ export async function getStaffServer() {
 
 export async function setStaffGuildId(guildId, staffGuildId) {
   if (!isConnected()) return fb.setStaffGuildId(guildId, staffGuildId);
-  await q('INSERT INTO guilds (guild_id, staff_guild_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE staff_guild_id = ?', [guildId, staffGuildId, staffGuildId]);
+  await q(
+    `INSERT INTO guilds (guild_id, staff_guild_id) VALUES (?, ?)
+     ON CONFLICT (guild_id) DO UPDATE SET staff_guild_id = EXCLUDED.staff_guild_id`,
+    [guildId, staffGuildId]
+  );
 }
 
 // ── Network Applications ──────────────────────────────────────────────────────
 
 export async function saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age) {
   if (!isConnected()) return fb.saveNetworkApplication(targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age);
-  const result = await q(
-    'INSERT INTO network_applications (target_guild_id, applicant_id, applicant_username, applicant_avatar, why, experience, timezone, age, status, created_at) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  const result = await qr(
+    `INSERT INTO network_applications (target_guild_id, applicant_id, applicant_username, applicant_avatar, why, experience, timezone, age, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     [targetGuildId, applicantId, applicantUsername, applicantAvatar, why, experience, timezone, age, 'pending', ts()]
   );
-  return result.insertId;
+  return result.rows[0]?.id;
 }
 
 export async function getNetworkApplication(id) {
@@ -747,7 +768,7 @@ export async function setStickyMessage(guildId, channelId, message) {
   if (!isConnected()) return fb.setStickyMessage(guildId, channelId, message);
   await q(
     `INSERT INTO sticky_messages (guild_id, channel_id, message) VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE message = VALUES(message)`,
+     ON CONFLICT (guild_id, channel_id) DO UPDATE SET message = EXCLUDED.message`,
     [guildId, channelId, message]
   );
 }
@@ -767,7 +788,7 @@ export async function updateStickyChannelState(guildId, channelId, messageId) {
   if (!isConnected()) return fb.updateStickyChannelState(guildId, channelId, messageId);
   await q(
     `INSERT INTO sticky_channel_state (guild_id, channel_id, last_message_id) VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE last_message_id = VALUES(last_message_id)`,
+     ON CONFLICT (guild_id, channel_id) DO UPDATE SET last_message_id = EXCLUDED.last_message_id`,
     [guildId, channelId, messageId]
   );
 }
@@ -782,5 +803,5 @@ export async function isInHallOfShame(guildId, messageId) {
 
 export async function addToHallOfShame(guildId, messageId) {
   if (!isConnected()) return fb.addToHallOfShame(guildId, messageId);
-  await q('INSERT IGNORE INTO hall_of_shame (guild_id, message_id) VALUES (?, ?)', [guildId, messageId]);
+  await q('INSERT INTO hall_of_shame (guild_id, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [guildId, messageId]);
 }
