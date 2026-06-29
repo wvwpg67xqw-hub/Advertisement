@@ -468,29 +468,57 @@ function maskUrl(url) {
   }
 }
 
-async function tryConnect() {
+let dnsBlocked = false;
+
+async function checkDns(host) {
+  // 1 — try the system resolver first
+  try {
+    const addrs = await dns.lookup(host, { all: true });
+    console.log(`✅ [DB] DNS resolved via system: ${addrs.map(a => a.address).join(', ')}`);
+    return true;
+  } catch {
+    console.error(`⚠️  [DB] System DNS failed for ${host} — trying Google DNS (8.8.8.8)...`);
+  }
+
+  // 2 — fall back to Google's public resolver
+  try {
+    const resolver = new dns.Resolver();
+    resolver.setServers(['8.8.8.8', '1.1.1.1']);
+    const addrs = await resolver.resolve4(host);
+    console.log(`✅ [DB] DNS resolved via Google DNS: ${addrs.join(', ')}`);
+    console.error(`❌ [DB] Your container's default DNS can't resolve Supabase.`);
+    console.error(`❌ [DB] Fix: ask your host to set the container DNS to 8.8.8.8`);
+    return true;
+  } catch {
+    console.error(`❌ [DB] Google DNS also failed — container has NO external DNS access.`);
+    console.error(`❌ [DB] This is a hard network block on your hosting container.`);
+    console.error(`❌ [DB] Solutions:`);
+    console.error(`❌ [DB]   1. Contact your host (FeatherPanel node owner) to allow outbound DNS`);
+    console.error(`❌ [DB]   2. Use a database hosted on the same node/network`);
+    console.error(`❌ [DB]   3. Self-host PostgreSQL on your VPS instead of Supabase`);
+    console.error(`❌ [DB] Stopping retry loop — DNS won't fix itself. Restart bot after fixing.`);
+    dnsBlocked = true;
+    return false;
+  }
+}
+
+async function tryConnect(isRetry = false) {
   if (!process.env.DATABASE_URL) {
     console.error('❌ [DB] DATABASE_URL is not set — cannot connect to PostgreSQL.');
-    console.error('❌ [DB] Falling back to JSON storage. Set DATABASE_URL in your environment secrets.');
     return false;
   }
 
-  console.log(`🔌 [DB] Connecting to: ${maskUrl(process.env.DATABASE_URL)}`);
+  if (!isRetry) {
+    console.log(`🔌 [DB] Connecting to: ${maskUrl(process.env.DATABASE_URL)}`);
+  }
 
-  // DNS check — runs inside the bot so you don't need shell access
-  try {
-    const u = new URL(process.env.DATABASE_URL);
-    const host = u.hostname;
-    console.log(`🔍 [DB] DNS lookup for: ${host}`);
-    const addresses = await dns.lookup(host, { all: true });
-    console.log(`✅ [DB] DNS resolved: ${addresses.map(a => a.address).join(', ')}`);
-  } catch (dnsErr) {
-    console.error(`❌ [DB] DNS FAILED for host — container cannot reach the database.`);
-    console.error(`❌ [DB] DNS error: ${dnsErr.message}`);
-    console.error(`❌ [DB] This means your hosting container has no external DNS access.`);
-    console.error(`❌ [DB] Ask your host to allow outbound DNS/TCP to *.supabase.com:6543`);
-    console.error(`❌ [DB] Or switch to a database on the same network as your container.`);
-    return false;
+  // DNS check (always run on first attempt; on retries only if not confirmed blocked)
+  if (!isRetry || !dnsBlocked) {
+    const host = (() => { try { return new URL(process.env.DATABASE_URL).hostname; } catch { return null; } })();
+    if (host) {
+      const ok = await checkDns(host);
+      if (!ok) return false;
+    }
   }
 
   try {
@@ -504,16 +532,22 @@ async function tryConnect() {
     await runMigration(p);
     return true;
   } catch (err) {
-    console.error('❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.');
-    console.error(`❌ [DB] Target:     ${maskUrl(process.env.DATABASE_URL)}`);
-    console.error(`❌ [DB] Error name: ${err.name}`);
-    console.error(`❌ [DB] Error code: ${err.code ?? '(none)'}`);
-    console.error(`❌ [DB] Message:    ${err.message}`);
-    if (err.detail)  console.error(`❌ [DB] Detail:     ${err.detail}`);
-    if (err.hint)    console.error(`❌ [DB] Hint:       ${err.hint}`);
-    if (err.address) console.error(`❌ [DB] Address:    ${err.address}`);
-    if (err.port)    console.error(`❌ [DB] Port:       ${err.port}`);
-    console.error('❌ [DB] Stack:', err.stack);
+    if (!isRetry) {
+      // Full detail on the first failure only
+      console.error('❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.');
+      console.error(`❌ [DB] Target:     ${maskUrl(process.env.DATABASE_URL)}`);
+      console.error(`❌ [DB] Error name: ${err.name}`);
+      console.error(`❌ [DB] Error code: ${err.code ?? '(none)'}`);
+      console.error(`❌ [DB] Message:    ${err.message}`);
+      if (err.detail)  console.error(`❌ [DB] Detail:     ${err.detail}`);
+      if (err.hint)    console.error(`❌ [DB] Hint:       ${err.hint}`);
+      if (err.address) console.error(`❌ [DB] Address:    ${err.address}`);
+      if (err.port)    console.error(`❌ [DB] Port:       ${err.port}`);
+      console.error('❌ [DB] Stack:', err.stack);
+    } else {
+      // Quiet on retries — just one line
+      console.warn(`⚠️  [DB] Retry failed: ${err.code ?? err.message}`);
+    }
     connected = false;
     pool = null;
     return false;
@@ -523,9 +557,13 @@ async function tryConnect() {
 function startRetryLoop() {
   if (retryTimer) return;
   retryTimer = setInterval(async () => {
-    if (connected) return;
+    if (connected || dnsBlocked) {
+      clearInterval(retryTimer);
+      retryTimer = null;
+      return;
+    }
     console.log('🔁 [DB] Retrying PostgreSQL connection...');
-    const ok = await tryConnect();
+    const ok = await tryConnect(true);
     if (ok) {
       clearInterval(retryTimer);
       retryTimer = null;

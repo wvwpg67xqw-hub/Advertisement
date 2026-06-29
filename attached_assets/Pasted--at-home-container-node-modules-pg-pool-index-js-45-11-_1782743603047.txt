@@ -1,0 +1,100 @@
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
+🔁 [DB] Retrying PostgreSQL connection...
+🔌 [DB] Connecting to: postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.
+❌ [DB] Target:     postgresql://postgres%20ITsbYQcygS8dCXej:***@aws-0-xxxx.pooler.supabase.com:6543/postgres
+❌ [DB] Error name: Error
+❌ [DB] Error code: ENOTFOUND
+❌ [DB] Message:    getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+❌ [DB] Stack: Error: getaddrinfo ENOTFOUND aws-0-xxxx.pooler.supabase.com
+    at /home/container/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async tryConnect (file:///home/container/src/dbState.js:481:20)
+    at async Timeout._onTimeout (file:///home/container/src/dbState.js:511:16)
