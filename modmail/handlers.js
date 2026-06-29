@@ -270,12 +270,41 @@ export async function handleReply(message, anonymous) {
   }
 }
 
-export async function handleClose(message) {
-  const thread = getThreadByChannel(message.channel.id);
-  if (!thread) { await message.reply('❌ This is not a modmail thread.'); return; }
+const scheduledCloses = new Map();
+
+function parseTime(str) {
+  if (!str) return null;
+  let ms = 0;
+  const pattern = /(\d+)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes|s|sec|secs|second|seconds)/gi;
+  let matched = false;
+  for (const match of str.matchAll(pattern)) {
+    matched = true;
+    const n    = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+    if (unit.startsWith('h')) ms += n * 60 * 60 * 1000;
+    else if (unit.startsWith('m')) ms += n * 60 * 1000;
+    else if (unit.startsWith('s')) ms += n * 1000;
+  }
+  return matched && ms > 0 ? ms : null;
+}
+
+function formatMs(ms) {
+  const totalSec = Math.round(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const parts = [];
+  if (h) parts.push(`${h}h`);
+  if (m) parts.push(`${m}m`);
+  if (s) parts.push(`${s}s`);
+  return parts.join(' ') || '0s';
+}
+
+async function doClose(channel, closedByTag, client, threadId, userId) {
+  scheduledCloses.delete(channel.id);
 
   try {
-    const user = await message.client.users.fetch(thread.userId);
+    const user = await client.users.fetch(userId);
     await user.send({
       embeds: [
         new EmbedBuilder()
@@ -286,17 +315,87 @@ export async function handleClose(message) {
     }).catch(() => {});
   } catch { /**/ }
 
-  closeThread(thread.threadId);
+  closeThread(threadId);
+
+  await channel.send({
+    embeds: [
+      new EmbedBuilder()
+        .setDescription(`🔒 Thread closed by **${closedByTag}**`)
+        .setColor(Colors.Red),
+    ],
+  }).catch(() => {});
+
+  setTimeout(async () => { await channel.delete().catch(() => {}); }, 5000);
+}
+
+export async function handleClose(message) {
+  const thread = getThreadByChannel(message.channel.id);
+  if (!thread) { await message.reply('❌ This is not a modmail thread.'); return; }
+
+  const arg = message.content.replace(/^\.close\s*/i, '').trim();
+
+  if (arg.toLowerCase() === 'cancel') {
+    const existing = scheduledCloses.get(message.channel.id);
+    if (!existing) {
+      await message.reply('⚠️ No scheduled close to cancel.');
+    } else {
+      clearTimeout(existing.timer);
+      scheduledCloses.delete(message.channel.id);
+      await message.reply('✅ Scheduled close cancelled.');
+    }
+    return;
+  }
+
+  if (!arg) {
+    await doClose(message.channel, message.author.tag, message.client, thread.threadId, thread.userId);
+    return;
+  }
+
+  const ms = parseTime(arg);
+  if (!ms) {
+    await message.reply('❌ Invalid time format. Examples: `.close 10m`, `.close 1h`, `.close 30s`, or `.close` for instant.');
+    return;
+  }
+
+  if (scheduledCloses.has(message.channel.id)) {
+    clearTimeout(scheduledCloses.get(message.channel.id).timer);
+  }
+
+  const closeAt = Date.now() + ms;
+  const timer = setTimeout(
+    () => doClose(message.channel, message.author.tag, message.client, thread.threadId, thread.userId),
+    ms,
+  );
+  scheduledCloses.set(message.channel.id, { timer, closeAt });
 
   await message.channel.send({
     embeds: [
       new EmbedBuilder()
-        .setDescription(`🔒 Thread closed by **${message.author.tag}**`)
-        .setColor(Colors.Red),
+        .setTitle('⏳ Thread Closing Soon')
+        .setDescription(
+          `This thread will close in **${formatMs(ms)}** (<t:${Math.floor(closeAt / 1000)}:R>).\n` +
+          `Type \`.close cancel\` to cancel.`,
+        )
+        .setColor(Colors.Yellow)
+        .setFooter({ text: `Scheduled by ${message.author.tag}` })
+        .setTimestamp(),
     ],
   });
 
-  setTimeout(async () => { await message.channel.delete().catch(() => {}); }, 5000);
+  try {
+    const user = await message.client.users.fetch(thread.userId);
+    await user.send({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle('⏳ Thread Closing Soon')
+          .setDescription(
+            `Your modmail thread will be closed in **${formatMs(ms)}**.\n` +
+            `If you have anything else to add, please send your message now.`,
+          )
+          .setColor(Colors.Yellow),
+      ],
+    }).catch(() => {});
+  } catch { /**/ }
 }
 
 export async function handleSub(message) {
@@ -489,7 +588,9 @@ export async function handleHelp(message, arg) {
     .setDescription(
       '`.r <msg>` — Reply to user\n' +
       '`.ar <msg>` — Anonymous reply\n' +
-      '`.close` — Close the thread\n' +
+      '`.close` — Close the thread instantly\n' +
+      '`.close <time>` — Schedule a close (e.g. `.close 10m`, `.close 1h`)\n' +
+      '`.close cancel` — Cancel a scheduled close\n' +
       '`.sub` — Toggle ping subscription\n' +
       '`.move <category>` — Move thread\n' +
       '`.block` — Block user\n' +

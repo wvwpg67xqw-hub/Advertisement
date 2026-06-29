@@ -83,7 +83,7 @@ export function startModmailBot() {
       const content = message.content.trim();
       const lower   = content.toLowerCase();
 
-      if (lower === '.close')   { await handleClose(message);        return; }
+      if (lower.startsWith('.close')) { await handleClose(message);   return; }
       if (lower === '.sub')     { await handleSub(message);          return; }
       if (lower === '.block')   { await handleBlock(message);        return; }
       if (lower === '.escalate'){ await handleEscalate(message);     return; }
