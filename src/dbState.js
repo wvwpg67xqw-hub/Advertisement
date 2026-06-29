@@ -1,4 +1,5 @@
 import pg from 'pg';
+import dns from 'dns/promises';
 import { exportAllForMigration } from './jsonFallback.js';
 
 const { Pool } = pg;
@@ -475,6 +476,22 @@ async function tryConnect() {
   }
 
   console.log(`🔌 [DB] Connecting to: ${maskUrl(process.env.DATABASE_URL)}`);
+
+  // DNS check — runs inside the bot so you don't need shell access
+  try {
+    const u = new URL(process.env.DATABASE_URL);
+    const host = u.hostname;
+    console.log(`🔍 [DB] DNS lookup for: ${host}`);
+    const addresses = await dns.lookup(host, { all: true });
+    console.log(`✅ [DB] DNS resolved: ${addresses.map(a => a.address).join(', ')}`);
+  } catch (dnsErr) {
+    console.error(`❌ [DB] DNS FAILED for host — container cannot reach the database.`);
+    console.error(`❌ [DB] DNS error: ${dnsErr.message}`);
+    console.error(`❌ [DB] This means your hosting container has no external DNS access.`);
+    console.error(`❌ [DB] Ask your host to allow outbound DNS/TCP to *.supabase.com:6543`);
+    console.error(`❌ [DB] Or switch to a database on the same network as your container.`);
+    return false;
+  }
 
   try {
     const p = buildPool();
