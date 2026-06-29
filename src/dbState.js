@@ -281,7 +281,9 @@ async function initTables(p) {
       hub_owner_role_id VARCHAR(20),
       github_repo VARCHAR(200),
       is_staff_server SMALLINT DEFAULT 0,
-      staff_guild_id VARCHAR(20)
+      staff_guild_id VARCHAR(20),
+      staff_server_role_map TEXT,
+      staff_server_skip_roles TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS warns (
       id SERIAL PRIMARY KEY,
@@ -456,6 +458,14 @@ async function initTables(p) {
     )`,
   ];
   for (const sql of tables) await p.query(sql).catch(() => {});
+
+  // Column migrations — safe to run every boot (IF NOT EXISTS)
+  const colMigrations = [
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS staff_server_role_map TEXT`,
+    `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS staff_server_skip_roles TEXT`,
+  ];
+  for (const sql of colMigrations) await p.query(sql).catch(() => {});
+
   console.log('✅ [DB] PostgreSQL tables ready');
 }
 

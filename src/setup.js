@@ -1,6 +1,6 @@
 import pkg from 'discord.js';
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, ButtonBuilder, ActionRowBuilder, ButtonStyle } = pkg;
-import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo, setAsStaffServer, unsetStaffServer, getStaffServer, disableDmCommand, enableDmCommand, getDmDisabledCommands } from './database.js';
+import { getGuild, setGuildConfig, setCommandRoles, setNetworkHub, setHubGuildId, clearNetworkHub, clearHubGuildId, getNetworkMembers, addAdChannel, removeAdChannel, getAdChannels, disableCommand, enableCommand, getDisabledCommands, setHubStaffRoles, autoLinkGuilds, getNetworkHub, setGithubRepo, setAsStaffServer, unsetStaffServer, getStaffServer, disableDmCommand, enableDmCommand, getDmDisabledCommands, getStaffServerRoleMap, setStaffServerRoleMap } from './database.js';
 import { hasCommandPermission } from './utils.js';
 import { configureHoneypot } from './commands/honeypot.js';
 
@@ -199,6 +199,31 @@ export const setupCommands = [
     .setDescription('Mark this server as the network staff server (saves its ID to the database)')
     .addBooleanOption(o =>
       o.setName('unset').setDescription('Remove the staff-server designation from this server')
+    ),
+
+  new SlashCommandBuilder()
+    .setName('setup-staff-join-roles')
+    .setDescription('Configure which roles users get in the staff server when they join or are accepted')
+    .addSubcommand(sub => sub
+      .setName('add')
+      .setDescription('Map a main server role → staff server role (given on join/accept)')
+      .addRoleOption(o => o.setName('main-role').setDescription('Role in the MAIN server').setRequired(true))
+      .addRoleOption(o => o.setName('staff-role').setDescription('Role to give in the STAFF server').setRequired(true))
+    )
+    .addSubcommand(sub => sub
+      .setName('remove')
+      .setDescription('Remove a role mapping')
+      .addRoleOption(o => o.setName('main-role').setDescription('Main server role to remove the mapping for').setRequired(true))
+    )
+    .addSubcommand(sub => sub
+      .setName('skip')
+      .setDescription('Mark a main server role as "do NOT join staff server" (e.g. Partnerships)')
+      .addRoleOption(o => o.setName('main-role').setDescription('Main server role to skip').setRequired(true))
+      .addBooleanOption(o => o.setName('remove').setDescription('Set true to un-skip this role'))
+    )
+    .addSubcommand(sub => sub
+      .setName('list')
+      .setDescription('Show current staff server role mappings and skip list')
     ),
 
   new SlashCommandBuilder()
@@ -1236,6 +1261,95 @@ export async function handleSetupStaffServer(interaction) {
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed], flags: 64 });
+}
+
+export async function handleSetupStaffJoinRoles(interaction) {
+  if (!await hasCommandPermission(interaction.member, 'setup')) {
+    return interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
+  }
+
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guildId;
+  const { map, skip } = await getStaffServerRoleMap(guildId);
+
+  if (sub === 'list') {
+    const mapLines = Object.entries(map).map(([main, staff]) => `<@&${main}> → <@&${staff}>`);
+    const skipLines = skip.map(id => `<@&${id}>`);
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🔗 Staff Server Role Mappings')
+      .addFields(
+        { name: 'Role Mappings (main → staff server)', value: mapLines.length ? mapLines.join('\n') : '*None configured*' },
+        { name: 'Skip List (do NOT join staff server)', value: skipLines.length ? skipLines.join('\n') : '*None configured*' },
+      )
+      .setFooter({ text: 'Use /setup-staff-join-roles add to add mappings' })
+      .setTimestamp();
+    return interaction.reply({ embeds: [embed], flags: 64 });
+  }
+
+  if (sub === 'add') {
+    const mainRole  = interaction.options.getRole('main-role');
+    const staffRole = interaction.options.getRole('staff-role');
+    map[mainRole.id] = staffRole.id;
+    await setStaffServerRoleMap(guildId, map, skip);
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Role Mapping Added')
+        .setDescription(`When a user with <@&${mainRole.id}> in the main server joins the staff server, they will automatically receive <@&${staffRole.id}>.`)
+        .setTimestamp()],
+      flags: 64,
+    });
+  }
+
+  if (sub === 'remove') {
+    const mainRole = interaction.options.getRole('main-role');
+    if (!map[mainRole.id]) {
+      return interaction.reply({ content: `❌ No mapping exists for <@&${mainRole.id}>.`, flags: 64 });
+    }
+    const removedStaff = map[mainRole.id];
+    delete map[mainRole.id];
+    await setStaffServerRoleMap(guildId, map, skip);
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xED4245)
+        .setTitle('🗑️ Role Mapping Removed')
+        .setDescription(`Removed mapping: <@&${mainRole.id}> → <@&${removedStaff}>`)
+        .setTimestamp()],
+      flags: 64,
+    });
+  }
+
+  if (sub === 'skip') {
+    const mainRole  = interaction.options.getRole('main-role');
+    const shouldRemove = interaction.options.getBoolean('remove') ?? false;
+
+    if (shouldRemove) {
+      const idx = skip.indexOf(mainRole.id);
+      if (idx === -1) return interaction.reply({ content: `❌ <@&${mainRole.id}> is not in the skip list.`, flags: 64 });
+      skip.splice(idx, 1);
+      await setStaffServerRoleMap(guildId, map, skip);
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('✅ Skip Role Removed')
+          .setDescription(`<@&${mainRole.id}> will now be allowed to join the staff server.`)
+          .setTimestamp()],
+        flags: 64,
+      });
+    }
+
+    if (!skip.includes(mainRole.id)) skip.push(mainRole.id);
+    await setStaffServerRoleMap(guildId, map, skip);
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xFEE75C)
+        .setTitle('⛔ Skip Role Added')
+        .setDescription(`Users with <@&${mainRole.id}> will **NOT** be added to the staff server.`)
+        .setTimestamp()],
+      flags: 64,
+    });
+  }
 }
 
 export async function handleSetupDmCommand(interaction) {

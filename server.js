@@ -81,10 +81,10 @@ import {
   handleSetupBreak, handleSetupResign, handleSetupBranding,
   handleToggleCommand, handleSetupNetworkRoles, handleSetupStaffRoles,
   handleSetupStaffServer, handleSetupDmCommand, handleSetupWizard, buildWizardEmbed,
-  handleSetupLogging,
+  handleSetupLogging, handleSetupStaffJoinRoles,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds, clearNetworkHub, clearHubGuildId, getNetworkMembers } from './src/database.js';
+import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds, clearNetworkHub, clearHubGuildId, getNetworkMembers, getStaffServerRoleMap } from './src/database.js';
 import { initDb as initDatabase } from './src/dbState.js';
 import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
@@ -168,6 +168,20 @@ if (process.env.ADMIN_ID && process.env.ADMIN_ID !== OWNER_ID) {
 }
 
 // ── DM Helpers (all use REST — no gateway dependency) ─────────────────────────
+
+// Assigns specific roles to a member in the staff server via Discord REST
+async function assignStaffServerRoles(userId, botToken, staffServerId, roleIds) {
+  for (const roleId of roleIds) {
+    if (!roleId) continue;
+    await fetch(`https://discord.com/api/v10/guilds/${staffServerId}/members/${userId}/roles/${roleId}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+    }).then(r => {
+      if (r.ok) console.log(`[staff-roles] Gave role ${roleId} to ${userId} in staff server.`);
+      else r.text().then(t => console.error(`[staff-roles] Failed to give role ${roleId} to ${userId}: ${r.status} ${t}`));
+    }).catch(e => console.error(`[staff-roles] Error giving role ${roleId}:`, e.message));
+  }
+}
 
 async function sendLoginAlert({ userId, username, avatar, isNew, isAdmin, isBlacklisted }) {
   if (userId === OWNER_ID) return; // don't alert on owner's own logins
@@ -398,22 +412,56 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
 
     const user = { userId: discordUser.id, username: discordUser.username, avatar, isBlacklisted, isStaff };
 
-    // Auto-add user to staff server (non-blocking)
-    const STAFF_SERVER     = process.env.STAFF_SERVER;
+    // Auto-add user to staff server + assign mapped roles (non-blocking)
+    const STAFF_SERVER      = process.env.STAFF_SERVER;
     const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
     if (STAFF_SERVER && DISCORD_BOT_TOKEN) {
-      fetch(`https://discord.com/api/v10/guilds/${STAFF_SERVER}/members/${discordUser.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bot ${DISCORD_BOT_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ access_token }),
-      }).then(r => {
-        if (r.status === 201) console.log(`[guild-join] Added ${discordUser.username} (${discordUser.id}) to staff server.`);
-        else if (r.status === 204) console.log(`[guild-join] ${discordUser.username} (${discordUser.id}) already in staff server.`);
-        else r.text().then(t => console.error(`[guild-join] Failed for ${discordUser.username}: ${r.status} ${t}`));
-      }).catch(err => console.error(`[guild-join] Error adding ${discordUser.username}:`, err.message));
+      (async () => {
+        try {
+          // Load role map for the main guild
+          const mainGuildId = process.env.MAIN_GUILD_ID;
+          const { map, skip } = mainGuildId ? await getStaffServerRoleMap(mainGuildId) : { map: {}, skip: [] };
+
+          // Get user's roles in the main guild to determine what to assign
+          let userRoleIds = [];
+          if (mainGuildId) {
+            const mainGuild = await client.guilds.fetch(mainGuildId).catch(() => null);
+            if (mainGuild) {
+              const member = await mainGuild.members.fetch(discordUser.id).catch(() => null);
+              if (member) userRoleIds = [...member.roles.cache.keys()];
+            }
+          }
+
+          // Check skip list — if ALL of the user's mapped roles are skip roles, don't join staff server
+          const mappedRoles    = userRoleIds.filter(id => map[id] && !skip.includes(id));
+          const hasSkipOnly    = userRoleIds.some(id => skip.includes(id)) && mappedRoles.length === 0;
+          const hasMappedRoles = mappedRoles.length > 0;
+
+          // If user only has skip roles (e.g. partnerships) and no other mapped role → skip
+          if (hasSkipOnly && !hasMappedRoles) {
+            console.log(`[guild-join] Skipped staff server for ${discordUser.username} (skip-list role).`);
+            return;
+          }
+
+          const r = await fetch(`https://discord.com/api/v10/guilds/${STAFF_SERVER}/members/${discordUser.id}`, {
+            method: 'PUT',
+            headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token }),
+          });
+
+          if (r.status === 201) console.log(`[guild-join] Added ${discordUser.username} (${discordUser.id}) to staff server.`);
+          else if (r.status === 204) console.log(`[guild-join] ${discordUser.username} (${discordUser.id}) already in staff server.`);
+          else { r.text().then(t => console.error(`[guild-join] Failed for ${discordUser.username}: ${r.status} ${t}`)); return; }
+
+          // Assign mapped staff server roles
+          const staffRoleIds = mappedRoles.map(id => map[id]).filter(Boolean);
+          if (staffRoleIds.length > 0) {
+            await assignStaffServerRoles(discordUser.id, DISCORD_BOT_TOKEN, STAFF_SERVER, staffRoleIds);
+          }
+        } catch (err) {
+          console.error(`[guild-join] Error for ${discordUser.username}:`, err.message);
+        }
+      })();
     }
 
     // Fire login alert DM (non-blocking)
@@ -773,6 +821,7 @@ const botHandlers = {
   'toggle-command': handleToggleCommand,
   'toggle-leveling': handleToggleLeveling,
   'setup-staff-server': handleSetupStaffServer,
+  'setup-staff-join-roles': handleSetupStaffJoinRoles,
   'setup-dm-command': handleSetupDmCommand,
   'setup-wizard': handleSetupWizard,
   status: handleStatus,
@@ -1385,20 +1434,39 @@ if (id.startsWith('app_')) {
         const toAdd = [STAFF_ROLE_ID, ...(specificRoleId ? [specificRoleId] : [])].filter(Boolean);
         await member.roles.add(toAdd).catch(e => console.error('Role add failed:', e.message));
 
-        // Auto-add to staff server using stored OAuth token
+        // Auto-add to staff server + assign mapped roles using stored OAuth token
         const STAFF_SERVER      = process.env.STAFF_SERVER;
         const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
         const userToken         = db.getUserToken(application.userId);
         if (STAFF_SERVER && DISCORD_BOT_TOKEN && userToken) {
-          fetch(`https://discord.com/api/v10/guilds/${STAFF_SERVER}/members/${application.userId}`, {
-            method: 'PUT',
-            headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ access_token: userToken }),
-          }).then(r => {
-            if (r.status === 201) console.log(`[accept] Added ${application.userId} to staff server.`);
-            else if (r.status === 204) console.log(`[accept] ${application.userId} already in staff server.`);
-            else r.text().then(t => console.error(`[accept] Staff server join failed: ${r.status} ${t}`));
-          }).catch(e => console.error('[accept] Staff server join error:', e.message));
+          (async () => {
+            try {
+              // Check skip list — e.g. partnerships should not join staff server
+              const { map, skip } = await getStaffServerRoleMap(guildId);
+              if (specificRoleId && skip.includes(specificRoleId)) {
+                console.log(`[accept] Skipping staff server for ${application.userId} (role ${specificRoleId} is on skip list).`);
+                return;
+              }
+
+              const r = await fetch(`https://discord.com/api/v10/guilds/${STAFF_SERVER}/members/${application.userId}`, {
+                method: 'PUT',
+                headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: userToken }),
+              });
+
+              if (r.status === 201) console.log(`[accept] Added ${application.userId} to staff server.`);
+              else if (r.status === 204) console.log(`[accept] ${application.userId} already in staff server.`);
+              else { r.text().then(t => console.error(`[accept] Staff server join failed: ${r.status} ${t}`)); return; }
+
+              // Assign mapped staff server role for this specific role
+              const staffRoleId = specificRoleId ? map[specificRoleId] : null;
+              if (staffRoleId) {
+                await assignStaffServerRoles(application.userId, DISCORD_BOT_TOKEN, STAFF_SERVER, [staffRoleId]);
+              }
+            } catch (e) {
+              console.error('[accept] Staff server join error:', e.message);
+            }
+          })();
         }
 
         await member.send({

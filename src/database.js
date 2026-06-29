@@ -805,3 +805,25 @@ export async function addToHallOfShame(guildId, messageId) {
   if (!isConnected()) return fb.addToHallOfShame(guildId, messageId);
   await q('INSERT INTO hall_of_shame (guild_id, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [guildId, messageId]);
 }
+
+// ── Staff Server Role Map ──────────────────────────────────────────────────────
+// map:  { mainRoleId → staffServerRoleId }
+// skip: [mainRoleId, ...]  — roles that should NOT trigger a staff-server join
+
+export async function getStaffServerRoleMap(guildId) {
+  if (!isConnected()) return { map: {}, skip: [] };
+  const row = await q1('SELECT staff_server_role_map, staff_server_skip_roles FROM guilds WHERE guild_id = ?', [guildId]);
+  if (!row) return { map: {}, skip: [] };
+  return {
+    map:  parseJson(row.staff_server_role_map,  {}),
+    skip: parseJson(row.staff_server_skip_roles, []),
+  };
+}
+
+export async function setStaffServerRoleMap(guildId, map, skip) {
+  await getGuild(guildId);
+  await q(
+    'UPDATE guilds SET staff_server_role_map = ?, staff_server_skip_roles = ? WHERE guild_id = ?',
+    [JSON.stringify(map), JSON.stringify(skip), guildId]
+  );
+}
