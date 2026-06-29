@@ -169,6 +169,32 @@ if (process.env.ADMIN_ID && process.env.ADMIN_ID !== OWNER_ID) {
 
 // ── DM Helpers (all use REST — no gateway dependency) ─────────────────────────
 
+// Resolves the staff-server role map + skip list.
+// Env vars take priority over the DB slash-command config.
+//
+//   STAFF_SERVER_ROLE_MAP   = "mainRoleId:staffRoleId,mainRoleId2:staffRoleId2"
+//   STAFF_SERVER_SKIP_ROLES = "roleId1,roleId2"
+//
+async function resolveStaffServerRoleMap(guildId) {
+  const envMap  = process.env.STAFF_SERVER_ROLE_MAP;
+  const envSkip = process.env.STAFF_SERVER_SKIP_ROLES;
+
+  if (envMap !== undefined || envSkip !== undefined) {
+    const map = {};
+    if (envMap) {
+      for (const pair of envMap.split(',')) {
+        const [main, staff] = pair.trim().split(':');
+        if (main && staff) map[main.trim()] = staff.trim();
+      }
+    }
+    const skip = envSkip ? envSkip.split(',').map(s => s.trim()).filter(Boolean) : [];
+    return { map, skip };
+  }
+
+  // Fall back to DB (slash-command config)
+  return getStaffServerRoleMap(guildId);
+}
+
 // Assigns specific roles to a member in the staff server via Discord REST
 async function assignStaffServerRoles(userId, botToken, staffServerId, roleIds) {
   for (const roleId of roleIds) {
@@ -420,7 +446,7 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
         try {
           // Load role map for the main guild
           const mainGuildId = process.env.MAIN_GUILD_ID;
-          const { map, skip } = mainGuildId ? await getStaffServerRoleMap(mainGuildId) : { map: {}, skip: [] };
+          const { map, skip } = mainGuildId ? await resolveStaffServerRoleMap(mainGuildId) : { map: {}, skip: [] };
 
           // Get user's roles in the main guild to determine what to assign
           let userRoleIds = [];
@@ -1442,7 +1468,7 @@ if (id.startsWith('app_')) {
           (async () => {
             try {
               // Check skip list — e.g. partnerships should not join staff server
-              const { map, skip } = await getStaffServerRoleMap(guildId);
+              const { map, skip } = await resolveStaffServerRoleMap(guildId);
               if (specificRoleId && skip.includes(specificRoleId)) {
                 console.log(`[accept] Skipping staff server for ${application.userId} (role ${specificRoleId} is on skip list).`);
                 return;
