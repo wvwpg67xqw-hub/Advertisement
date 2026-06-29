@@ -458,11 +458,24 @@ async function initTables(p) {
   console.log('✅ [DB] PostgreSQL tables ready');
 }
 
+function maskUrl(url) {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.username ? u.username + ':***@' : ''}${u.host}${u.pathname}`;
+  } catch {
+    return '(invalid URL)';
+  }
+}
+
 async function tryConnect() {
   if (!process.env.DATABASE_URL) {
-    console.warn('⚠️  [DB] DATABASE_URL not set — using JSON fallback.');
+    console.error('❌ [DB] DATABASE_URL is not set — cannot connect to PostgreSQL.');
+    console.error('❌ [DB] Falling back to JSON storage. Set DATABASE_URL in your environment secrets.');
     return false;
   }
+
+  console.log(`🔌 [DB] Connecting to: ${maskUrl(process.env.DATABASE_URL)}`);
+
   try {
     const p = buildPool();
     const client = await p.connect();
@@ -474,7 +487,16 @@ async function tryConnect() {
     await runMigration(p);
     return true;
   } catch (err) {
-    console.warn(`⚠️  [DB] PostgreSQL unavailable — using JSON fallback. (${err.message})`);
+    console.error('❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.');
+    console.error(`❌ [DB] Target:     ${maskUrl(process.env.DATABASE_URL)}`);
+    console.error(`❌ [DB] Error name: ${err.name}`);
+    console.error(`❌ [DB] Error code: ${err.code ?? '(none)'}`);
+    console.error(`❌ [DB] Message:    ${err.message}`);
+    if (err.detail)  console.error(`❌ [DB] Detail:     ${err.detail}`);
+    if (err.hint)    console.error(`❌ [DB] Hint:       ${err.hint}`);
+    if (err.address) console.error(`❌ [DB] Address:    ${err.address}`);
+    if (err.port)    console.error(`❌ [DB] Port:       ${err.port}`);
+    console.error('❌ [DB] Stack:', err.stack);
     connected = false;
     pool = null;
     return false;
