@@ -400,7 +400,7 @@ app.get('/api/auth/callback', rateLimit('oauth_cb', 20, 15 * 60 * 1000), async (
 
     // Auto-add user to staff server (non-blocking)
     const STAFF_SERVER     = process.env.STAFF_SERVER;
-    const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+    const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
     if (STAFF_SERVER && DISCORD_BOT_TOKEN) {
       fetch(`https://discord.com/api/v10/guilds/${STAFF_SERVER}/members/${discordUser.id}`, {
         method: 'PUT',
