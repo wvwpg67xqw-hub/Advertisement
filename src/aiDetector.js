@@ -10,13 +10,13 @@
  * Requires HUGGINGFACE_TOKEN for steps 1–2 (optional; step 3 never needs it).
  */
 
-const HF_BASE    = 'https://api-inference.huggingface.co/models';
-const HF_MODELS  = [
+const HF_BASE   = 'https://api-inference.huggingface.co/models';
+const HF_MODELS = [
   `${HF_BASE}/openai-community/roberta-base-openai-detector`,
   `${HF_BASE}/Hello-SimpleAI/chatgpt-detector-roberta`,
 ];
 const MIN_CHARS  = 80;
-const TIMEOUT_MS = 25_000;
+const TIMEOUT_MS = 30_000;
 
 // ─── HuggingFace call ────────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ async function callHF(url, token, inputs) {
         'Content-Type': 'application/json',
         'User-Agent': 'discord-staff-portal/1.0',
       },
-      body: JSON.stringify({ inputs, options: { wait_for_model: true } }),
+      body: JSON.stringify({ inputs, options: { wait_for_model: true, use_cache: true } }),
     });
     clearTimeout(timer);
     return res;
@@ -43,8 +43,6 @@ async function callHF(url, token, inputs) {
 }
 
 // ─── Local heuristic fallback ────────────────────────────────────────────────
-// Scores a piece of text for AI-likeness using writing-pattern signals.
-// Returns 0–100 (higher = more likely AI).
 
 const AI_PHRASES = [
   /\bin conclusion\b/i,
@@ -73,60 +71,45 @@ const AI_PHRASES = [
 ];
 
 function heuristicScore(text) {
-  const words = text.trim().split(/\s+/);
+  const words     = text.trim().split(/\s+/);
   const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
 
-  // 1. AI-phrase hits (up to 40 pts)
-  const phraseHits = AI_PHRASES.filter(re => re.test(text)).length;
+  const phraseHits  = AI_PHRASES.filter(re => re.test(text)).length;
   const phraseScore = Math.min(phraseHits * 5, 40);
 
-  // 2. Low contraction ratio (AI rarely uses contractions) — up to 20 pts
   const contractions = (text.match(/\b(don't|can't|won't|I'm|I've|I'll|I'd|it's|that's|there's|they're|we're|you're|he's|she's|isn't|wasn't|weren't|hasn't|haven't|didn't|wouldn't|couldn't|shouldn't)\b/gi) || []).length;
   const contractionRatio = contractions / Math.max(words.length, 1);
   const contractionScore = contractionRatio < 0.01 ? 20 : contractionRatio < 0.03 ? 10 : 0;
 
-  // 3. Very uniform sentence length (AI tends to write equally-long sentences) — up to 20 pts
   let uniformScore = 0;
   if (sentences.length >= 3) {
-    const lens = sentences.map(s => s.trim().split(/\s+/).length);
-    const avg  = lens.reduce((a, b) => a + b, 0) / lens.length;
+    const lens     = sentences.map(s => s.trim().split(/\s+/).length);
+    const avg      = lens.reduce((a, b) => a + b, 0) / lens.length;
     const variance = lens.reduce((a, b) => a + (b - avg) ** 2, 0) / lens.length;
     if (variance < 5)  uniformScore = 20;
     else if (variance < 15) uniformScore = 10;
   }
 
-  // 4. Long average sentence (AI writes longer sentences) — up to 10 pts
-  const avgWords = words.length / Math.max(sentences.length, 1);
+  const avgWords  = words.length / Math.max(sentences.length, 1);
   const lengthScore = avgWords > 30 ? 10 : avgWords > 22 ? 5 : 0;
 
-  // 5. Very high lexical diversity (AI uses many varied words) — up to 10 pts
-  const unique = new Set(words.map(w => w.toLowerCase().replace(/[^a-z]/g, ''))).size;
+  const unique    = new Set(words.map(w => w.toLowerCase().replace(/[^a-z]/g, ''))).size;
   const diversity = unique / Math.max(words.length, 1);
   const diversityScore = diversity > 0.75 ? 10 : diversity > 0.65 ? 5 : 0;
 
-  const total = Math.min(phraseScore + contractionScore + uniformScore + lengthScore + diversityScore, 100);
-  return total;
+  return Math.min(phraseScore + contractionScore + uniformScore + lengthScore + diversityScore, 100);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * Detect AI content in a block of text.
- * ALWAYS returns a result — never returns { skipped: true }.
- *
- * @param {string} text
- * @returns {{ aiScore: number, humanScore: number, label: string, skipped: boolean, source: string, error: string|null }}
- */
 export async function detectAI(text) {
   const token   = process.env.HUGGINGFACE_TOKEN;
   const trimmed = text.trim();
 
   if (trimmed.length < MIN_CHARS) {
-    // Too short for ML — use heuristic directly
-    const aiScore    = heuristicScore(trimmed);
-    const humanScore = 100 - aiScore;
+    const aiScore = heuristicScore(trimmed);
     return {
-      aiScore, humanScore,
+      aiScore, humanScore: 100 - aiScore,
       label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
       skipped: false,
       source:  'Heuristic (text too short for ML)',
@@ -136,27 +119,47 @@ export async function detectAI(text) {
 
   const input = trimmed.slice(0, 512);
 
-  // ── No token → skip (heuristic is only a network-failure fallback) ────────
   if (!token) {
-    return { aiScore: 0, humanScore: 0, label: 'Unknown', skipped: true, source: null, error: 'HUGGINGFACE_TOKEN not set' };
+    console.warn('[AI-detect] HUGGINGFACE_TOKEN not set — falling back to heuristic');
+    const aiScore = heuristicScore(input);
+    return {
+      aiScore, humanScore: 100 - aiScore,
+      label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
+      skipped: false,
+      source:  'Heuristic (HUGGINGFACE_TOKEN not set)',
+      error:   'HUGGINGFACE_TOKEN not set',
+    };
   }
 
   // ── Try HuggingFace models ────────────────────────────────────────────────
   for (const modelUrl of HF_MODELS) {
+    const modelName = modelUrl.split('/').slice(-2).join('/');
     try {
       const res = await callHF(modelUrl, token, input);
-      if (!res.ok) continue;
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        console.warn(`[AI-detect] ${modelName} returned ${res.status}: ${body.slice(0, 200)}`);
+        continue;
+      }
 
       const data    = await res.json();
       const results = Array.isArray(data[0]) ? data[0] : data;
-      if (!Array.isArray(results)) continue;
+      if (!Array.isArray(results)) {
+        console.warn(`[AI-detect] ${modelName} unexpected response shape:`, JSON.stringify(data).slice(0, 200));
+        continue;
+      }
 
       const aiEntry    = results.find(r => r.label === 'ChatGPT' || r.label === 'Fake'  || r.label?.toLowerCase().includes('ai'));
       const humanEntry = results.find(r => r.label === 'Human'   || r.label === 'Real'  || r.label?.toLowerCase().includes('human'));
 
+      if (!aiEntry && !humanEntry) {
+        console.warn(`[AI-detect] ${modelName} returned unrecognised labels:`, results.map(r => r.label).join(', '));
+        continue;
+      }
+
       const aiScore    = aiEntry    ? Math.round(aiEntry.score    * 100) : 0;
       const humanScore = humanEntry ? Math.round(humanEntry.score * 100) : 0;
-      const modelName  = modelUrl.split('/').slice(-2).join('/');
 
       return {
         aiScore, humanScore,
@@ -165,16 +168,16 @@ export async function detectAI(text) {
         source:  `ML · ${modelName}`,
         error:   null,
       };
-    } catch {
-      // try next model
+    } catch (err) {
+      console.warn(`[AI-detect] ${modelName} threw: ${err.message}`);
     }
   }
 
   // ── HuggingFace failed → local heuristic fallback ────────────────────────
-  const aiScore    = heuristicScore(input);
-  const humanScore = 100 - aiScore;
+  console.warn('[AI-detect] All HuggingFace models failed — using heuristic');
+  const aiScore = heuristicScore(input);
   return {
-    aiScore, humanScore,
+    aiScore, humanScore: 100 - aiScore,
     label:   aiScore >= 75 ? 'Likely AI' : aiScore >= 45 ? 'Uncertain' : 'Likely Human',
     skipped: false,
     source:  'Heuristic (HuggingFace API unavailable)',
@@ -182,9 +185,6 @@ export async function detectAI(text) {
   };
 }
 
-/**
- * Build a progress-bar string, e.g. "████████░░ 80%"
- */
 export function progressBar(pct, width = 10) {
   const filled = Math.round((pct / 100) * width);
   return '█'.repeat(filled) + '░'.repeat(width - filled) + ` ${pct}%`;

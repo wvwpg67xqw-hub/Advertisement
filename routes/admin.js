@@ -222,6 +222,33 @@ function makeFakeUser() {
   return { userId, username, avatar };
 }
 
+// Models tried in order — first success wins
+const HF_GEN_MODELS = [
+  {
+    url: 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2',
+    buildPrompt: (role, numbered) =>
+      `[INST] You are filling out a Discord staff application for the role of ${role}. ` +
+      `Answer each numbered question in 2–3 natural, genuine sentences as a real person. ` +
+      `Do not repeat the question. Number your answers.\n\n${numbered} [/INST]\n1.`,
+  },
+  {
+    url: 'https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-alpha',
+    buildPrompt: (role, numbered) =>
+      `<|system|>You are filling out a Discord staff application for the role of ${role}. ` +
+      `Answer each question in 2–3 natural sentences as a real person. ` +
+      `Do not repeat the question. Number each answer.</s>\n` +
+      `<|user|>${numbered}</s>\n<|assistant|>1.`,
+  },
+  {
+    url: 'https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta',
+    buildPrompt: (role, numbered) =>
+      `<|system|>You are filling out a Discord staff application for the role of ${role}. ` +
+      `Answer each question in 2–3 natural sentences as a real person. ` +
+      `Do not repeat the question. Number each answer.</s>\n` +
+      `<|user|>${numbered}</s>\n<|assistant|>1.`,
+  },
+];
+
 async function generateAiAnswers(questions, role) {
   const token = process.env.HUGGINGFACE_TOKEN;
 
@@ -236,40 +263,56 @@ async function generateAiAnswers(questions, role) {
     return null;
   };
 
-  const answers = questions.map(q => shortAnswer(q));
+  const answers  = questions.map(q => shortAnswer(q));
   const essayIdx = answers.map((a, i) => a === null ? i : null).filter(i => i !== null);
 
   if (essayIdx.length === 0 || !token) {
+    if (!token) console.warn('[test-app] HUGGINGFACE_TOKEN not set — using placeholder answers');
     return answers.map((a, i) => a ?? `[TEST] Sample answer for: "${questions[i].slice(0, 60)}"`);
   }
 
   const numbered = essayIdx.map((qi, n) => `${n + 1}. ${questions[qi]}`).join('\n');
-  const prompt =
-    `<|system|>You are writing a realistic Discord staff application for the role of ${role}. ` +
-    `Answer each question in 2–3 natural sentences as a real person would. Be genuine and specific. ` +
-    `Do not repeat the question. Number each answer.</s>\n` +
-    `<|user|>${numbered}</s>\n<|assistant|>1.`;
 
-  try {
-    const hfRes = await fetch('https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        inputs: prompt,
-        parameters: { max_new_tokens: 1800, return_full_text: false, temperature: 0.75, do_sample: true },
-      }),
-    });
+  for (const model of HF_GEN_MODELS) {
+    const modelName = model.url.split('/').slice(-2).join('/');
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30_000);
 
-    if (hfRes.ok) {
+      const hfRes = await fetch(model.url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputs: model.buildPrompt(role, numbered),
+          parameters: { max_new_tokens: 1800, return_full_text: false, temperature: 0.75, do_sample: true },
+          options: { wait_for_model: true },
+        }),
+      });
+      clearTimeout(timer);
+
+      if (!hfRes.ok) {
+        const body = await hfRes.text().catch(() => '');
+        console.warn(`[test-app] ${modelName} returned ${hfRes.status}: ${body.slice(0, 200)}`);
+        continue;
+      }
+
       const data = await hfRes.json();
-      const raw = (Array.isArray(data) ? data[0]?.generated_text : data?.generated_text) ?? '';
+      const raw  = (Array.isArray(data) ? data[0]?.generated_text : data?.generated_text) ?? '';
+      if (!raw.trim()) {
+        console.warn(`[test-app] ${modelName} returned empty text`);
+        continue;
+      }
+
       const parts = ('1.' + raw).split(/\n?\d+\.\s+/).filter(Boolean);
       essayIdx.forEach((qi, pi) => {
         answers[qi] = parts[pi]?.trim() || null;
       });
+      console.log(`[test-app] Generated answers using ${modelName}`);
+      break;
+    } catch (e) {
+      console.warn(`[test-app] ${modelName} threw: ${e.message}`);
     }
-  } catch (e) {
-    console.error('[test-app] HF generation error:', e.message);
   }
 
   return answers.map((a, i) => a ?? `[TEST] Sample answer for: "${questions[i].slice(0, 60)}"`);
