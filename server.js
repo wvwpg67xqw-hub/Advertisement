@@ -1543,6 +1543,8 @@ if (id.startsWith('app_')) {
           .addFields({ name: '🛡️ Reviewed by', value: reviewerTag, inline: true })
           .setTimestamp();
         await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
+        await thread.setLocked(true, 'Application accepted').catch(() => null);
+        await thread.setArchived(true, 'Application accepted').catch(() => null);
       })(),
     ]).catch(() => null);
 
@@ -1581,6 +1583,8 @@ if (id.startsWith('app_')) {
           .addFields({ name: '🛡️ Reviewed by', value: denyReviewerTag, inline: true })
           .setTimestamp();
         await thread.send({ embeds: [decisionEmbed] }).catch(() => null);
+        await thread.setLocked(true, 'Application denied').catch(() => null);
+        await thread.setArchived(true, 'Application denied').catch(() => null);
       })(),
     ]).catch(() => null);
 
