@@ -3,13 +3,8 @@ import * as fb from './jsonFallback.js';
 
 function ts() { return Math.floor(Date.now() / 1000); }
 
-function toPg(sql) {
-  let i = 0;
-  return sql.replace(/\?/g, () => `$${++i}`);
-}
-
 async function q(sql, params = []) {
-  const { rows } = await getPool().query(toPg(sql), params);
+  const [rows] = await getPool().query(sql, params);
   return rows;
 }
 
@@ -18,7 +13,8 @@ async function q1(sql, params = []) {
 }
 
 async function qr(sql, params = []) {
-  return getPool().query(toPg(sql), params);
+  const [rows] = await getPool().query(sql, params);
+  return rows;
 }
 
 function parseJson(val, fallback) {

@@ -30,7 +30,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "sh start.sh"
+args = "node index.js"
 waitForPort = 5000
 
 [agent]

@@ -1,8 +1,5 @@
-import pg from 'pg';
-import dns from 'dns/promises';
+import mysql from 'mysql2/promise';
 import { exportAllForMigration } from './jsonFallback.js';
-
-const { Pool } = pg;
 
 let pool = null;
 let connected = false;
@@ -12,12 +9,16 @@ let retryTimer = null;
 const RETRY_INTERVAL_MS = 30_000;
 
 function buildPool() {
-  return new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+  return mysql.createPool({
+    host:     process.env.DB_HOST,
+    port:     parseInt(process.env.DB_PORT || '3306', 10),
+    database: process.env.DB_NAME,
+    user:     process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    waitForConnections: true,
+    connectionLimit:    10,
+    connectTimeout:     10000,
+    multipleStatements: false,
   });
 }
 
@@ -30,13 +31,13 @@ async function run(p, sql, params = []) {
 
 async function runMigration(p) {
   if (migrationDone) return;
-  console.log('🔄 [DB] PostgreSQL connected — migrating JSON fallback data...');
+  console.log('🔄 [DB] MySQL connected — migrating JSON fallback data...');
   try {
     const data = exportAllForMigration();
 
     for (const g of (data.guilds || [])) {
       await run(p,
-        `INSERT INTO guilds (guild_id, log_channel_id, warn_log_channel_id,
+        `INSERT IGNORE INTO guilds (guild_id, log_channel_id, warn_log_channel_id,
           strike_log_channel_id, request_log_channel_id, ad_warn_log_channel_id,
           ad_warn_dm_log_channel_id, staff_updates_channel_id, jail_role_id,
           muted_role_id, ban_request_channel_id, blacklist_request_channel_id,
@@ -49,8 +50,7 @@ async function runMigration(p) {
           level_log_channel_id, level_xp_channel_id, leveling_enabled,
           abuse_log_channel_id, is_hub, hub_guild_id, github_repo,
           is_staff_server, staff_guild_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
-         ON CONFLICT (guild_id) DO NOTHING`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           g.guild_id, g.log_channel_id||null, g.warn_log_channel_id||null,
           g.strike_log_channel_id||null, g.request_log_channel_id||null, g.ad_warn_log_channel_id||null,
@@ -73,162 +73,162 @@ async function runMigration(p) {
 
     for (const r of (data.warns || [])) {
       await run(p,
-        `INSERT INTO warns (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO warns (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?,?,?,?,?,?)`,
         [r.case_id, r.guild_id, r.user_id, r.moderator_id, r.reason, r.created_at]
       );
     }
 
     for (const r of (data.ad_warns || [])) {
       await run(p,
-        `INSERT INTO ad_warns (case_id, guild_id, user_id, moderator_id, reason, message_id, message_content, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO ad_warns (case_id, guild_id, user_id, moderator_id, reason, message_id, message_content, created_at) VALUES (?,?,?,?,?,?,?,?)`,
         [r.case_id, r.guild_id, r.user_id, r.moderator_id, r.reason, r.message_id||null, r.message_content||null, r.created_at]
       );
     }
 
     for (const r of (data.strikes || [])) {
       await run(p,
-        `INSERT INTO strikes (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO strikes (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?,?,?,?,?,?)`,
         [r.case_id, r.guild_id, r.user_id, r.moderator_id, r.reason, r.created_at]
       );
     }
 
     for (const r of (data.jailed_users || [])) {
       await run(p,
-        `INSERT INTO jailed_users (guild_id, user_id, original_roles, jailed_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO jailed_users (guild_id, user_id, original_roles, jailed_at) VALUES (?,?,?,?)`,
         [r.guild_id, r.user_id, typeof r.original_roles === 'string' ? r.original_roles : JSON.stringify(r.original_roles||[]), r.jailed_at]
       );
     }
 
     for (const r of (data.message_counts || [])) {
       await run(p,
-        `INSERT INTO message_counts (guild_id, user_id, count) VALUES ($1,$2,$3) ON CONFLICT (guild_id, user_id) DO UPDATE SET count = GREATEST(message_counts.count, EXCLUDED.count)`,
+        `INSERT INTO message_counts (guild_id, user_id, count) VALUES (?,?,?) ON DUPLICATE KEY UPDATE count = GREATEST(count, VALUES(count))`,
         [r.guild_id, r.user_id, r.count]
       );
     }
 
     for (const r of (data.snipe_cache || [])) {
       await run(p,
-        `INSERT INTO snipe_cache (guild_id, channel_id, content, author_id, author_name, author_avatar, deleted_at) VALUES ($1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (guild_id, channel_id) DO UPDATE SET content=EXCLUDED.content, author_id=EXCLUDED.author_id, author_name=EXCLUDED.author_name, author_avatar=EXCLUDED.author_avatar, deleted_at=EXCLUDED.deleted_at`,
+        `INSERT INTO snipe_cache (guild_id, channel_id, content, author_id, author_name, author_avatar, deleted_at) VALUES (?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE content=VALUES(content), author_id=VALUES(author_id), author_name=VALUES(author_name), author_avatar=VALUES(author_avatar), deleted_at=VALUES(deleted_at)`,
         [r.guild_id, r.channel_id, r.content, r.author_id, r.author_name, r.author_avatar, r.deleted_at]
       );
     }
 
     for (const r of (data.balances || [])) {
       await run(p,
-        `INSERT INTO balances (guild_id, user_id, balance) VALUES ($1,$2,$3) ON CONFLICT (guild_id, user_id) DO UPDATE SET balance = GREATEST(balances.balance, EXCLUDED.balance)`,
+        `INSERT INTO balances (guild_id, user_id, balance) VALUES (?,?,?) ON DUPLICATE KEY UPDATE balance = GREATEST(balance, VALUES(balance))`,
         [r.guild_id, r.user_id, r.balance]
       );
     }
 
     for (const r of (data.breaks || [])) {
       await run(p,
-        `INSERT INTO breaks (guild_id, user_id, username, reason, started_at, end_at, saved_roles) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO breaks (guild_id, user_id, username, reason, started_at, end_at, saved_roles) VALUES (?,?,?,?,?,?,?)`,
         [r.guild_id, r.user_id, r.username, r.reason||null, r.started_at, r.end_at||null, typeof r.saved_roles === 'string' ? r.saved_roles : JSON.stringify(r.saved_roles||[])]
       );
     }
 
     for (const r of (data.bot_applications || [])) {
       await run(p,
-        `INSERT INTO applications (guild_id, user_id, username, data, submitted_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO applications (guild_id, user_id, username, data, submitted_at) VALUES (?,?,?,?,?)`,
         [r.guild_id, r.user_id, r.username, r.data, r.submitted_at]
       );
     }
 
     for (const r of (data.bot_blacklist || [])) {
       await run(p,
-        `INSERT INTO bot_blacklist (guild_id, user_id, moderator_id, reason, created_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO bot_blacklist (guild_id, user_id, moderator_id, reason, created_at) VALUES (?,?,?,?,?)`,
         [r.guild_id, r.user_id, r.moderator_id, r.reason, r.created_at]
       );
     }
 
     for (const r of (data.levels || [])) {
       await run(p,
-        `INSERT INTO levels (guild_id, user_id, total_xp) VALUES ($1,$2,$3) ON CONFLICT (guild_id, user_id) DO UPDATE SET total_xp = GREATEST(levels.total_xp, EXCLUDED.total_xp)`,
+        `INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?,?,?) ON DUPLICATE KEY UPDATE total_xp = GREATEST(total_xp, VALUES(total_xp))`,
         [r.guild_id, r.user_id, r.total_xp]
       );
     }
 
     for (const r of (data.disabled_commands || [])) {
       await run(p,
-        `INSERT INTO disabled_commands (guild_id, command_name) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO disabled_commands (guild_id, command_name) VALUES (?,?)`,
         [r.guild_id, r.command_name]
       );
     }
 
     for (const r of (data.auto_reacts || [])) {
       await run(p,
-        `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated) VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (guild_id, user_id) DO UPDATE SET emoji_id=EXCLUDED.emoji_id, emoji_name=EXCLUDED.emoji_name, animated=EXCLUDED.animated`,
+        `INSERT INTO auto_reacts (guild_id, user_id, emoji_id, emoji_name, animated) VALUES (?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE emoji_id=VALUES(emoji_id), emoji_name=VALUES(emoji_name), animated=VALUES(animated)`,
         [r.guild_id || 'global', r.user_id, r.emoji_id||null, r.emoji_name||'', r.animated||0]
       );
     }
 
     for (const r of (data.invite_blacklist || [])) {
       await run(p,
-        `INSERT INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at) VALUES (?,?,?,?)`,
         [r.guild_id, r.blocked_guild_id, r.added_by, r.added_at]
       );
     }
 
     for (const r of (data.network_applications || [])) {
       await run(p,
-        `INSERT INTO network_applications (target_guild_id, applicant_id, applicant_username, applicant_avatar, why, experience, timezone, age, status, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO network_applications (target_guild_id, applicant_id, applicant_username, applicant_avatar, why, experience, timezone, age, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [r.target_guild_id, r.applicant_id, r.applicant_username, r.applicant_avatar||null, r.why, r.experience, r.timezone, r.age, r.status||'pending', r.created_at]
       );
     }
 
     for (const r of (data.sticky_messages || [])) {
       await run(p,
-        `INSERT INTO sticky_messages (guild_id, channel_id, message) VALUES ($1,$2,$3) ON CONFLICT (guild_id, channel_id) DO UPDATE SET message=EXCLUDED.message`,
+        `INSERT INTO sticky_messages (guild_id, channel_id, message) VALUES (?,?,?) ON DUPLICATE KEY UPDATE message=VALUES(message)`,
         [r.guild_id, r.channel_id, r.message]
       );
     }
 
     for (const r of (data.sticky_channel_state || [])) {
       await run(p,
-        `INSERT INTO sticky_channel_state (guild_id, channel_id, last_message_id) VALUES ($1,$2,$3) ON CONFLICT (guild_id, channel_id) DO UPDATE SET last_message_id=EXCLUDED.last_message_id`,
+        `INSERT INTO sticky_channel_state (guild_id, channel_id, last_message_id) VALUES (?,?,?) ON DUPLICATE KEY UPDATE last_message_id=VALUES(last_message_id)`,
         [r.guild_id, r.channel_id, r.last_message_id]
       );
     }
 
     for (const r of (data.hall_of_shame || [])) {
       await run(p,
-        `INSERT INTO hall_of_shame (guild_id, message_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO hall_of_shame (guild_id, message_id) VALUES (?,?)`,
         [r.guild_id, r.message_id]
       );
     }
 
     for (const r of (data.honeypot_config || [])) {
       await run(p,
-        `INSERT INTO honeypot_config (guild_id, channel_id, alert_channel_id, action, created_at, created_by) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO honeypot_config (guild_id, channel_id, alert_channel_id, action, created_at, created_by) VALUES (?,?,?,?,?,?)`,
         [r.guild_id, r.channel_id, r.alert_channel_id||null, r.action||'none', r.created_at, r.created_by]
       );
     }
 
     for (const r of (data.honeypot_triggers || [])) {
       await run(p,
-        `INSERT INTO honeypot_triggers (guild_id, user_id, username, content_preview, triggered_at, action_taken) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO honeypot_triggers (guild_id, user_id, username, content_preview, triggered_at, action_taken) VALUES (?,?,?,?,?,?)`,
         [r.guild_id, r.user_id, r.username||null, r.content_preview||null, r.triggered_at, r.action_taken||'none']
       );
     }
 
     for (const r of (data.ad_channels || [])) {
       await run(p,
-        `INSERT INTO ad_channels (guild_id, channel_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO ad_channels (guild_id, channel_id) VALUES (?,?)`,
         [r.guild_id, r.channel_id]
       );
     }
 
     for (const r of (data.ad_posts || [])) {
       await run(p,
-        `INSERT INTO ad_posts (guild_id, channel_id, message_id, user_id, created_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+        `INSERT IGNORE INTO ad_posts (guild_id, channel_id, message_id, user_id, created_at) VALUES (?,?,?,?,?)`,
         [r.guild_id, r.channel_id, r.message_id, r.user_id, r.created_at]
       );
     }
 
     migrationDone = true;
-    console.log('✅ [DB] JSON → PostgreSQL migration complete.');
+    console.log('✅ [DB] JSON → MySQL migration complete.');
   } catch (err) {
     console.error('⚠️  [DB] Migration error (non-fatal):', err.message);
   }
@@ -286,7 +286,7 @@ async function initTables(p) {
       staff_server_skip_roles TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS warns (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       case_id VARCHAR(20),
       guild_id VARCHAR(20),
       user_id VARCHAR(20),
@@ -295,7 +295,7 @@ async function initTables(p) {
       created_at INT
     )`,
     `CREATE TABLE IF NOT EXISTS ad_warns (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       case_id VARCHAR(20),
       guild_id VARCHAR(20),
       user_id VARCHAR(20),
@@ -306,7 +306,7 @@ async function initTables(p) {
       created_at INT
     )`,
     `CREATE TABLE IF NOT EXISTS strikes (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       case_id VARCHAR(20),
       guild_id VARCHAR(20),
       user_id VARCHAR(20),
@@ -344,7 +344,7 @@ async function initTables(p) {
       PRIMARY KEY (guild_id, user_id)
     )`,
     `CREATE TABLE IF NOT EXISTS breaks (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       guild_id VARCHAR(20),
       user_id VARCHAR(20),
       username VARCHAR(200),
@@ -354,7 +354,7 @@ async function initTables(p) {
       saved_roles TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS applications (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       guild_id VARCHAR(20),
       user_id VARCHAR(20),
       username VARCHAR(200),
@@ -373,7 +373,7 @@ async function initTables(p) {
       PRIMARY KEY (guild_id, command_name)
     )`,
     `CREATE TABLE IF NOT EXISTS bot_blacklist (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       guild_id VARCHAR(20),
       user_id VARCHAR(20),
       moderator_id VARCHAR(20),
@@ -381,7 +381,7 @@ async function initTables(p) {
       created_at INT
     )`,
     `CREATE TABLE IF NOT EXISTS network_applications (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       target_guild_id VARCHAR(20),
       applicant_id VARCHAR(20),
       applicant_username VARCHAR(200),
@@ -399,7 +399,7 @@ async function initTables(p) {
       PRIMARY KEY (guild_id, channel_id)
     )`,
     `CREATE TABLE IF NOT EXISTS ad_posts (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       guild_id VARCHAR(20),
       channel_id VARCHAR(20),
       message_id VARCHAR(20),
@@ -412,7 +412,7 @@ async function initTables(p) {
       emoji_id VARCHAR(20),
       emoji_name VARCHAR(100) NOT NULL DEFAULT '',
       animated SMALLINT DEFAULT 0,
-      ar_expires_at TIMESTAMPTZ NULL,
+      ar_expires_at DATETIME NULL,
       PRIMARY KEY (guild_id, user_id)
     )`,
     `CREATE TABLE IF NOT EXISTS sticky_messages (
@@ -448,7 +448,7 @@ async function initTables(p) {
       created_by VARCHAR(20) NOT NULL
     )`,
     `CREATE TABLE IF NOT EXISTS honeypot_triggers (
-      id SERIAL PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       guild_id VARCHAR(20) NOT NULL,
       user_id VARCHAR(20) NOT NULL,
       username VARCHAR(200),
@@ -459,103 +459,47 @@ async function initTables(p) {
   ];
   for (const sql of tables) await p.query(sql).catch(() => {});
 
-  // Column migrations — safe to run every boot (IF NOT EXISTS)
   const colMigrations = [
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS staff_server_role_map TEXT`,
     `ALTER TABLE guilds ADD COLUMN IF NOT EXISTS staff_server_skip_roles TEXT`,
   ];
   for (const sql of colMigrations) await p.query(sql).catch(() => {});
 
-  console.log('✅ [DB] PostgreSQL tables ready');
-}
-
-function maskUrl(url) {
-  try {
-    const u = new URL(url);
-    return `${u.protocol}//${u.username ? u.username + ':***@' : ''}${u.host}${u.pathname}`;
-  } catch {
-    return '(invalid URL)';
-  }
-}
-
-let dnsBlocked = false;
-
-async function checkDns(host) {
-  // 1 — try the system resolver first
-  try {
-    const addrs = await dns.lookup(host, { all: true });
-    console.log(`✅ [DB] DNS resolved via system: ${addrs.map(a => a.address).join(', ')}`);
-    return true;
-  } catch {
-    console.error(`⚠️  [DB] System DNS failed for ${host} — trying Google DNS (8.8.8.8)...`);
-  }
-
-  // 2 — fall back to Google's public resolver
-  try {
-    const resolver = new dns.Resolver();
-    resolver.setServers(['8.8.8.8', '1.1.1.1']);
-    const addrs = await resolver.resolve4(host);
-    console.log(`✅ [DB] DNS resolved via Google DNS: ${addrs.join(', ')}`);
-    console.error(`❌ [DB] Your container's default DNS can't resolve Supabase.`);
-    console.error(`❌ [DB] Fix: ask your host to set the container DNS to 8.8.8.8`);
-    return true;
-  } catch {
-    console.error(`❌ [DB] Google DNS also failed — container has NO external DNS access.`);
-    console.error(`❌ [DB] This is a hard network block on your hosting container.`);
-    console.error(`❌ [DB] Solutions:`);
-    console.error(`❌ [DB]   1. Contact your host (FeatherPanel node owner) to allow outbound DNS`);
-    console.error(`❌ [DB]   2. Use a database hosted on the same node/network`);
-    console.error(`❌ [DB]   3. Self-host PostgreSQL on your VPS instead of Supabase`);
-    console.error(`❌ [DB] Stopping retry loop — DNS won't fix itself. Restart bot after fixing.`);
-    dnsBlocked = true;
-    return false;
-  }
+  console.log('✅ [DB] MySQL tables ready');
 }
 
 async function tryConnect(isRetry = false) {
-  if (!process.env.DATABASE_URL) {
-    console.error('❌ [DB] DATABASE_URL is not set — cannot connect to PostgreSQL.');
+  const host = process.env.DB_HOST;
+  const user = process.env.DB_USER;
+  const name = process.env.DB_NAME;
+
+  if (!host || !user || !name) {
+    console.error('❌ [DB] DB_HOST, DB_USER, and DB_NAME must be set — cannot connect to MySQL.');
     return false;
   }
 
   if (!isRetry) {
-    console.log(`🔌 [DB] Connecting to: ${maskUrl(process.env.DATABASE_URL)}`);
-  }
-
-  // DNS check (always run on first attempt; on retries only if not confirmed blocked)
-  if (!isRetry || !dnsBlocked) {
-    const host = (() => { try { return new URL(process.env.DATABASE_URL).hostname; } catch { return null; } })();
-    if (host) {
-      const ok = await checkDns(host);
-      if (!ok) return false;
-    }
+    console.log(`🔌 [DB] Connecting to MySQL: ${user}@${host}:${process.env.DB_PORT || 3306}/${name}`);
   }
 
   try {
     const p = buildPool();
-    const client = await p.connect();
-    client.release();
+    const conn = await p.getConnection();
+    conn.release();
     await initTables(p);
     pool = p;
     connected = true;
-    console.log('✅ [DB] Connected to PostgreSQL');
+    console.log('✅ [DB] Connected to MySQL');
     await runMigration(p);
     return true;
   } catch (err) {
     if (!isRetry) {
-      // Full detail on the first failure only
-      console.error('❌ [DB] PostgreSQL connection FAILED — falling back to JSON storage.');
-      console.error(`❌ [DB] Target:     ${maskUrl(process.env.DATABASE_URL)}`);
-      console.error(`❌ [DB] Error name: ${err.name}`);
-      console.error(`❌ [DB] Error code: ${err.code ?? '(none)'}`);
-      console.error(`❌ [DB] Message:    ${err.message}`);
-      if (err.detail)  console.error(`❌ [DB] Detail:     ${err.detail}`);
-      if (err.hint)    console.error(`❌ [DB] Hint:       ${err.hint}`);
-      if (err.address) console.error(`❌ [DB] Address:    ${err.address}`);
-      if (err.port)    console.error(`❌ [DB] Port:       ${err.port}`);
-      console.error('❌ [DB] Stack:', err.stack);
+      console.error('❌ [DB] MySQL connection FAILED — falling back to JSON storage.');
+      console.error(`❌ [DB] Host:      ${host}:${process.env.DB_PORT || 3306}`);
+      console.error(`❌ [DB] Database:  ${name}`);
+      console.error(`❌ [DB] User:      ${user}`);
+      console.error(`❌ [DB] Error:     ${err.message}`);
     } else {
-      // Quiet on retries — just one line
       console.warn(`⚠️  [DB] Retry failed: ${err.code ?? err.message}`);
     }
     connected = false;
@@ -567,12 +511,12 @@ async function tryConnect(isRetry = false) {
 function startRetryLoop() {
   if (retryTimer) return;
   retryTimer = setInterval(async () => {
-    if (connected || dnsBlocked) {
+    if (connected) {
       clearInterval(retryTimer);
       retryTimer = null;
       return;
     }
-    console.log('🔁 [DB] Retrying PostgreSQL connection...');
+    console.log('🔁 [DB] Retrying MySQL connection...');
     const ok = await tryConnect(true);
     if (ok) {
       clearInterval(retryTimer);
