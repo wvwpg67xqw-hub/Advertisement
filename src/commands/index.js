@@ -14,6 +14,7 @@ export { defs as stickyDefs, handleSticky } from './sticky.js';
 export { contextMenuDefs, handleWarnUserContextMenu, handleAdWarnMessageContextMenu } from './context-menus.js';
 export { defs as buyDefs, handleBuy } from './buy.js';
 export { defs as inviteBlacklistDefs, handleBlacklistServer, handleMassBlacklist, checkInviteBlacklist } from './invite-blacklist.js';
+export { defs as dbImportDefs, handleDbImport } from './db-import.js';
 
 import { defs as moderationDefs } from './moderation.js';
 import { defs as staffManagementDefs } from './staff-management.js';
@@ -29,6 +30,7 @@ import { defs as devCommandDefs } from './dev-commands.js';
 import { defs as stickyDefs, handleSticky } from './sticky.js';
 import { defs as buyDefs } from './buy.js';
 import { defs as inviteBlacklistDefs } from './invite-blacklist.js';
+import { defs as dbImportDefs } from './db-import.js';
 
 import { contextMenuDefs } from './context-menus.js';
 
@@ -47,6 +49,7 @@ export const commandDefs = [
   ...stickyDefs,
   ...buyDefs,
   ...inviteBlacklistDefs,
+  ...dbImportDefs,
   ...contextMenuDefs,
 ];
 

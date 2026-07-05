@@ -23,7 +23,8 @@ import staffRoutes from './routes/staff.js';
 import { setStaffDiscordClient } from './routes/staff.js';
 
 import {
-  commandDefs, handleWarn, handleWarns, handleWarnLeaderboard,
+  commandDefs, handleDbImport,
+  handleWarn, handleWarns, handleWarnLeaderboard,
   handleAdWarn, handleRemoveAdWarn, handleRemoveWarn, handleMute, handleUnmute,
   handleBan, handleFire, handlePromote, handleDemoteUser,
   handleStrike, handleStrikeRemove, handleJail, handleUnjail,
@@ -902,6 +903,7 @@ const botHandlers = {
   'dev-test-abuse':    handleTestAbuse,
   'honeypot':          handleHoneypot,
   'report':            handleReport,
+  'import-db':         handleDbImport,
 };
 
 // ── Owner Command Panel ───────────────────────────────────────────────────────
@@ -2751,12 +2753,32 @@ client.once('clientReady', async () => {
         'testunicode','testempty','testspam',
       ]);
 
-      const prodCommands = allCommands.filter(c => !DEV_CMD_NAMES.has(c.name));
+      // import-db is guild-only (never registered globally)
+      const IMPORT_DB_GUILD_ID = '1487744336908124190';
+      const GUILD_ONLY_CMD_NAMES = new Set(['import-db']);
+
+      const prodCommands = allCommands.filter(c => !DEV_CMD_NAMES.has(c.name) && !GUILD_ONLY_CMD_NAMES.has(c.name));
       const devCommands  = allCommands.filter(c =>  DEV_CMD_NAMES.has(c.name));
+      const guildOnlyCommands = allCommands.filter(c => GUILD_ONLY_CMD_NAMES.has(c.name));
 
       // Register prod commands globally
       await rest.put(Routes.applicationCommands(CLIENT_ID), { body: prodCommands.map(c => c.toJSON()) });
       console.log(`✅ Registered ${prodCommands.length} slash commands globally`);
+
+      // Register guild-only commands (e.g. import-db) to their specific guild
+      if (guildOnlyCommands.length > 0) {
+        try {
+          const existing = await rest.get(Routes.applicationGuildCommands(CLIENT_ID, IMPORT_DB_GUILD_ID)).catch(() => []);
+          const merged = [...(Array.isArray(existing) ? existing : [])];
+          for (const cmd of guildOnlyCommands) {
+            if (!merged.find(c => c.name === cmd.name)) merged.push(cmd.toJSON());
+          }
+          await rest.put(Routes.applicationGuildCommands(CLIENT_ID, IMPORT_DB_GUILD_ID), { body: merged });
+          console.log(`🔒 Registered ${guildOnlyCommands.map(c=>c.name).join(', ')} to guild ${IMPORT_DB_GUILD_ID}`);
+        } catch (guildErr) {
+          console.warn(`⚠️  Could not register guild-only commands to ${IMPORT_DB_GUILD_ID}: ${guildErr.message}`);
+        }
+      }
 
       // Register dev/test commands only to the explicitly configured DEV_GUILD_ID
       const DEV_GUILD_ID = process.env.DEV_GUILD_ID;
