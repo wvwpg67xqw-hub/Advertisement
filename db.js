@@ -334,5 +334,195 @@ const db = {
   },
 
   async deleteBlacklist(id) {
-    const rows =
-$$
+    const rows = await readCol('web_blacklist');
+    const next = rows.filter(b => b.id !== Number(id));
+    await writeCol('web_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  async deleteBlacklistByUserId(userId) {
+    const rows = await readCol('web_blacklist');
+    const next = rows.filter(b => b.userId !== userId);
+    await writeCol('web_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  async isBlacklisted(userId) {
+    const rows = await readCol('web_blacklist');
+    return !!rows.find(b => b.userId === userId);
+  },
+
+  async getBlacklistEntry(userId) {
+    const rows = await readCol('web_blacklist');
+    return rows.find(b => b.userId === userId) ?? null;
+  },
+
+  // ── IP Blacklist ───────────────────────────────────────────────────────────
+  async getIpBlacklist() {
+    const rows = await readCol('ip_blacklist');
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  async addIpBlacklist(ip, reason, addedBy) {
+    const rows = await readCol('ip_blacklist');
+    if (rows.find(b => b.ip === ip)) throw new Error('IP already blacklisted');
+    const entry = { id: await nextId('ip_blacklist'), ip, reason: reason || 'No reason given', addedBy: addedBy || 'system', createdAt: ts() };
+    rows.push(entry);
+    await writeCol('ip_blacklist', rows);
+    return entry;
+  },
+
+  async removeIpBlacklist(id) {
+    const rows = await readCol('ip_blacklist');
+    const next = rows.filter(b => b.id !== Number(id));
+    await writeCol('ip_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  async removeIpBlacklistByIp(ip) {
+    const rows = await readCol('ip_blacklist');
+    const next = rows.filter(b => b.ip !== ip);
+    await writeCol('ip_blacklist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  async isIpBlacklisted(ip) {
+    if (!ip || ip === 'unknown') return false;
+    const rows = await readCol('ip_blacklist');
+    return !!rows.find(b => b.ip === ip);
+  },
+
+  // ── Ban Appeals ────────────────────────────────────────────────────────────
+  async insertAppeal({ userId, username, avatar, reason }) {
+    const rows = await readCol('appeals');
+    const id = await nextId('appeals');
+    rows.push({ id, userId, username, avatar: avatar ?? null, reason, status: 'pending', createdAt: ts() });
+    await writeCol('appeals', rows);
+    return { id };
+  },
+
+  async getAppeal(id) {
+    const rows = await readCol('appeals');
+    return rows.find(a => a.id === Number(id)) ?? null;
+  },
+
+  async getAppeals(status) {
+    let rows = await readCol('appeals');
+    if (status) rows = rows.filter(a => a.status === status);
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  async getUserAppeal(userId) {
+    const rows = await readCol('appeals');
+    return rows
+      .filter(a => a.userId === userId)
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+  },
+
+  async updateAppealStatus(id, status) {
+    const rows = await readCol('appeals');
+    const i = rows.findIndex(a => a.id === Number(id));
+    if (i >= 0) { rows[i].status = status; rows[i].reviewedAt = ts(); }
+    await writeCol('appeals', rows);
+    return rows[i] ?? null;
+  },
+
+  // ── IP Appeals ─────────────────────────────────────────────────────────────
+  async insertIpAppeal(ip, reason) {
+    const rows = await readCol('ip_appeals');
+    if (rows.find(a => a.ip === ip && a.status === 'pending')) throw new Error('A pending appeal for this IP already exists');
+    const entry = { id: await nextId('ip_appeals'), ip, reason: String(reason).slice(0, 2000), status: 'pending', createdAt: ts() };
+    rows.push(entry);
+    await writeCol('ip_appeals', rows);
+    return entry;
+  },
+
+  async getIpAppeal(id) {
+    const rows = await readCol('ip_appeals');
+    return rows.find(a => a.id === Number(id)) ?? null;
+  },
+
+  async getIpAppeals(status) {
+    let rows = await readCol('ip_appeals');
+    if (status && ['pending', 'accepted', 'denied'].includes(status)) rows = rows.filter(a => a.status === status);
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  async updateIpAppealStatus(id, status) {
+    const rows = await readCol('ip_appeals');
+    const i = rows.findIndex(a => a.id === Number(id));
+    if (i >= 0) { rows[i].status = status; rows[i].reviewedAt = ts(); }
+    await writeCol('ip_appeals', rows);
+    return rows[i] ?? null;
+  },
+
+  // ── IP Whitelist ───────────────────────────────────────────────────────────
+  async getIpWhitelist() {
+    const rows = await readCol('ip_whitelist');
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  async addIpWhitelist(ip, reason, addedBy) {
+    const rows = await readCol('ip_whitelist');
+    if (rows.find(w => w.ip === ip)) throw new Error('IP already whitelisted');
+    const entry = { id: await nextId('ip_whitelist'), ip, reason: reason || 'No reason given', addedBy: addedBy || 'system', createdAt: ts() };
+    rows.push(entry);
+    await writeCol('ip_whitelist', rows);
+    return entry;
+  },
+
+  async removeIpWhitelist(id) {
+    const rows = await readCol('ip_whitelist');
+    const next = rows.filter(w => w.id !== Number(id));
+    await writeCol('ip_whitelist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  async removeIpWhitelistByIp(ip) {
+    const rows = await readCol('ip_whitelist');
+    const next = rows.filter(w => w.ip !== ip);
+    await writeCol('ip_whitelist', next);
+    return { changes: rows.length - next.length };
+  },
+
+  async isIpWhitelisted(ip) {
+    if (!ip || ip === 'unknown') return false;
+    const rows = await readCol('ip_whitelist');
+    return !!rows.find(w => w.ip === ip);
+  },
+
+  // ── Managed Bots ───────────────────────────────────────────────────────────
+  async getAllBots() {
+    const rows = await readCol('managed_bots');
+    return rows.sort((a, b) => a.createdAt - b.createdAt);
+  },
+
+  async addBot(name, clientId, description, permissions) {
+    const rows = await readCol('managed_bots');
+    if (rows.find(b => b.clientId === clientId)) throw new Error('A bot with this Client ID already exists');
+    const entry = { id: await nextId('managed_bots'), name, clientId, description: description || '', permissions: permissions || '8', createdAt: ts() };
+    rows.push(entry);
+    await writeCol('managed_bots', rows);
+    return entry;
+  },
+
+  async updateBot(id, fields) {
+    const rows = await readCol('managed_bots');
+    const i = rows.findIndex(b => b.id === Number(id));
+    if (i < 0) return null;
+    rows[i] = { ...rows[i], ...fields };
+    await writeCol('managed_bots', rows);
+    return rows[i];
+  },
+
+  async removeBot(id) {
+    const rows = await readCol('managed_bots');
+    const i = rows.findIndex(b => b.id === Number(id));
+    if (i < 0) return null;
+    const [removed] = rows.splice(i, 1);
+    await writeCol('managed_bots', rows);
+    return removed;
+  },
+};
+
+export default db;
