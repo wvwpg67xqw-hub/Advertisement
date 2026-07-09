@@ -1,5 +1,15 @@
 import pool from '../postgres.js';
 
+let connected = false;
+
+export function getPool() {
+  return pool;
+}
+
+export function isConnected() {
+  return connected;
+}
+
 export async function initDbState() {
   const tables = [
 
@@ -50,7 +60,7 @@ export async function initDbState() {
       hub_team_lead_role_id VARCHAR(20),
       hub_admin_role_id VARCHAR(20),
       hub_owner_role_id VARCHAR(20),
-      github_repo VARCHAR(200),
+      github_repo TEXT,
       is_staff_server SMALLINT DEFAULT 0,
       staff_guild_id VARCHAR(20),
       staff_server_role_map TEXT,
@@ -142,53 +152,15 @@ export async function initDbState() {
     `,
 
     `
-    CREATE TABLE IF NOT EXISTS sticky_messages (
+    CREATE TABLE IF NOT EXISTS snipe_cache (
       guild_id VARCHAR(20),
       channel_id VARCHAR(20),
-      message TEXT NOT NULL,
+      content TEXT,
+      author_id VARCHAR(20),
+      author_name VARCHAR(200),
+      author_avatar TEXT,
+      deleted_at BIGINT,
       PRIMARY KEY(guild_id,channel_id)
-    )
-    `,
-
-    `
-    CREATE TABLE IF NOT EXISTS sticky_channel_state (
-      guild_id VARCHAR(20),
-      channel_id VARCHAR(20),
-      last_message_id VARCHAR(20),
-      PRIMARY KEY(guild_id,channel_id)
-    )
-    `,
-
-    `
-    CREATE TABLE IF NOT EXISTS auto_reacts (
-      guild_id VARCHAR(20),
-      user_id VARCHAR(20),
-      emoji_id VARCHAR(20),
-      emoji_name VARCHAR(100) DEFAULT '',
-      animated SMALLINT DEFAULT 0,
-      ar_expires_at TIMESTAMP,
-      PRIMARY KEY(guild_id,user_id)
-    )
-    `,
-
-    `
-    CREATE TABLE IF NOT EXISTS invite_blacklist (
-      guild_id VARCHAR(20),
-      blocked_guild_id VARCHAR(20),
-      added_by VARCHAR(20),
-      added_at BIGINT,
-      PRIMARY KEY(guild_id,blocked_guild_id)
-    )
-    `,
-
-    `
-    CREATE TABLE IF NOT EXISTS bot_blacklist (
-      id SERIAL PRIMARY KEY,
-      guild_id VARCHAR(20),
-      user_id VARCHAR(20),
-      moderator_id VARCHAR(20),
-      reason TEXT,
-      created_at BIGINT
     )
     `,
 
@@ -217,6 +189,100 @@ export async function initDbState() {
     `,
 
     `
+    CREATE TABLE IF NOT EXISTS bot_blacklist (
+      id SERIAL PRIMARY KEY,
+      guild_id VARCHAR(20),
+      user_id VARCHAR(20),
+      moderator_id VARCHAR(20),
+      reason TEXT,
+      created_at BIGINT
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS network_applications (
+      id SERIAL PRIMARY KEY,
+      target_guild_id VARCHAR(20),
+      applicant_id VARCHAR(20),
+      applicant_username VARCHAR(200),
+      applicant_avatar TEXT,
+      why TEXT,
+      experience TEXT,
+      timezone VARCHAR(100),
+      age VARCHAR(10),
+      status VARCHAR(20) DEFAULT 'pending',
+      created_at BIGINT
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS ad_channels (
+      guild_id VARCHAR(20),
+      channel_id VARCHAR(20),
+      PRIMARY KEY(guild_id,channel_id)
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS ad_posts (
+      id SERIAL PRIMARY KEY,
+      guild_id VARCHAR(20),
+      channel_id VARCHAR(20),
+      message_id VARCHAR(20),
+      user_id VARCHAR(20),
+      created_at BIGINT
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS auto_reacts (
+      guild_id VARCHAR(20),
+      user_id VARCHAR(20),
+      emoji_id VARCHAR(20),
+      emoji_name VARCHAR(100) DEFAULT '',
+      animated SMALLINT DEFAULT 0,
+      ar_expires_at TIMESTAMP,
+      PRIMARY KEY(guild_id,user_id)
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS sticky_messages (
+      guild_id VARCHAR(20),
+      channel_id VARCHAR(20),
+      message TEXT NOT NULL,
+      PRIMARY KEY(guild_id,channel_id)
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS sticky_channel_state (
+      guild_id VARCHAR(20),
+      channel_id VARCHAR(20),
+      last_message_id VARCHAR(20),
+      PRIMARY KEY(guild_id,channel_id)
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS hall_of_shame (
+      guild_id VARCHAR(20),
+      message_id VARCHAR(20),
+      PRIMARY KEY(guild_id,message_id)
+    )
+    `,
+
+    `
+    CREATE TABLE IF NOT EXISTS invite_blacklist (
+      guild_id VARCHAR(20),
+      blocked_guild_id VARCHAR(20),
+      added_by VARCHAR(20),
+      added_at BIGINT,
+      PRIMARY KEY(guild_id,blocked_guild_id)
+    )
+    `,
+
+    `
     CREATE TABLE IF NOT EXISTS honeypot_config (
       guild_id VARCHAR(20) PRIMARY KEY,
       channel_id VARCHAR(20) NOT NULL,
@@ -240,9 +306,17 @@ export async function initDbState() {
     `
   ];
 
-  for (const sql of tables) {
-    await pool.query(sql);
-  }
+  try {
+    for (const sql of tables) {
+      await pool.query(sql);
+    }
 
-  console.log('✅ [DB] Neon PostgreSQL tables ready');
+    connected = true;
+    console.log('✅ [DB] PostgreSQL tables ready');
+
+  } catch (err) {
+    connected = false;
+    console.error('❌ [DB] Table creation failed:', err);
+    throw err;
+  }
 }
