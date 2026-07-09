@@ -2457,15 +2457,56 @@ client.on('messageCreate', async (msg) => {
   // ── Honeypot trap check ──────────────────────────────────────────────────────
   if (msg.guild) {
     const hp = honeypotCache.get(msg.guildId);
+
     if (hp && msg.channelId === hp.channel_id) {
       const guildCfg = await getBotGuild(msg.guildId).catch(() => null);
+
       handleHoneypotTrigger(msg, hp, guildCfg).catch(err =>
-        logError('Honeypot trigger', err).catch(() => {}),
+        logError('Honeypot trigger', err).catch(() => {})
       );
+
       return;
     }
   }
 
+  // Keep your existing message tracking code below this line
+});
+
+
+// ── Honeypot Reaction Tracking ────────────────────────────────────────────────
+
+client.on('messageReactionAdd', async (reaction, user) => {
+  try {
+    if (reaction.partial) {
+      await reaction.fetch().catch(() => {});
+    }
+
+    if (user.bot) return;
+
+    const guild = reaction.message.guild;
+    if (!guild) return;
+
+    const hp = honeypotCache.get(guild.id);
+    if (!hp) return;
+
+    // Only trigger reactions inside the honeypot channel
+    if (reaction.message.channelId !== hp.channel_id) return;
+
+    const guildCfg = await getBotGuild(guild.id).catch(() => null);
+
+    handleHoneypotReaction(
+      reaction,
+      user,
+      hp,
+      guildCfg
+    ).catch(err =>
+      logError('Honeypot reaction trigger', err).catch(() => {})
+    );
+
+  } catch (err) {
+    logError('Honeypot reaction listener', err).catch(() => {});
+  }
+});
   // ── Owner DM commands ───────────────────────────────────────────────────────
   if (!msg.guild && msg.author.id === OWNER_ID) {
     const parts = msg.content.trim().split(/\s+/);
