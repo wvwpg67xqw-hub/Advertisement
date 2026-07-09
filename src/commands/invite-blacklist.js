@@ -33,8 +33,9 @@ export async function preloadInviteBlacklist(guilds) {
 
 export async function addBlocked(guildId, blockedGuildId, addedBy) {
   await pool.execute(
-    `INSERT IGNORE INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at)
-     VALUES (?, ?, ?, ?)`,
+    `INSERT INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (guild_id, blocked_guild_id) DO NOTHING`,
     [guildId, blockedGuildId, addedBy, Math.floor(Date.now() / 1000)],
   );
   if (!cache.has(guildId)) cache.set(guildId, new Set());
@@ -231,7 +232,8 @@ export async function handleMassBlacklist(interaction) {
         if (!cache.has(gId)) await loadCache(gId);
         if (!cache.get(gId).has(blockedId)) {
           await pool.execute(
-            `INSERT IGNORE INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at) VALUES (?, ?, ?, ?)`,
+            `INSERT INTO invite_blacklist (guild_id, blocked_guild_id, added_by, added_at) VALUES (?, ?, ?, ?)
+             ON CONFLICT (guild_id, blocked_guild_id) DO NOTHING`,
             [gId, blockedId, interaction.user.id, now],
           );
           cache.get(gId).add(blockedId);
