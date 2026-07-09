@@ -2,21 +2,23 @@ import pool from './postgres.js';
 
 export async function readCol(name) {
   const result = await pool.query(`SELECT * FROM "${name}"`);
-  return result.rows ?? [];
+  return result.rows || [];
 }
 
 export async function writeCol(name, data) {
-  await pool.query(`DELETE FROM "${name}"`);
-
   if (!Array.isArray(data)) return;
+
+  await pool.query(`DELETE FROM "${name}"`);
 
   for (const row of data) {
     const keys = Object.keys(row);
     const values = Object.values(row);
 
+    if (!keys.length) continue;
+
     await pool.query(
       `INSERT INTO "${name}" (${keys.map(k => `"${k}"`).join(', ')})
-       VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`,
+       VALUES (${keys.map((_, i) => `$${i + 1}`).join(', ')})`,
       values
     );
   }
