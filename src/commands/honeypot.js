@@ -77,8 +77,8 @@ export async function configureHoneypot({ guildId, channel, action, alertChannel
   await pool.execute(
     `INSERT INTO honeypot_config (guild_id, channel_id, alert_channel_id, action, created_at, created_by)
      VALUES (?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id), alert_channel_id = VALUES(alert_channel_id),
-       action = VALUES(action), created_at = VALUES(created_at), created_by = VALUES(created_by)`,
+     ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id, alert_channel_id = EXCLUDED.alert_channel_id,
+       action = EXCLUDED.action, created_at = EXCLUDED.created_at, created_by = EXCLUDED.created_by`,
     [guildId, channel.id, alertChannel?.id ?? null, action, now, userId],
   );
 
