@@ -2900,8 +2900,12 @@ client.once('clientReady', async () => {
   for (const guild of client.guilds.cache.values()) {
     if (STAFF_SERVER_ID && guild.id === STAFF_SERVER_ID) continue;
     const icon_url = guild.iconURL({ size: 256, extension: 'png' }) || null;
-    const { created } = db.syncApplyServer({ guildId: guild.id, name: guild.name, icon_url });
-    if (created) synced++;
+    try {
+      const { created } = await db.syncApplyServer({ guildId: guild.id, name: guild.name, icon_url });
+      if (created) synced++;
+    } catch (err) {
+      console.error(`syncApplyServer failed for guild ${guild.id}:`, err.message);
+    }
   }
   if (synced > 0) console.log(`🖥️  Auto-registered ${synced} new server(s) in apply_servers`);
 });
@@ -2922,14 +2926,20 @@ client.on('guildCreate', async (guild) => {
   const STAFF_SERVER_ID = process.env.STAFF_SERVER;
   if (!STAFF_SERVER_ID || guild.id !== STAFF_SERVER_ID) {
     const icon_url = guild.iconURL({ size: 256, extension: 'png' }) || null;
-    const { created } = db.syncApplyServer({ guildId: guild.id, name: guild.name, icon_url });
-    if (created) console.log(`🖥️  Auto-registered new server "${guild.name}" (${guild.id}) in apply_servers`);
+    try {
+      const { created } = await db.syncApplyServer({ guildId: guild.id, name: guild.name, icon_url });
+      if (created) console.log(`🖥️  Auto-registered new server "${guild.name}" (${guild.id}) in apply_servers`);
+    } catch (err) {
+      console.error(`syncApplyServer failed for guild ${guild.id}:`, err.message);
+    }
   }
 });
 
 client.on('guildDelete', async (guild) => {
   logGuildLeave(guild).catch(() => {});
-  db.setApplyServerActive(guild.id, false);
+  await db.setApplyServerActive(guild.id, false).catch(err =>
+    console.error(`setApplyServerActive failed for guild ${guild.id}:`, err.message)
+  );
   console.log(`🖥️  Marked server "${guild.name}" (${guild.id}) as inactive in apply_servers (bot removed)`);
 
   try {
