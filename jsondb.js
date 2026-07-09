@@ -28,7 +28,6 @@ export async function nextId(name) {
   const result = await pool.query(
     `SELECT COALESCE(MAX(id), 0) + 1 AS next FROM "${name}"`
   );
-
   return Number(result.rows[0]?.next ?? 1);
 }
 
