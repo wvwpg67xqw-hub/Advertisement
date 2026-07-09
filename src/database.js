@@ -3,9 +3,18 @@ import * as fb from './jsonFallback.js';
 
 function ts() { return Math.floor(Date.now() / 1000); }
 
+// Converts mysql2-style '?' placeholders to Postgres '$1, $2, ...' positional
+// placeholders. pg does not support '?' substitution at all — passing it
+// through unconverted sends a literal '?' to the server and breaks the SQL
+// grammar (syntax error at or near ...).
+function toPositional(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `${++i}`);
+}
+
 async function q(sql, params = []) {
-  const [rows] = await getPool().query(sql, params);
-  return rows;
+  const result = await getPool().query(toPositional(sql), params);
+  return result.rows;
 }
 
 async function q1(sql, params = []) {
@@ -13,8 +22,9 @@ async function q1(sql, params = []) {
 }
 
 async function qr(sql, params = []) {
-  const [rows] = await getPool().query(sql, params);
-  return rows;
+  // Returns the full pg result object ({ rows, rowCount, ... }) — callers
+  // that need rowCount (e.g. removeWarn, renewArSubscription) rely on this.
+  return getPool().query(toPositional(sql), params);
 }
 
 function parseJson(val, fallback) {
