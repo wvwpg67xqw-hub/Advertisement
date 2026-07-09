@@ -9,7 +9,7 @@ function ts() { return Math.floor(Date.now() / 1000); }
 // grammar (syntax error at or near ...).
 function toPositional(sql) {
   let i = 0;
-  return sql.replace(/\?/g, () => `${++i}`);
+  return sql.replace(/\?/g, () => `$${++i}`);
 }
 
 async function q(sql, params = []) {
