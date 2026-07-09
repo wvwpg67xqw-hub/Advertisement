@@ -1,23 +1,31 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import pool from './postgres.js';
 
-const dataDir = join(process.cwd(), 'data');
-mkdirSync(dataDir, { recursive: true });
-
-export function readCol(name) {
-  const path = join(dataDir, `${name}.json`);
-  if (!existsSync(path)) return [];
-  try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return []; }
+export async function readCol(name) {
+  const result = await pool.query(`SELECT * FROM ${name}`);
+  return result.rows;
 }
 
-export function writeCol(name, data) {
-  writeFileSync(join(dataDir, `${name}.json`), JSON.stringify(data, null, 2));
+export async function writeCol(name, data) {
+  await pool.query(`DELETE FROM ${name}`);
+
+  for (const row of data) {
+    const keys = Object.keys(row);
+    const values = Object.values(row);
+
+    await pool.query(
+      `INSERT INTO ${name} (${keys.join(', ')})
+       VALUES (${keys.map((_, i) => `$${i + 1}`).join(', ')})`,
+      values
+    );
+  }
 }
 
-export function nextId(name) {
-  const rows = readCol(name);
-  if (!rows.length) return 1;
-  return Math.max(...rows.map(r => r.id || 0)) + 1;
+export async function nextId(name) {
+  const result = await pool.query(
+    `SELECT COALESCE(MAX(id), 0) + 1 AS next FROM ${name}`
+  );
+
+  return Number(result.rows[0].next);
 }
 
 export function ts() {
