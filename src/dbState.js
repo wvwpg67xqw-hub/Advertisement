@@ -1,4 +1,4 @@
-import pool from './postgres.js';
+import pool from '../postgres.js';
 
 export async function initDbState() {
   const tables = [
