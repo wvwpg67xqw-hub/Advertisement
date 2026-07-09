@@ -1,17 +1,28 @@
-import { initDb, getPool, isConnected } from './src/dbState.js';
+import pool from './postgres.js';
 
-export { initDb as initDatabase, isConnected };
+export async function initDb() {
+  try {
+    await pool.query('SELECT NOW()');
+    console.log('✅ Neon database connected');
+    return true;
+  } catch (err) {
+    console.error('❌ Neon connection failed:', err.message);
+    return false;
+  }
+}
+
+export function isConnected() {
+  return true;
+}
+
+export function getPool() {
+  return pool;
+}
 
 const poolProxy = new Proxy({}, {
   get(_, prop) {
     return (...args) => {
-      const p = getPool();
-      if (!p) {
-        if (prop === 'execute' || prop === 'query') return Promise.resolve([[], null]);
-        if (prop === 'getConnection') return Promise.reject(new Error('No DB connection'));
-        return Promise.resolve(null);
-      }
-      return p[prop](...args);
+      return pool[prop](...args);
     };
   },
 });
