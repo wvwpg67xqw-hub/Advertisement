@@ -32,7 +32,7 @@ import {
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
   handleBreakRequest, handleManageBreak,
   handleResetMessages, handleResetMessagesAll, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel,
-  handleAutoReact, handleAutoReactClear, handleBuy,
+  handleAutoReact, handleAutoReactClear, handleAutoReactClear, handleBuy,
   handleBlacklistServer, handleMassBlacklist, checkInviteBlacklist,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleUpdate,
@@ -42,6 +42,7 @@ import {
   handleUnblockAll,
   handleSticky,
 } from './src/commands/index.js';
+
 import {
   isMaintenanceMode, getMaintenanceReason,
   handleWhitelist, handleDevMaintenance, handleDevCleanEmojis,
@@ -59,15 +60,25 @@ import {
   handleTestEmpty, handleTestSpam, handleDevTestInteraction,
   handleTestAbuse,
 } from './src/commands/dev-commands.js';
+
 import {
   defs as honeypotDefs,
-  handleHoneypot, honeypotCache, handleHoneypotTrigger, loadHoneypotConfigs,
+  handleHoneypot,
+  honeypotCache,
+  handleHoneypotTrigger,
+  handleHoneypotReaction,
+  loadHoneypotConfigs,
 } from './src/commands/honeypot.js';
+
 import {
   defs as reportDefs,
-  handleReport, handleReportModal, handleReportButton,
+  handleReport,
+  handleReportModal,
+  handleReportButton,
 } from './src/commands/report.js';
+
 import { uploadAppEmoji, emojiCdnUrl, deleteAppEmoji, listAppEmojis } from './src/appEmoji.js';
+
 import {
   setupDevServer, logStartup, logCommand, logGuildJoin, logGuildLeave,
   logWarning, logError, startMetricsLoop, registerProcessHandlers,
@@ -84,7 +95,48 @@ import {
   handleSetupLogging, handleSetupStaffJoinRoles,
 } from './src/setup.js';
 
-import { incrementMessageCount, isAdChannel, trackAdPost, getGuild as getBotGuild, setSnipeCache, getSnipeCache as getSnipeCacheDb, addUserXp, computeLevel, xpForLevel, isCommandDisabled, disableCommand as dbDisableCmd, enableCommand as dbEnableCmd, getDisabledCommands as dbGetDisabledCmds, setGuildConfig as dbSetGuildConfig, getNetworkHub, autoLinkGuilds, getAutoReact, setAutoReact, clearAutoReact, blockAutoReact, isAutoReactBlocked, getBalance, setBalance, getArExpiry, isDmCommandDisabled, getLastWarnTime, addWarn, getWarnCount, addAdWarn, getAdWarns, getAdWarnCountByModerator, getStickyMessage, getStickyChannelState, updateStickyChannelState, isInHallOfShame, addToHallOfShame, getAllAutoReactEmojiIds, clearNetworkHub, clearHubGuildId, getNetworkMembers, getStaffServerRoleMap } from './src/database.js';
+import {
+  incrementMessageCount, isAdChannel, trackAdPost,
+  getGuild as getBotGuild,
+  setSnipeCache,
+  getSnipeCache as getSnipeCacheDb,
+  addUserXp,
+  computeLevel,
+  xpForLevel,
+  isCommandDisabled,
+  disableCommand as dbDisableCmd,
+  enableCommand as dbEnableCmd,
+  getDisabledCommands as dbGetDisabledCmds,
+  setGuildConfig as dbSetGuildConfig,
+  getNetworkHub,
+  autoLinkGuilds,
+  getAutoReact,
+  setAutoReact,
+  clearAutoReact,
+  blockAutoReact,
+  isAutoReactBlocked,
+  getBalance,
+  setBalance,
+  getArExpiry,
+  isDmCommandDisabled,
+  getLastWarnTime,
+  addWarn,
+  getWarnCount,
+  addAdWarn,
+  getAdWarns,
+  getAdWarnCountByModerator,
+  getStickyMessage,
+  getStickyChannelState,
+  updateStickyChannelState,
+  isInHallOfShame,
+  addToHallOfShame,
+  getAllAutoReactEmojiIds,
+  clearNetworkHub,
+  clearHubGuildId,
+  getNetworkMembers,
+  getStaffServerRoleMap
+} from './src/database.js';
+
 import { initDb as initDatabase } from './src/dbState.js';
 import { buildMessageCard } from './src/messageCanvas.js';
 import { sendLog, buildStaffUpdateEmbed, getStaffRank, hasCommandPermission, buildWarnEmbed, buildAdWarnEmbed } from './src/utils.js';
