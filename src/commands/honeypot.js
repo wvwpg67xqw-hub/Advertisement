@@ -306,3 +306,108 @@ export async function handleHoneypotTrigger(msg, config, guildConfig) {
 
   await alertChannel.send({ embeds: [embed] }).catch(() => {});
 }
+// ── Reaction Trigger handler — called by server.js messageReactionAdd ─────────
+
+export async function handleHoneypotReaction(reaction, user, config, guildConfig) {
+  if (user.bot) return;
+
+  const msg = reaction.message;
+  const now = Math.floor(Date.now() / 1000);
+
+  const member = await msg.guild.members.fetch(user.id).catch(() => null);
+
+  let actionTaken = config.action;
+
+  try {
+    await reaction.users.remove(user.id).catch(() => {});
+
+    if (config.action === 'dm') {
+      await user.send(
+        `⚠️ **Your reaction triggered the honeypot in ${msg.guild.name}.**`
+      ).catch(() => {
+        actionTaken = 'dm_failed';
+      });
+
+    } else if (config.action === 'timeout' && member) {
+      await member.timeout(
+        24 * 60 * 60 * 1000,
+        'Honeypot reaction trigger'
+      ).catch(() => {
+        actionTaken = 'timeout_failed';
+      });
+
+    } else if (config.action === 'kick' && member) {
+      await member.kick('Honeypot reaction trigger')
+        .catch(() => {
+          actionTaken = 'kick_failed';
+        });
+
+    } else if (config.action === 'ban') {
+      await msg.guild.members.ban(user.id, {
+        reason: 'Honeypot reaction trigger',
+        deleteMessageSeconds: 86400
+      }).catch(() => {
+        actionTaken = 'ban_failed';
+      });
+    }
+
+  } catch (err) {
+    logError('Honeypot reaction action', err).catch(() => {});
+  }
+
+
+  await pool.execute(
+    `INSERT INTO honeypot_triggers 
+    (guild_id, user_id, username, content_preview, triggered_at, action_taken)
+    VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      msg.guild.id,
+      user.id,
+      user.tag,
+      `Reacted with ${reaction.emoji.name}`,
+      now,
+      actionTaken
+    ]
+  ).catch(() => {});
+
+
+  const alertChannelId =
+    config.alert_channel_id ?? guildConfig?.log_channel_id ?? null;
+
+  if (!alertChannelId) return;
+
+  const alertChannel = msg.guild.channels.cache.get(alertChannelId);
+
+  if (!alertChannel) return;
+
+
+  const embed = new EmbedBuilder()
+    .setTitle('🍯 Honeypot Reaction Triggered')
+    .setColor(0xFF6B35)
+    .setThumbnail(user.displayAvatarURL({ size: 128 }))
+    .addFields(
+      {
+        name: '👤 User',
+        value: `<@${user.id}> \`${user.tag}\``
+      },
+      {
+        name: '📍 Channel',
+        value: `<#${msg.channel.id}>`,
+        inline: true
+      },
+      {
+        name: '😀 Reaction',
+        value: reaction.emoji.toString(),
+        inline: true
+      },
+      {
+        name: '⚡ Action Taken',
+        value: actionTaken,
+        inline: true
+      }
+    )
+    .setTimestamp();
+
+
+  await alertChannel.send({ embeds: [embed] }).catch(() => {});
+}
