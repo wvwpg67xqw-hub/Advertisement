@@ -191,6 +191,19 @@ const CLIENT_ID             = process.env.CLIENT_ID;
 // Owner ID — receives all login/appeal/security DMs
 const OWNER_ID = process.env.OWNER_ID || '1453592157607825595';
 
+// ── Server Symbols ────────────────────────────────────────────────────────────
+const GUILD_SYMBOLS = {
+  '1238248843968122952': '✮', // Plain
+  '1160258234083450970': '♛', // Advertising Legends
+  '1308214357725020240': '✟', // Devil
+  '1487798778986758257': '⏾', // Shadow
+};
+/** Returns "SYMBOL name" for known guilds, or just "name" for unknown ones. */
+function namedGuild(guildId, name) {
+  const sym = GUILD_SYMBOLS[String(guildId)];
+  return sym ? `${sym} ${name}` : name;
+}
+
 // ── Express Setup ─────────────────────────────────────────────────────────────
 
 const app = express();
@@ -970,7 +983,7 @@ async function buildOwnerPanel(guildId) {
   const disabledList = await dbGetDisabledCmds(guildId).catch(() => []);
   const disabled = new Set(disabledList);
   const guild = client.guilds.cache.get(guildId);
-  const guildName = guild?.name || `Guild ${guildId}`;
+  const guildName = namedGuild(guildId, guild?.name || `Guild ${guildId}`);
   const levelingOn = config?.leveling_enabled !== 0;
 
   const embed = new EmbedBuilder()
@@ -1046,7 +1059,7 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.deferUpdate();
           const { getGuild: wGuild } = await import('./src/database.js');
           const config = await wGuild(guildId);
-          const embed  = buildWizardEmbed(config, interaction.guild?.name || guildId);
+          const embed  = buildWizardEmbed(config, namedGuild(interaction.guildId, interaction.guild?.name || interaction.guildId));
           const { ButtonBuilder: WBB, ActionRowBuilder: WARB, ButtonStyle: WBS } = discordPkg;
           const row = new WARB().addComponents(
             new WBB().setCustomId(`wizard:refresh:${guildId}`).setLabel('🔄 Refresh Status').setStyle(WBS.Primary),
@@ -1352,7 +1365,7 @@ client.on('interactionCreate', async (interaction) => {
       if (id.startsWith('napply_') && !id.startsWith('napply_accept_') && !id.startsWith('napply_deny_')) {
         const targetGuildId = id.slice(7);
         const targetGuild = interaction.client.guilds.cache.get(targetGuildId);
-        const serverName = targetGuild?.name || 'this server';
+        const serverName = namedGuild(targetGuildId, targetGuild?.name || 'this server');
 
         const { ModalBuilder: MB, TextInputBuilder: TIB, TextInputStyle: TIS, ActionRowBuilder: ARB2 } = discordPkg;
         const modal = new MB()
@@ -1417,7 +1430,7 @@ client.on('interactionCreate', async (interaction) => {
               embeds: [new EmbedBuilder()
                 .setColor(0x57F287)
                 .setTitle('🎉 Application Accepted!')
-                .setDescription(`Your application to join **${targetGuild?.name || 'the server'}** has been **accepted**!\n\nAn admin has reviewed your application and you have been given your roles. Welcome to the team!`)
+                .setDescription(`Your application to join **${namedGuild(targetGuildId, targetGuild?.name || 'the server')}** has been **accepted**!\n\nAn admin has reviewed your application and you have been given your roles. Welcome to the team!`)
                 .setTimestamp()
               ]
             }).catch(() => null);
@@ -1460,7 +1473,7 @@ client.on('interactionCreate', async (interaction) => {
               embeds: [new EmbedBuilder()
                 .setColor(0xED4245)
                 .setTitle('❌ Application Denied')
-                .setDescription(`Your application to join **${targetGuild?.name || 'the server'}** was **not accepted** at this time.\n\nThank you for your interest. You are welcome to apply again in the future.`)
+                .setDescription(`Your application to join **${namedGuild(targetGuildId, targetGuild?.name || 'the server')}** was **not accepted** at this time.\n\nThank you for your interest. You are welcome to apply again in the future.`)
                 .setTimestamp()
               ]
             }).catch(() => null);
@@ -2102,7 +2115,7 @@ if (id.startsWith('app_')) {
       const appId = await saveNA(targetGuildId, interaction.user.id, interaction.user.tag, avatar, why, experience, timezone, age);
 
       const targetGuild = interaction.client.guilds.cache.get(targetGuildId);
-      const serverName = targetGuild?.name || 'Unknown Server';
+      const serverName = namedGuild(targetGuildId, targetGuild?.name || 'Unknown Server');
 
       const appEmbed = new EmbedBuilder()
         .setColor(0x5865F2)
@@ -2190,7 +2203,7 @@ if (id.startsWith('app_')) {
         const dmEmbed = new EmbedBuilder()
           .setColor(0xFFAA00)
           .setTitle('⚠️ You have received a warning')
-          .setDescription(`You were warned in **${interaction.guild?.name || 'a server'}**.`)
+          .setDescription(`You were warned in **${namedGuild(interaction.guildId, interaction.guild?.name || 'a server')}**.`)
           .addFields(
             { name: '📋 Reason', value: reason, inline: false },
             { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
@@ -2238,7 +2251,7 @@ if (id.startsWith('app_')) {
         const logEmbed = buildAdWarnEmbed({
           userId: target.id, moderatorId: interaction.user.id,
           moderatorUsername: interaction.user.username, moderatorAdWarnCount,
-          guildName: interaction.guild?.name || 'Moderation',
+          guildName: namedGuild(interaction.guildId, interaction.guild?.name || 'Moderation'),
           caseId, reason, messageContent: null,
           channelId, messageId, totalWarns,
         });
@@ -2248,7 +2261,7 @@ if (id.startsWith('app_')) {
         const dmEmbed = new EmbedBuilder()
           .setColor(0xFF5555)
           .setTitle('🚫 You have received an ad warning')
-          .setDescription(`You were warned for advertising in **${interaction.guild?.name || 'a server'}**.`)
+          .setDescription(`You were warned for advertising in **${namedGuild(interaction.guildId, interaction.guild?.name || 'a server')}**.`)
           .addFields(
             { name: '📋 Reason', value: reason, inline: false },
             ...(deletedContent ? [{ name: '🗑️ Deleted Message', value: deletedContent.length > 1024 ? deletedContent.slice(0, 1021) + '...' : deletedContent, inline: false }] : []),
@@ -2327,7 +2340,7 @@ function buildDeleteTranscriptHtml(msg) {
   const userId      = author?.id ?? 'unknown';
   const content     = msg.content || '';
   const channelName = msg.channel?.name ?? 'unknown-channel';
-  const guildName   = msg.guild?.name   ?? 'Unknown Server';
+  const guildName   = namedGuild(msg.guild?.id, msg.guild?.name ?? 'Unknown Server');
   const sentAt      = msg.createdAt ? msg.createdAt.toISOString() : new Date().toISOString();
   const deletedAt   = new Date().toISOString();
 
@@ -2757,7 +2770,7 @@ client.on('messageCreate', async (msg) => {
               .setDescription(`🎉 <@${msg.author.id}> just leveled up to **Level ${newLevel}**! Congratulations! 🎊`)
               .setThumbnail(msg.author.displayAvatarURL({ size: 128 }))
               .addFields({ name: '🏆 New Level', value: `**${newLevel}**`, inline: true })
-              .setFooter({ text: msg.guild.name, iconURL: msg.guild.iconURL() || undefined })
+              .setFooter({ text: namedGuild(msg.guild.id, msg.guild.name), iconURL: msg.guild.iconURL() || undefined })
               .setTimestamp();
             const sentMsg = await levelCh.send({ embeds: [buildEmbed(0)] });
             let colorIndex = 1;
@@ -2774,7 +2787,7 @@ client.on('messageCreate', async (msg) => {
         } else if (!dmmedOwnerGuilds.has(msg.guild.id)) {
           dmmedOwnerGuilds.add(msg.guild.id);
           const owner = await client.users.fetch(OWNER_ID).catch(() => null);
-          if (owner) await owner.send(`⚠️ **Level-up alert** in **${msg.guild.name}**: a user just reached Level ${newLevel} but no level log channel is configured.\nUse \`/setup level-log:#channel\` to set one.`).catch(() => null);
+          if (owner) await owner.send(`⚠️ **Level-up alert** in **${namedGuild(msg.guild.id, msg.guild.name)}**: a user just reached Level ${newLevel} but no level log channel is configured.\nUse \`/setup level-log:#channel\` to set one.`).catch(() => null);
         }
       } catch {}
     }
@@ -3085,7 +3098,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
       content:       msg.content || '',
       timestamp:     msg.createdAt,
       channelName:   msg.channel.name ?? 'unknown',
-      guildName:     msg.guild.name ?? 'Unknown Server',
+      guildName:     namedGuild(msg.guild.id, msg.guild.name ?? 'Unknown Server'),
       starCount,
       attachmentUrl: attachmentImg,
     }).catch(() => null);
