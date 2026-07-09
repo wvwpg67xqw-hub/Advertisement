@@ -10,10 +10,9 @@ export function isConnected() {
   return connected;
 }
 
-export async function initDbState() {
+export async function initDb() {
   const tables = [
-
-    `
+        `
     CREATE TABLE IF NOT EXISTS users (
       id BIGINT PRIMARY KEY,
       coins INTEGER DEFAULT 0,
