@@ -1037,7 +1037,7 @@ async function getTableCounts() {
   const results = await Promise.all(
     DB_TABLES.map(async t => {
       try {
-        const [rows] = await pool.execute(`SELECT COUNT(*) AS c FROM \`${t}\``);
+        const [rows] = await pool.execute(`SELECT COUNT(*) AS c FROM "${t}"`);
         return { table: t, count: rows[0].c };
       } catch {
         return { table: t, count: null };
@@ -1683,8 +1683,8 @@ export async function handleSeedData(interaction) {
       pool.execute('INSERT INTO warns (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',   [`SEED-W1-${now}`, guildId, TEST_USER_ID, modId, '[TEST] Seed warn 1', now]),
       pool.execute('INSERT INTO warns (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',   [`SEED-W2-${now}`, guildId, TEST_USER_ID, modId, '[TEST] Seed warn 2', now]),
       pool.execute('INSERT INTO strikes (case_id, guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)', [`SEED-S1-${now}`, guildId, TEST_USER_ID, modId, '[TEST] Seed strike 1', now]),
-      pool.execute('INSERT INTO balances (guild_id, user_id, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = 9999',    [guildId, TEST_USER_ID, 9999]),
-      pool.execute('INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE total_xp = 99999',  [guildId, TEST_USER_ID, 99999]),
+      pool.execute('INSERT INTO balances (guild_id, user_id, balance) VALUES (?, ?, ?) ON CONFLICT (guild_id, user_id) DO UPDATE SET balance = 9999',    [guildId, TEST_USER_ID, 9999]),
+      pool.execute('INSERT INTO levels (guild_id, user_id, total_xp) VALUES (?, ?, ?) ON CONFLICT (guild_id, user_id) DO UPDATE SET total_xp = 99999',  [guildId, TEST_USER_ID, 99999]),
     ]);
 
     const embed = new EmbedBuilder()
@@ -1718,7 +1718,7 @@ export async function handleClearTestData(interaction) {
 
     const results = await Promise.all(
       tables.map(t =>
-        pool.execute(`DELETE FROM \`${t}\` WHERE user_id = ?`, [TEST_USER_ID])
+        pool.execute(`DELETE FROM "${t}" WHERE user_id = ?`, [TEST_USER_ID])
           .then(([r]) => ({ table: t, deleted: r.affectedRows }))
           .catch(() => ({ table: t, deleted: 'err' }))
       )
@@ -1758,7 +1758,7 @@ export async function handleDataCheck(interaction) {
       pool.execute('SELECT COUNT(*) AS c FROM strikes WHERE guild_id NOT IN (SELECT guild_id FROM guilds)').then(([r]) => ({ name: 'Strikes with no guild config', count: r[0].c })).catch(() => ({ name: 'Strikes orphan check', count: '?' })),
       pool.execute('SELECT COUNT(*) AS c FROM levels  WHERE guild_id NOT IN (SELECT guild_id FROM guilds)').then(([r]) => ({ name: 'Levels with no guild config',  count: r[0].c })).catch(() => ({ name: 'Levels orphan check',  count: '?' })),
       pool.execute('SELECT COUNT(*) AS c FROM guilds  WHERE log_channel_id IS NULL AND warn_log_channel_id IS NULL').then(([r]) => ({ name: 'Guilds with no log channels configured', count: r[0].c })).catch(() => ({ name: 'Guild config check', count: '?' })),
-      pool.execute('SELECT COUNT(*) AS c FROM breaks  WHERE end_at < UNIX_TIMESTAMP() AND saved_roles IS NOT NULL').then(([r]) => ({ name: 'Expired breaks (roles not restored)', count: r[0].c })).catch(() => ({ name: 'Breaks check', count: '?' })),
+      pool.execute("SELECT COUNT(*) AS c FROM breaks  WHERE end_at < EXTRACT(EPOCH FROM NOW()) AND saved_roles IS NOT NULL").then(([r]) => ({ name: 'Expired breaks (roles not restored)', count: r[0].c })).catch(() => ({ name: 'Breaks check', count: '?' })),
     ]);
 
     const allOk  = checks.every(c => c.count === 0 || c.count === '?');
