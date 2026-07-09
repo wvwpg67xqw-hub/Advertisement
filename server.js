@@ -32,7 +32,7 @@ import {
   handleCaseInfo, handleBalance, handleSnipe, handleCurrentBreaks,
   handleBreakRequest, handleManageBreak,
   handleResetMessages, handleResetMessagesAll, handleAddBalance, handleSetBalance, handleSetupOwnerRole, handlePanel,
-  handleAutoReact, handleAutoReactClear, handleAutoReactClear, handleBuy,
+  handleAutoReact, handleAutoReactClear, handleBuy,
   handleBlacklistServer, handleMassBlacklist, checkInviteBlacklist,
   handleNetworkBan, handleNetworkUnban, handleRequestButton,
   handleResignRequest, handleUpdate,
